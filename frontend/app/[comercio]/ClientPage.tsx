@@ -47,7 +47,7 @@ export default function ClientPage({ data, themeHex, RENDER_API }: any) {
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ delay: i * 0.1 + 0.1 }}
-              href={btn.type === 'instagram' ? btn.url : `https://wa.me/${btn.phone}`}
+              href={btn.url ? btn.url : (btn.phone ? `https://wa.me/${btn.phone}` : '#')}
               target="_blank"
               rel="noopener noreferrer"
               className="group flex flex-col items-center justify-center p-6 rounded-2xl border backdrop-blur-xl transition-all duration-300 hover:-translate-y-1 shadow-lg hover:bg-[var(--theme)] border-zinc-800/80 bg-zinc-900/40"

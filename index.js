@@ -173,6 +173,25 @@ app.get('/api/avatar/:jid', async (req, res) => {
     }
 });
 
+app.get('/api/seed', async (req, res) => {
+    try {
+        if (!db) return res.status(500).json({ error: 'DB not setup' });
+        await db.collection('comercios').doc('cc-bodega-mayorista').set({
+            themeHex: "#3b82f6", // Premium Blue
+            businessName: "Centro Comercial Bodega Mayorista",
+            avatarJid: "573014709090",
+            promoJid: "EGSmr9dLr9iG0juYRQG3GT",
+            buttons: [
+                { type: "whatsapp", url: "https://whatsapp.com/channel/0029VbBXnQY2phHItjmZQx0a", name: "Canal Ofertas 1", role: "Descuentos Diarios" },
+                { type: "whatsapp", url: "https://whatsapp.com/channel/0029VbBblzrBFLgWbyOgpL2o", name: "Canal Mayoristas 2", role: "Catálogo Nuevo" },
+                { type: "whatsapp", url: "https://whatsapp.com/channel/0029VbBtmyBAYlUQ0QfzAG1D", name: "Canal Vip 3", role: "Promos Flash" },
+                { type: "whatsapp", url: "https://whatsapp.com/channel/0029VbCRMzMC1Fu5vMwm9p05", name: "Canal Asistencia 4", role: "Soporte Técnico" }
+            ]
+        });
+        res.json({ ok: true });
+    } catch(e) { res.status(500).json({ err: e.toString() }); }
+});
+
 app.listen(port, () => console.log(`API port ${port}`));
 
 app.get('/api/test-db', async (req, res) => {
