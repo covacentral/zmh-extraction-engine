@@ -164,3 +164,13 @@ app.get('/api/avatar/:jid', async (req, res) => {
 });
 
 app.listen(port, () => console.log(`API port ${port}`));
+
+app.get('/api/test-db', async (req, res) => {
+    try {
+        if (!db) return res.status(500).json({ status: 'error', message: 'DB not initialized' });
+        await db.collection('test_ping').doc('123').set({ ok: true, time: new Date().toISOString() });
+        res.json({ status: 'ok', message: 'Successfully wrote to Firestore!' });
+    } catch (e) {
+        res.status(500).json({ status: 'error', message: e.toString(), stack: e.stack });
+    }
+});
