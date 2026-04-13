@@ -145,8 +145,18 @@ app.get('/api/health', (req, res) => res.json({ status: 'ok', ready: isReady }))
 app.get('/api/avatar/:jid', async (req, res) => {
     if (!isReady || !globalSock) return res.status(503).json({ error: 'Not ready' });
     try {
-        const jid = req.params.jid.includes('@') ? req.params.jid : `${req.params.jid}@s.whatsapp.net`;
-        const profilePicUrl = await globalSock.profilePictureUrl(jid, 'image');
+        let targetJid = req.params.jid;
+
+        // Detect if it's an invite code (does not have @ and has letters)
+        if (!targetJid.includes('@') && /[a-zA-Z]/.test(targetJid)) {
+            let inviteCode = targetJid.replace('https://chat.whatsapp.com/', '').trim();
+            const inviteInfo = await globalSock.groupGetInviteInfo(inviteCode);
+            if (inviteInfo && inviteInfo.id) targetJid = inviteInfo.id;
+        } else {
+            targetJid = targetJid.includes('@') ? targetJid : `${targetJid}@s.whatsapp.net`;
+        }
+
+        const profilePicUrl = await globalSock.profilePictureUrl(targetJid, 'image');
         if (!profilePicUrl) return res.status(404).json({ error: 'No pic' });
         
         // Dynamic fetch of the profile picture to proxy it to frontend avoiding CORS
