@@ -68,16 +68,16 @@ export default function ClientPage({ data, themeHex, RENDER_API }: any) {
                 {/* Avatar Profile */}
                 <div className="w-6 h-6 rounded-full overflow-hidden shrink-0 bg-white/10 border border-white/20">
                   <img 
-                    src={`${RENDER_API}/api/avatar/${btnId}`}
-                    alt={btn.name}
+                    src={btn.scrapedImage || `${RENDER_API}/api/avatar/${btnId}`}
+                    alt={btn.scrapedName || btn.name}
                     className="w-full h-full object-cover"
-                    onError={(e) => (e.currentTarget.src = `https://ui-avatars.com/api/?name=${btn.name}&background=18181b&color=fff`)}
+                    onError={(e) => (e.currentTarget.src = `https://ui-avatars.com/api/?name=${btn.scrapedName || btn.name}&background=18181b&color=fff`)}
                   />
                 </div>
 
                 {/* Simplified Name */}
                 <span className="text-xs sm:text-sm font-medium text-white/90 truncate leading-none pt-0.5 group-hover:text-white transition-colors">
-                  {btn.name.replace('Canal de WhatsApp ', '').trim()}
+                  {btn.scrapedName || btn.name.replace('Canal de WhatsApp ', '').trim()}
                 </span>
               </motion.a>
             )
