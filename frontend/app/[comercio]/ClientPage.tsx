@@ -19,14 +19,20 @@ export default function ClientPage({ data, themeHex, RENDER_API }: any) {
 
   return (
     <main 
-      className="flex flex-col items-center p-4 sm:p-12 min-h-screen w-full relative"
-      style={{ backgroundColor: themeHex, '--theme': themeHex } as any}
+      className="flex flex-col items-center p-4 sm:p-12 min-h-screen w-full relative bg-black font-sans"
+      style={{ '--theme': themeHex } as any}
     >
+      {/* Dynamic Glow Blob */}
+      <div 
+        className="absolute top-10 left-1/2 -translate-x-1/2 w-[120%] h-96 opacity-40 blur-[100px] pointer-events-none transition-colors duration-1000 z-0"
+        style={{ backgroundColor: 'var(--theme)' }}
+      />
+
       <div className="w-full max-w-sm flex-col items-center flex gap-6 z-10">
         
         {/* Banner Horizontal (Transparente) */}
-        <div className="w-full flex flex-row items-center justify-between gap-4 bg-transparent mt-4">
-          <div className="w-20 h-20 rounded-full overflow-hidden shrink-0 shadow-xl bg-black">
+        <div className="w-full flex flex-row items-center justify-between gap-4 mt-4">
+          <div className="w-20 h-20 sm:w-22 sm:h-22 rounded-full overflow-hidden shrink-0 shadow-xl border border-white/10 relative">
             <img 
               src={`${RENDER_API}/api/avatar/${avatarJid}`}
               alt={businessName}
@@ -34,13 +40,13 @@ export default function ClientPage({ data, themeHex, RENDER_API }: any) {
               onError={(e) => (e.currentTarget.src = `https://ui-avatars.com/api/?name=${businessName}&background=000&color=fff`)}
             />
           </div>
-          <h1 className="text-xl sm:text-2xl font-semibold text-white text-right leading-tight max-w-[65%] drop-shadow-md">
+          <h1 className="text-[1.35rem] sm:text-2xl font-semibold text-white text-right leading-tight max-w-[65%] drop-shadow-md">
             {businessName}
           </h1>
         </div>
 
-        {/* 2-Column Buttons Grid (Solid Black Horizontal Pills) */}
-        <div className="w-full grid grid-cols-2 gap-3 mt-2">
+        {/* 2-Column Buttons Grid (Píldoras Glassmorphism) */}
+        <div className="w-full grid grid-cols-2 gap-3 mt-4">
           {buttons.map((btn: any, i: number) => {
              const btnId = btn.phone || extractId(btn.url);
              return (
@@ -52,15 +58,15 @@ export default function ClientPage({ data, themeHex, RENDER_API }: any) {
                 href={btn.url ? btn.url : (btn.phone ? `https://wa.me/${btn.phone}` : '#')}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex flex-row items-center justify-start p-1.5 pr-3 rounded-full shadow-lg bg-zinc-950 text-white hover:bg-zinc-800 transition-colors gap-2 border-[0.5px] border-zinc-800"
+                className="flex flex-row items-center justify-start p-1.5 pr-3 rounded-full backdrop-blur-md bg-white/5 hover:bg-white/10 border border-white/10 transition-all shadow-[0_0_15px_rgba(0,0,0,0.5)] gap-2 hover:shadow-[0_0_20px_var(--theme)] group"
               >
                 {/* Whatsapp Icon */}
-                <div className="shrink-0 bg-white rounded-full p-[3px] shadow-sm">
+                <div className="shrink-0 bg-white rounded-full p-[3px] shadow-sm transform group-hover:scale-110 transition-transform">
                    <WhatsappIcon />
                 </div>
 
                 {/* Avatar Profile */}
-                <div className="w-6 h-6 rounded-full overflow-hidden shrink-0 bg-zinc-800">
+                <div className="w-6 h-6 rounded-full overflow-hidden shrink-0 bg-white/10 border border-white/20">
                   <img 
                     src={`${RENDER_API}/api/avatar/${btnId}`}
                     alt={btn.name}
@@ -70,7 +76,7 @@ export default function ClientPage({ data, themeHex, RENDER_API }: any) {
                 </div>
 
                 {/* Simplified Name */}
-                <span className="text-xs sm:text-sm font-medium truncate leading-none pt-0.5">
+                <span className="text-xs sm:text-sm font-medium text-white/90 truncate leading-none pt-0.5 group-hover:text-white transition-colors">
                   {btn.name.replace('Canal de WhatsApp ', '').trim()}
                 </span>
               </motion.a>
@@ -84,12 +90,13 @@ export default function ClientPage({ data, themeHex, RENDER_API }: any) {
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
-            className="w-full aspect-square mt-2 rounded-[2rem] overflow-hidden bg-zinc-950 shadow-2xl"
+            className="w-full aspect-square mt-2 rounded-[2rem] overflow-hidden relative shadow-2xl ring-1 ring-white/10"
           >
+            <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none z-10" />
             <img 
               src={`${RENDER_API}/api/avatar/${promoJid}?timestamp=${new Date().getTime()}`} 
               alt="Promo del día"
-              className="w-full h-full object-cover"
+              className="w-full h-full object-cover z-0"
               onError={(e) => (e.currentTarget.src = `https://ui-avatars.com/api/?name=PROMO&background=18181b&color=fff&size=500`)}
             />
           </motion.div>
