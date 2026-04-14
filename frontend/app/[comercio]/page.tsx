@@ -44,25 +44,21 @@ export default async function ComercioServerPage({ params }: { params: { comerci
         safeButtons = [];
     }
 
-    // Scrape precise channel names and images on the server to spare the client
+    // Scrape precise channel images on the server to spare the client
     const enhancedButtons = await Promise.all(safeButtons.map(async (btn: any) => {
-      let scrapedName = null;
       let scrapedImage = null;
       if (btn.url && btn.url.includes('whatsapp.com/channel/')) {
         try {
           const resp = await fetch(btn.url, { next: { revalidate: 3600 } });
           const html = await resp.text();
-          const titleMatch = html.match(/<meta[^>]*property="og:title"[^>]*content="([^"]+)"/i) || html.match(/<meta[^>]*content="([^"]+)"[^>]*property="og:title"/i);
           const imageMatch = html.match(/<meta[^>]*property="og:image"[^>]*content="([^"]+)"/i) || html.match(/<meta[^>]*content="([^"]+)"[^>]*property="og:image"/i);
-          if (titleMatch) scrapedName = titleMatch[1]
-              .replace('Canal do WhatsApp', '')
-              .replace('WhatsApp Channel', '')
-              .replace(' – canal do WhatsApp', '')
-              .trim();
-          if (imageMatch) scrapedImage = imageMatch[1];
+          if (imageMatch && imageMatch[1]) {
+             // Fix Facebook HTML entity escaping for ampersands which breaks hash signatures in Whatsapp CDNs
+             scrapedImage = imageMatch[1].replace(/&amp;/g, '&');
+          }
         } catch(e) { console.error("Scrape Error:", e) }
       }
-      return { ...btn, scrapedName, scrapedImage };
+      return { ...btn, scrapedImage };
     }));
 
     const safeData = { ...data, buttons: enhancedButtons };
