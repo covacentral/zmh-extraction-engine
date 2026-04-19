@@ -34,7 +34,11 @@ const PinterestIcon = () => (
 )
 
 export default function ClientPage({ data, themeHex, RENDER_API }: any) {
-  const { businessName, avatarJid, promoJid, buttons = [] } = data;
+  let { businessName, avatarJid, promoJid, buttons = [], promos = [] } = data;
+
+  if (promoJid && (!Array.isArray(promos) || promos.length === 0)) {
+     promos = [promoJid];
+  }
 
   const getNetworkSpecs = (btn: any) => {
      const networkType = (btn.type || 'whatsapp').toLowerCase();
@@ -144,23 +148,24 @@ export default function ClientPage({ data, themeHex, RENDER_API }: any) {
           })}
         </div>
 
-        {/* Promo 1:1 Large Square Image (NO borders, high radius) */}
-        {promoJid && (
+        {/* Promos 1:1 Large Square Images (NO borders, high radius) */}
+        {promos.map((promoId: string, idx: number) => (
           <motion.div 
+            key={idx}
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
+            transition={{ delay: 0.3 + (idx * 0.1) }}
             className="w-full aspect-square mt-2 rounded-[2rem] overflow-hidden relative shadow-2xl ring-1 ring-white/10"
           >
             <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none z-10" />
             <img 
-              src={`${RENDER_API}/api/avatar/${promoJid}?timestamp=${new Date().getTime()}`} 
-              alt="Promo del día"
+              src={`${RENDER_API}/api/avatar/${promoId}?timestamp=${new Date().getTime()}`} 
+              alt={`Promo del día ${idx + 1}`}
               className="w-full h-full object-cover z-0"
               onError={(e) => (e.currentTarget.src = `https://ui-avatars.com/api/?name=PROMO&background=18181b&color=fff&size=500`)}
             />
           </motion.div>
-        )}
+        ))}
       </div>
     </main>
   );
