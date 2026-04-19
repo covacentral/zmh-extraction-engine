@@ -7,15 +7,75 @@ const WhatsappIcon = () => (
   </svg>
 );
 
+const InstagramIcon = () => (
+  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="stroke-pink-500">
+    <rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect>
+    <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path>
+    <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line>
+  </svg>
+);
+
+const TiktokIcon = () => (
+  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="stroke-zinc-800">
+     <path d="M9 12a4 4 0 1 0 4 4V4a5 5 0 0 0 5 5"></path>
+  </svg>
+);
+
+const FacebookIcon = () => (
+  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="stroke-blue-600">
+    <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"></path>
+  </svg>
+);
+
+const PinterestIcon = () => (
+    <svg viewBox="0 0 24 24" width="18" height="18" className="fill-red-600">
+        <path d="M12.017 0C5.396 0 .029 5.367.029 11.987c0 5.079 3.158 9.417 7.618 11.162-.105-.949-.199-2.403.041-3.439.219-.937 1.406-5.957 1.406-5.957s-.359-.72-.359-1.781c0-1.663.967-2.911 2.168-2.911 1.024 0 1.518.769 1.518 1.688 0 1.029-.653 2.567-.992 3.992-.285 1.193.6 2.165 1.775 2.165 2.128 0 3.768-2.245 3.768-5.487 0-2.861-2.063-4.869-5.008-4.869-3.41 0-5.409 2.562-5.409 5.199 0 1.033.394 2.143.889 2.741.099.12.112.225.085.345-.09.375-.293 1.199-.334 1.363-.053.225-.172.271-.401.165-1.495-.69-2.433-2.878-2.433-4.646 0-3.776 2.748-7.252 7.951-7.252 4.195 0 7.453 2.99 7.453 6.98 0 4.175-2.631 7.533-6.284 7.533-1.228 0-2.384-.638-2.778-1.39l-.759 2.894c-.274 1.045-1.018 2.348-1.519 3.143 1.196.368 2.457.567 3.764.567 6.621 0 11.988-5.368 11.988-11.988C24 5.367 18.638 0 12.017 0z"/>
+    </svg>
+)
+
 export default function ClientPage({ data, themeHex, RENDER_API }: any) {
   const { businessName, avatarJid, promoJid, buttons = [] } = data;
 
-  const extractId = (url: string) => {
-    if (!url) return '';
-    if (url.includes('channel/')) return url.split('channel/')[1];
-    if (url.includes('wa.me/')) return url.split('wa.me/')[1];
-    return '';
-  };
+  const getNetworkSpecs = (btn: any) => {
+     const networkType = (btn.type || 'whatsapp').toLowerCase();
+     
+     // 1. Determine Icon
+     let Icon = WhatsappIcon;
+     if (networkType === 'instagram') Icon = InstagramIcon;
+     if (networkType === 'tiktok') Icon = TiktokIcon;
+     if (networkType === 'facebook') Icon = FacebookIcon;
+     if (networkType === 'pinterest') Icon = PinterestIcon;
+
+     // 2. Extract Username / ID to fetch correct Avatar
+     let avatarUrl = btn.scrapedImage || '';
+     const fallback = `https://ui-avatars.com/api/?name=${btn.name}&background=18181b&color=fff`;
+
+     if (!avatarUrl && networkType === 'whatsapp') {
+       let waId = btn.phone || '';
+       if (!waId && btn.url) {
+           if (btn.url.includes('channel/')) waId = btn.url.split('channel/')[1].split('/')[0].split('?')[0];
+           else if (btn.url.includes('wa.me/')) waId = btn.url.split('wa.me/')[1].split('/')[0].split('?')[0];
+       }
+       avatarUrl = waId ? `${RENDER_API}/api/avatar/${waId}` : fallback;
+     } 
+     else if (!avatarUrl && btn.url) {
+       // Using unavatar.io proxy logic for non-whatsapp networks
+       try {
+           const urlObj = new URL(btn.url);
+           let path = urlObj.pathname.replace(/^\/|\/$/g, '');
+           let username = path.split('/')[0];
+           if (username && username.startsWith('@')) username = username.substring(1);
+           
+           if (username) {
+              avatarUrl = `https://unavatar.io/${networkType}/${username}?fallback=${encodeURIComponent(fallback)}`;
+           }
+       } catch (e) {
+           avatarUrl = fallback; 
+       }
+     }
+
+     return { Icon, avatarUrl: avatarUrl || fallback };
+  }
 
   return (
     <main 
@@ -48,7 +108,7 @@ export default function ClientPage({ data, themeHex, RENDER_API }: any) {
         {/* 2-Column Buttons Grid (Píldoras Glassmorphism) */}
         <div className="w-full grid grid-cols-2 gap-3 mt-4">
           {buttons.map((btn: any, i: number) => {
-             const btnId = btn.phone || extractId(btn.url);
+             const { Icon, avatarUrl } = getNetworkSpecs(btn);
              return (
               <motion.a
                 key={i}
@@ -60,15 +120,15 @@ export default function ClientPage({ data, themeHex, RENDER_API }: any) {
                 rel="noopener noreferrer"
                 className="flex flex-row items-center justify-start p-1.5 pr-3 rounded-full backdrop-blur-md bg-white/5 hover:bg-white/10 border border-white/10 transition-all shadow-[0_0_15px_rgba(0,0,0,0.5)] gap-2 hover:shadow-[0_0_20px_var(--theme)] group"
               >
-                {/* Whatsapp Icon */}
-                <div className="shrink-0 bg-white rounded-full p-[3px] shadow-sm transform group-hover:scale-110 transition-transform">
-                   <WhatsappIcon />
+                {/* Dynamic Network Icon */}
+                <div className="shrink-0 bg-white rounded-full flex items-center justify-center w-7 h-7 shadow-sm transform group-hover:scale-110 transition-transform">
+                   <Icon />
                 </div>
 
                 {/* Avatar Profile */}
                 <div className="w-6 h-6 rounded-full overflow-hidden shrink-0 bg-white/10 border border-white/20">
                   <img 
-                    src={btn.scrapedImage || `${RENDER_API}/api/avatar/${btnId}`}
+                    src={avatarUrl}
                     alt={btn.name}
                     className="w-full h-full object-cover"
                     onError={(e) => (e.currentTarget.src = `https://ui-avatars.com/api/?name=${btn.name}&background=18181b&color=fff`)}
