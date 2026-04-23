@@ -58,15 +58,20 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
      setCart(prev => prev.filter(i => i.id !== id));
   };
 
-  const setQty = (id: string, newQty: number) => {
-     if (newQty < 1) {
+  const setQty = (id: string, newQty: any) => {
+     if (newQty === '') {
+         setCart(prev => prev.map(i => i.id === id ? { ...i, qty: '' } : i));
+         return;
+     }
+     const val = parseInt(newQty);
+     if (isNaN(val) || val < 1) {
          removeProduct(id);
          return;
      }
-     setCart(prev => prev.map(i => i.id === id ? { ...i, qty: newQty } : i));
+     setCart(prev => prev.map(i => i.id === id ? { ...i, qty: val } : i));
   };
 
-  const cartTotal = cart.reduce((acc, item) => acc + (item.price * item.qty), 0);
+  const cartTotal = cart.reduce((acc, item) => acc + (item.price * (parseInt(item.qty) || 0)), 0);
 
   // Time formatter
   const formatTimeTo12h = (isoString: string) => {
@@ -207,7 +212,7 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
 
        {/* FIXED FLOATING BUTTON */}
        <AnimatePresence>
-        <motion.div initial={{ y: -100, x: "-50%" }} animate={{ y: 0, x: "-50%" }} className="fixed top-4 left-1/2 z-40 w-[90%] max-w-sm flex justify-center">
+        <motion.div initial={{ y: -100, x: "-50%" }} animate={{ y: 0, x: "-50%" }} className="fixed top-4 left-1/2 z-40 w-[85%] max-w-[320px] flex justify-center">
            <button 
              onClick={() => setShowCheckout(true)}
              className="w-full bg-[var(--theme)] text-white p-4 rounded-full font-bold shadow-[0_10px_30px_rgba(0,0,0,0.6)] border border-white/20 hover:scale-[1.02] active:scale-95 transition-transform flex justify-between items-center"
@@ -230,7 +235,7 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
            >
               <motion.div 
                 initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }} transition={{ type: "spring", damping: 25, stiffness: 200 }}
-                className="bg-zinc-950 w-full sm:max-w-md rounded-t-[2.5rem] sm:rounded-3xl p-5 sm:p-8 border-t sm:border border-white/10 max-h-[90vh] overflow-y-auto shadow-[0_-20px_50px_rgba(0,0,0,0.8)] relative"
+                className="bg-zinc-950 w-[95%] sm:w-full sm:max-w-md rounded-[2.5rem] p-6 sm:p-8 border sm:border border-white/10 max-h-[85vh] overflow-y-auto shadow-[0_-20px_50px_rgba(0,0,0,0.8)] relative mb-4 sm:mb-0"
                 style={{ '--theme': themeHex } as any}
               >
                  {success ? (
@@ -257,10 +262,10 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
                                        <span className="font-medium line-clamp-1">{item.name}</span>
                                        <span className="text-white/40 text-[10px] block">${item.price.toLocaleString('es-CO')} c/u</span>
                                    </div>
-                                   <div className="flex items-center bg-white/5 rounded-xl overflow-hidden border border-white/5">
-                                      <button type="button" onClick={() => setQty(item.id, item.qty - 1)} className="w-8 h-8 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-colors">-</button>
-                                      <input type="number" min="1" value={item.qty} onChange={(e) => setQty(item.id, parseInt(e.target.value) || 1)} className="w-10 text-center bg-transparent border-x border-white/5 font-bold text-sm outline-none text-white [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
-                                      <button type="button" onClick={() => setQty(item.id, item.qty + 1)} className="w-8 h-8 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-colors">+</button>
+                                    <div className="flex items-center bg-white/5 rounded-xl overflow-hidden border border-white/5">
+                                      <button type="button" onClick={() => setQty(item.id, (parseInt(item.qty) || 0) - 1)} className="w-8 h-8 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-colors">-</button>
+                                      <input type="text" inputMode="numeric" pattern="[0-9]*" value={item.qty} onChange={(e) => setQty(item.id, e.target.value)} onBlur={() => { if (!item.qty || parseInt(item.qty) < 1) setQty(item.id, 1); }} className="w-10 text-center bg-transparent border-x border-white/5 font-bold text-sm outline-none text-white [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+                                      <button type="button" onClick={() => setQty(item.id, (parseInt(item.qty) || 0) + 1)} className="w-8 h-8 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-colors">+</button>
                                    </div>
                                 </div>
                              ))}
