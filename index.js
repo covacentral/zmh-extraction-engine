@@ -231,8 +231,19 @@ const syncCatalogs = async () => {
                          // Firestore crashes if there are undefined values in the array (like retailerId: undefined)
                          // We serialize to JSON and back to strip all undefined values cleanly.
                          const sanitizedProducts = JSON.parse(JSON.stringify(products));
-                         await doc.ref.update({ whatsappCatalog: sanitizedProducts });
-                         console.log(`Catálogo sincronizado para ${data.businessName}: ${products.length} productos.`);
+                         
+                         // Store catalog in separate collection to prevent bloating the commerce document
+                         await db.collection('catalogos').doc(doc.id).set({
+                             whatsappCatalog: sanitizedProducts,
+                             updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                         });
+                         
+                         // Remove legacy field from main document if it exists to clean up Read payloads
+                         if (data.whatsappCatalog) {
+                             await doc.ref.update({ whatsappCatalog: admin.firestore.FieldValue.delete() });
+                         }
+                         
+                         console.log(`Catálogo sincronizado para ${data.businessName}: ${products.length} productos guardados en /catalogos/${doc.id}.`);
                      }
                  } catch(err) {
                      console.error('Error sincronizando catálogo para', targetJid, err.message);

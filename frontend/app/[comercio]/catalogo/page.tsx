@@ -26,8 +26,16 @@ export default async function CatalogoPage({ params }: { params: { comercio: str
   const doc = await db.collection('comercios').doc(comercio).get();
   if (!doc.exists) return notFound();
 
-  const data = doc.data();
-  if (!data) return notFound();
+  const data = doc.data() || {};
+
+  // Fetch independent catalog to prevent main document bloat
+  const catalogDoc = await db.collection('catalogos').doc(comercio).get();
+  if (catalogDoc.exists) {
+      const catalogData = catalogDoc.data();
+      if (catalogData && catalogData.whatsappCatalog) {
+          data.whatsappCatalog = catalogData.whatsappCatalog;
+      }
+  }
 
   const themeHex = data.themeHex || '#25D366';
   const RENDER_API = process.env.NEXT_PUBLIC_RENDER_API || 'https://zmh-extraction-engine.onrender.com';
