@@ -126,7 +126,7 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
     <main className="flex flex-col items-center p-4 min-h-screen w-full relative bg-black font-sans pb-32" style={{ '--theme': themeHex } as any}>
        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[120%] h-64 opacity-20 blur-[100px] pointer-events-none z-0" style={{ backgroundColor: 'var(--theme)' }} />
 
-       <div className="w-full max-w-lg z-10 flex flex-col gap-4">
+       <div className="w-full max-w-lg z-10 flex flex-col gap-4 pt-20">
           
           {/* TOP BAR: BACK BUTTON & SEARCH */}
           <div className="flex items-center gap-3 mt-2">
@@ -206,7 +206,7 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
 
        {/* FIXED FLOATING BUTTON */}
        <AnimatePresence>
-        <motion.div initial={{ y: 100 }} animate={{ y: 0 }} className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 w-[90%] max-w-sm">
+        <motion.div initial={{ y: -100 }} animate={{ y: 0 }} className="fixed top-4 left-1/2 -translate-x-1/2 z-40 w-[90%] max-w-sm">
            <button 
              onClick={() => setShowCheckout(true)}
              className="w-full bg-[var(--theme)] text-white p-4 rounded-full font-bold shadow-[0_10px_30px_rgba(0,0,0,0.6)] border border-white/20 hover:scale-[1.02] active:scale-95 transition-transform flex justify-between items-center"
