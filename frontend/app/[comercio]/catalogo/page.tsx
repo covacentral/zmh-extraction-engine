@@ -1,13 +1,29 @@
 import { notFound } from 'next/navigation';
-import { adminDb } from '@/lib/firebase-admin';
 import CatalogClient from './CatalogClient';
+import admin from 'firebase-admin';
+
+// Initialize Firebase once
+if (!admin.apps.length) {
+  try {
+    if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+      const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+      admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount)
+      });
+    }
+  } catch (e) {
+    console.error("Firebase Auth Error");
+  }
+}
+
+const db = admin.firestore();
 
 export default async function CatalogoPage({ params }: { params: { comercio: string } }) {
   const { comercio } = params;
   
   if (!comercio) return notFound();
 
-  const doc = await adminDb.collection('comercios').doc(comercio).get();
+  const doc = await db.collection('comercios').doc(comercio).get();
   if (!doc.exists) return notFound();
 
   const data = doc.data();
