@@ -220,7 +220,10 @@ const syncCatalogs = async () => {
                      }
                      
                      if (products.length > 0) {
-                         await doc.ref.update({ whatsappCatalog: products });
+                         // Firestore crashes if there are undefined values in the array (like retailerId: undefined)
+                         // We serialize to JSON and back to strip all undefined values cleanly.
+                         const sanitizedProducts = JSON.parse(JSON.stringify(products));
+                         await doc.ref.update({ whatsappCatalog: sanitizedProducts });
                          console.log(`Catálogo sincronizado para ${data.businessName}: ${products.length} productos.`);
                      }
                  } catch(err) {
