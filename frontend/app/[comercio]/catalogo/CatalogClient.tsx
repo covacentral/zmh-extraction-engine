@@ -26,7 +26,8 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
   };
 
   const getProductPrice = (product: any, wholesale: boolean) => {
-      let regularPrice = (product.priceAmount1000 || 0) / 1000;
+      let rawPrice = product.priceAmount1000 !== undefined ? product.priceAmount1000 : product.price;
+      let regularPrice = (rawPrice || 0) / 1000;
       if (!wholesale) return regularPrice;
       const desc = (product.description || '').toLowerCase();
       const match = desc.match(/mayorista:\s*\$?(\d+(\.\d+)?)/);
@@ -229,7 +230,7 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
            >
               <motion.div 
                 initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }} transition={{ type: "spring", damping: 25, stiffness: 200 }}
-                className="bg-zinc-950 w-full sm:max-w-md rounded-t-[2.5rem] sm:rounded-3xl p-6 sm:p-8 border-t sm:border border-white/10 max-h-[90vh] overflow-y-auto shadow-[0_-20px_50px_rgba(0,0,0,0.8)] relative"
+                className="bg-zinc-950 w-full sm:max-w-md rounded-t-[2.5rem] sm:rounded-3xl p-5 sm:p-8 border-t sm:border border-white/10 max-h-[90vh] overflow-y-auto shadow-[0_-20px_50px_rgba(0,0,0,0.8)] relative"
                 style={{ '--theme': themeHex } as any}
               >
                  {success ? (
