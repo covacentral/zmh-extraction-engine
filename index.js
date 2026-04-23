@@ -3,6 +3,14 @@ const { default: makeWASocket, fetchLatestBaileysVersion, initAuthCreds, BufferJ
 const cors = require('cors');
 const admin = require('firebase-admin');
 
+// Prevent Baileys unhandled promise rejections from crashing the server
+process.on('unhandledRejection', (reason, promise) => {
+    console.log('Unhandled Rejection at:', promise, 'reason:', reason);
+});
+process.on('uncaughtException', (err) => {
+    console.log('Uncaught Exception:', err);
+});
+
 // Initialize Firebase Admin DB
 if (process.env.FIREBASE_SERVICE_ACCOUNT) {
     const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
