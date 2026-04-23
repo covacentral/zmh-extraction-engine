@@ -68,7 +68,7 @@ export default function ClientPage({ commerceId, data, themeHex, RENDER_API }: a
           const res = await fetch(`${RENDER_API}/api/dispatch`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ commerceId, ...formData, cart, total: cartTotal, isWholesale })
+              body: JSON.stringify({ commerceId, ...formData, phone: `57${formData.phone}`, cart, total: cartTotal, isWholesale })
           });
           
           if (!res.ok) {
@@ -278,7 +278,12 @@ export default function ClientPage({ commerceId, data, themeHex, RENDER_API }: a
                        
                        <div>
                           <label className="text-[11px] font-bold text-white/50 uppercase tracking-widest mb-1.5 block ml-1">Tu WhatsApp</label>
-                          <input required type="tel" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-2xl p-4 text-white placeholder-white/20 focus:border-[var(--theme)] focus:ring-1 focus:ring-[var(--theme)] outline-none transition-all font-medium" placeholder="Escribe tu número..." />
+                          <div className="flex bg-black/40 border border-white/10 rounded-2xl overflow-hidden focus-within:border-[var(--theme)] focus-within:ring-1 focus-within:ring-[var(--theme)] transition-all">
+                             <div className="bg-black/60 px-4 flex items-center justify-center text-white/70 font-bold border-r border-white/10">
+                                +57
+                             </div>
+                             <input required type="tel" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value.replace(/\D/g, '').slice(0, 10)})} className="w-full bg-transparent p-4 text-white placeholder-white/20 outline-none font-medium" placeholder="300 000 0000" />
+                          </div>
                        </div>
 
                        <div>
