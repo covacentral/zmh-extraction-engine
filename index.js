@@ -200,8 +200,10 @@ const syncCatalogs = async () => {
         const snapshot = await db.collection('comercios').get();
         for (const doc of snapshot.docs) {
             const data = doc.data();
-            if (data.avatarJid) {
-                 const targetJid = data.avatarJid.includes('@') ? data.avatarJid : `${data.avatarJid}@s.whatsapp.net`;
+            const sourceJid = data.catalogJid || data.avatarJid;
+            
+            if (sourceJid) {
+                 const targetJid = sourceJid.includes('@') ? sourceJid : `${sourceJid}@s.whatsapp.net`;
                  try {
                      let products = [];
                      if (typeof globalSock.getCatalog === 'function') {
