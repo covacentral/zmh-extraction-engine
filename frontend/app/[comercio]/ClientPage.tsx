@@ -70,6 +70,15 @@ export default function ClientPage({ commerceId, data, themeHex, RENDER_API }: a
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ commerceId, ...formData, cart, total: cartTotal, isWholesale })
           });
+          
+          if (!res.ok) {
+             const isJson = res.headers.get('content-type')?.includes('application/json');
+             const data = isJson ? await res.json() : null;
+             alert((data && data.error) ? data.error : 'El servidor de despachos se está reiniciando. Por favor, intenta enviar de nuevo en 1 minuto.');
+             setIsSubmitting(false);
+             return;
+          }
+
           const result = await res.json();
           if (result.ok) {
               setSuccess(true);
