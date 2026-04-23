@@ -1,5 +1,5 @@
 'use client';
-import { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }: any) {
@@ -15,16 +15,6 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
   const [success, setSuccess] = useState(false);
   const [formData, setFormData] = useState({ name: '', phone: '', datetime: '' });
 
-  // Fallback for image URLs based on standard Baileys Product structure
-  const getImageUrl = (prod: any) => {
-    if (!prod.imageUrls) return '';
-    if (typeof prod.imageUrls === 'string') return prod.imageUrls;
-    if (prod.imageUrls.requested) return prod.imageUrls.requested;
-    if (prod.imageUrls.original) return prod.imageUrls.original;
-    if (Array.isArray(prod.imageUrls)) return prod.imageUrls[0] || '';
-    return '';
-  };
-
   const getProductPrice = (product: any, wholesale: boolean) => {
       let rawPrice = product.priceAmount1000 !== undefined ? product.priceAmount1000 : product.price;
       let regularPrice = (rawPrice || 0) / 1000;
@@ -33,6 +23,16 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
       const match = desc.match(/mayorista:\s*\$?(\d+(\.\d+)?)/);
       if (match && match[1]) return parseFloat(match[1]);
       return regularPrice;
+  };
+
+  // Fallback for image URLs based on standard Baileys Product structure
+  const getImageUrl = (prod: any) => {
+    if (!prod.imageUrls) return '';
+    if (typeof prod.imageUrls === 'string') return prod.imageUrls;
+    if (prod.imageUrls.requested) return prod.imageUrls.requested;
+    if (prod.imageUrls.original) return prod.imageUrls.original;
+    if (Array.isArray(prod.imageUrls)) return prod.imageUrls[0] || '';
+    return '';
   };
 
   // Filtered and paginated products
@@ -70,6 +70,24 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
      }
      setCart(prev => prev.map(i => i.id === id ? { ...i, qty: val } : i));
   };
+
+  useEffect(() => {
+     setCart(prev => {
+        let changed = false;
+        const newCart = prev.map(item => {
+            const catalogItem = whatsappCatalog.find((p: any) => p.id === item.id);
+            if (catalogItem) {
+                const newPrice = getProductPrice(catalogItem, isWholesale);
+                if (newPrice !== item.price) {
+                    changed = true;
+                    return { ...item, price: newPrice };
+                }
+            }
+            return item;
+        });
+        return changed ? newCart : prev;
+     });
+  }, [isWholesale, whatsappCatalog]);
 
   const cartTotal = cart.reduce((acc, item) => acc + (item.price * (Number(item.qty) || 0)), 0);
 
@@ -287,7 +305,7 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
                              <div className="bg-black/60 px-4 flex items-center justify-center text-white/70 font-bold border-r border-white/10">
                                 +57
                              </div>
-                             <input required type="tel" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value.replace(/\D/g, '').slice(0, 10)})} className="w-full bg-transparent p-4 text-white placeholder-white/20 outline-none font-medium" placeholder="300 000 0000" />
+                             <input required minLength={10} maxLength={10} pattern="[0-9]{10}" title="El número debe tener exactamente 10 dígitos" type="tel" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value.replace(/\D/g, '').slice(0, 10)})} className="w-full bg-transparent p-4 text-white placeholder-white/20 outline-none font-medium" placeholder="300 000 0000" />
                           </div>
                        </div>
 
