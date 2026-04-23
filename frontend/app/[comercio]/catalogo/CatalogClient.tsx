@@ -230,11 +230,11 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
       <AnimatePresence>
          {showCheckout && (
            <motion.div 
-             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-             className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-end sm:items-center justify-center"
+             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}
+             className="fixed inset-0 bg-black/90 z-[100] flex items-end sm:items-center justify-center p-2"
            >
               <motion.div 
-                initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }} transition={{ type: "spring", damping: 25, stiffness: 200 }}
+                initial={{ scale: 0.9, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.9, opacity: 0, y: 20 }} transition={{ duration: 0.15, ease: "easeOut" }}
                 className="bg-zinc-950 w-[95%] sm:w-full sm:max-w-md rounded-[2.5rem] p-6 sm:p-8 border sm:border border-white/10 max-h-[85vh] overflow-y-auto shadow-[0_-20px_50px_rgba(0,0,0,0.8)] relative mb-4 sm:mb-0"
                 style={{ '--theme': themeHex } as any}
               >
