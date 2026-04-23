@@ -247,8 +247,23 @@ app.post('/api/dispatch', async (req, res) => {
         const doc = await db.collection('comercios').doc(commerceId).get();
         if (!doc.exists) return res.status(404).json({ error: 'Commerce not found' });
         
-        const dispatchJid = doc.data().dispatchJid;
+        let dispatchJid = doc.data().dispatchJid;
         if (!dispatchJid) return res.status(400).json({ error: 'Este comercio aún no ha configurado su dispatchJid (Grupo Privado) en Firestore.' });
+        
+        // Auto-resolve group invite links to actual JIDs
+        if (dispatchJid.includes('chat.whatsapp.com/')) {
+            const inviteCode = dispatchJid.replace('https://chat.whatsapp.com/', '').trim();
+            try {
+                const groupInfo = await globalSock.groupGetInviteInfo(inviteCode);
+                if (groupInfo && groupInfo.id) {
+                    dispatchJid = groupInfo.id;
+                    // Auto-update Firestore so we don't have to resolve it again next time
+                    await doc.ref.update({ dispatchJid: dispatchJid });
+                }
+            } catch(e) {
+                console.error("Failed to resolve group invite link", e);
+            }
+        }
         
         let msg = `🔔 *NUEVO PEDIDO / CITA*\n\n`;
         msg += `👤 *Cliente:* ${name}\n`;
