@@ -206,7 +206,7 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
 
        {/* FIXED FLOATING BUTTON */}
        <AnimatePresence>
-        <motion.div initial={{ y: -100 }} animate={{ y: 0 }} className="fixed top-4 left-1/2 -translate-x-1/2 z-40 w-[90%] max-w-sm flex justify-center">
+        <motion.div initial={{ y: -100, x: "-50%" }} animate={{ y: 0, x: "-50%" }} className="fixed top-4 left-1/2 z-40 w-[90%] max-w-sm flex justify-center">
            <button 
              onClick={() => setShowCheckout(true)}
              className="w-full bg-[var(--theme)] text-white p-4 rounded-full font-bold shadow-[0_10px_30px_rgba(0,0,0,0.6)] border border-white/20 hover:scale-[1.02] active:scale-95 transition-transform flex justify-between items-center"
