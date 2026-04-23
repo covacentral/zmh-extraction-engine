@@ -63,7 +63,7 @@ export default async function ComercioServerPage({ params }: { params: { comerci
 
     const safeData = { ...data, buttons: enhancedButtons };
 
-    return <ClientPage data={safeData} themeHex={data?.themeHex || '#4F46E5'} RENDER_API={RENDER_API} />;
+    return <ClientPage commerceId={params.comercio} data={safeData} themeHex={data?.themeHex || '#4F46E5'} RENDER_API={RENDER_API} />;
   } catch (error: any) {
     return (
       <div className="p-10 text-white text-center flex flex-col items-center justify-center min-h-screen bg-black">

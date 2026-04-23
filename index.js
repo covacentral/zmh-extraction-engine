@@ -192,6 +192,90 @@ app.get('/api/seed', async (req, res) => {
     } catch(e) { res.status(500).json({ err: e.toString() }); }
 });
 
+app.use(express.json());
+
+const syncCatalogs = async () => {
+    if (!isReady || !globalSock || !db) return;
+    try {
+        const snapshot = await db.collection('comercios').get();
+        for (const doc of snapshot.docs) {
+            const data = doc.data();
+            if (data.avatarJid) {
+                 const targetJid = data.avatarJid.includes('@') ? data.avatarJid : `${data.avatarJid}@s.whatsapp.net`;
+                 try {
+                     let products = [];
+                     if (typeof globalSock.getCatalog === 'function') {
+                         const catalog = await globalSock.getCatalog({ jid: targetJid });
+                         if (catalog && catalog.products) products = catalog.products;
+                     } else {
+                         const result = await globalSock.query({
+                             tag: 'iq',
+                             attrs: { to: 's.whatsapp.net', type: 'get', xmlns: 'w:biz:catalog' },
+                             content: [{ tag: 'product_catalog', attrs: { jid: targetJid, allow_paged: 'true' } }]
+                         });
+                         // Basic fallback parsing if getCatalog is missing
+                         products = result?.content || [];
+                     }
+                     
+                     if (products.length > 0) {
+                         await doc.ref.update({ whatsappCatalog: products });
+                         console.log(`Catálogo sincronizado para ${data.businessName}: ${products.length} productos.`);
+                     }
+                 } catch(err) {
+                     console.error('Error sincronizando catálogo para', targetJid, err.message);
+                 }
+            }
+        }
+    } catch(e) { console.error('Cron error:', e.message); }
+};
+
+// Cronjob: Sincronizar cada 30 minutos
+setInterval(syncCatalogs, 30 * 60 * 1000);
+
+app.get('/api/force-sync', async (req, res) => {
+    if (!isReady || !globalSock) return res.status(503).json({ error: 'WhatsApp offline' });
+    await syncCatalogs();
+    res.json({ ok: true, msg: 'Sincronización forzada completada' });
+});
+
+app.post('/api/dispatch', async (req, res) => {
+    if (!isReady || !globalSock) return res.status(503).json({ error: 'WhatsApp offline' });
+    try {
+        const { commerceId, name, phone, datetime, cart = [], total = 0, isWholesale = false } = req.body;
+        if (!name || !phone || !datetime) return res.status(400).json({ error: 'Missing mandatory fields' });
+
+        const doc = await db.collection('comercios').doc(commerceId).get();
+        if (!doc.exists) return res.status(404).json({ error: 'Commerce not found' });
+        
+        const dispatchJid = doc.data().dispatchJid;
+        if (!dispatchJid) return res.status(400).json({ error: 'Este comercio aún no ha configurado su dispatchJid (Grupo Privado) en Firestore.' });
+        
+        let msg = `🔔 *NUEVO PEDIDO / CITA*\n\n`;
+        msg += `👤 *Cliente:* ${name}\n`;
+        msg += `📱 *Teléfono:* +${phone.replace(/\D/g,'')}\n`;
+        msg += `🕒 *Fecha sugerida:* ${datetime}\n`;
+        msg += `🏢 *Modo:* ${isWholesale ? 'Mayorista' : 'Minorista'}\n\n`;
+        
+        if (cart.length > 0) {
+            msg += `🛒 *CARRITO:*\n`;
+            cart.forEach(item => {
+                msg += `- ${item.qty}x ${item.name} ($${item.price})\n`;
+            });
+            msg += `\n💰 *Total Estimado:* $${total}\n\n`;
+        } else {
+            msg += `🛒 *CARRITO:* Vacío (Solo Agendamiento)\n\n`;
+        }
+        
+        msg += `Para atender esta solicitud, responde a este ticket. Toca el número arriba para abrir el chat con el cliente.`;
+        
+        await globalSock.sendMessage(dispatchJid, { text: msg });
+        res.json({ ok: true, msg: 'Ticket despachado exitosamente.' });
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
 app.listen(port, () => console.log(`API port ${port}`));
 
 app.get('/api/test-db', async (req, res) => {
