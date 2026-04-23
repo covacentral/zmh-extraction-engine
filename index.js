@@ -296,6 +296,16 @@ app.post('/api/dispatch', async (req, res) => {
     }
 });
 
+app.get('/api/debug-catalog', async (req, res) => {
+    try {
+        const doc = await db.collection('comercios').doc(req.query.id || 'cc-bodega-mayorista').get();
+        const catalog = doc.data()?.whatsappCatalog || [];
+        res.json(catalog.slice(0, 3));
+    } catch(e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 app.listen(port, () => console.log(`API port ${port}`));
 
 app.get('/api/test-db', async (req, res) => {
