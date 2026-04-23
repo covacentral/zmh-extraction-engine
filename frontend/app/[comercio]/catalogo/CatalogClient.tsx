@@ -63,7 +63,7 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
          setCart(prev => prev.map(i => i.id === id ? { ...i, qty: '' } : i));
          return;
      }
-     const val = parseInt(newQty);
+     const val = Number(newQty);
      if (isNaN(val) || val < 1) {
          removeProduct(id);
          return;
@@ -71,7 +71,7 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
      setCart(prev => prev.map(i => i.id === id ? { ...i, qty: val } : i));
   };
 
-  const cartTotal = cart.reduce((acc, item) => acc + (item.price * (parseInt(item.qty) || 0)), 0);
+  const cartTotal = cart.reduce((acc, item) => acc + (item.price * (Number(item.qty) || 0)), 0);
 
   // Time formatter
   const formatTimeTo12h = (isoString: string) => {
@@ -263,9 +263,9 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
                                        <span className="text-white/40 text-[10px] block">${item.price.toLocaleString('es-CO')} c/u</span>
                                    </div>
                                     <div className="flex items-center bg-white/5 rounded-xl overflow-hidden border border-white/5">
-                                      <button type="button" onClick={() => setQty(item.id, (parseInt(item.qty) || 0) - 1)} className="w-8 h-8 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-colors">-</button>
-                                      <input type="text" inputMode="numeric" pattern="[0-9]*" value={item.qty} onChange={(e) => setQty(item.id, e.target.value)} onBlur={() => { if (!item.qty || parseInt(item.qty) < 1) setQty(item.id, 1); }} className="w-10 text-center bg-transparent border-x border-white/5 font-bold text-sm outline-none text-white [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
-                                      <button type="button" onClick={() => setQty(item.id, (parseInt(item.qty) || 0) + 1)} className="w-8 h-8 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-colors">+</button>
+                                      <button type="button" onClick={() => setQty(item.id, (Number(item.qty) || 0) - 1)} className="w-8 h-8 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-colors">-</button>
+                                      <input type="text" inputMode="numeric" pattern="[0-9]*" value={item.qty} onChange={(e) => setQty(item.id, e.target.value)} onBlur={() => { if (!item.qty || Number(item.qty) < 1) setQty(item.id, 1); }} className="w-10 text-center bg-transparent border-x border-white/5 font-bold text-sm outline-none text-white [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+                                      <button type="button" onClick={() => setQty(item.id, (Number(item.qty) || 0) + 1)} className="w-8 h-8 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-colors">+</button>
                                    </div>
                                 </div>
                              ))}
