@@ -298,7 +298,8 @@ app.post('/api/dispatch', async (req, res) => {
         if (cart.length > 0) {
             msg += `🛒 *CARRITO:*\n`;
             cart.forEach(item => {
-                msg += `- ${item.qty}x ${item.name} ($${item.price})\n`;
+                const ref = item.refCode ? ` [REF: ${item.refCode}]` : '';
+                msg += `- ${item.qty}x ${item.name}${ref} ($${item.price})\n`;
             });
             msg += `\n💰 *Total Estimado:* $${total}\n\n`;
         } else {

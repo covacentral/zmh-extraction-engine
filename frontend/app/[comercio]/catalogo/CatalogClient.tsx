@@ -83,10 +83,11 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API, 
 
   // Cart operations
   const addToCart = (product: any, price: number) => {
+     const refCode = getProductRef(product);
      setCart(prev => {
         const existing = prev.find(i => i.id === product.id);
         if (existing) return prev.map(i => i.id === product.id ? { ...i, qty: i.qty + 1 } : i);
-        return [...prev, { id: product.id, name: product.name, price, qty: 1 }];
+        return [...prev, { id: product.id, name: product.name, refCode, price, qty: 1 }];
      });
   };
 
