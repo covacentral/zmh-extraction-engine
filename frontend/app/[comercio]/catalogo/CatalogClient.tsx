@@ -17,14 +17,23 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API, 
   const [formData, setFormData] = useState({ name: vipClient?.name || '', phone: vipClient?.phone || '', datetime: '' });
   const [isASAP, setIsASAP] = useState(false);
 
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+
   const getProductPrice = (product: any, wholesale: boolean) => {
       let rawPrice = product.priceAmount1000 !== undefined ? product.priceAmount1000 : product.price;
       let regularPrice = (rawPrice || 0) / 1000;
       if (!wholesale) return regularPrice;
-      const desc = (product.description || '').toLowerCase();
-      const match = desc.match(/mayorista:\s*\$?(\d+(\.\d+)?)/);
+      const desc = product.description || '';
+      const match = desc.match(/mayorista:\s*\$?(\d+(\.\d+)?)/i);
       if (match && match[1]) return parseFloat(match[1]);
       return regularPrice;
+  };
+
+  const getProductRef = (product: any) => {
+      const desc = product.description || '';
+      const match = desc.match(/(?:referencia|ref):\s*([a-zA-Z0-9_-]+)/i);
+      if (match && match[1]) return match[1];
+      return null;
   };
 
   // Fallback for image URLs based on standard Baileys Product structure
@@ -37,13 +46,38 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API, 
     return '';
   };
 
+  // Extract categories (hashtags)
+  const categories = useMemo(() => {
+     const tags = new Set<string>();
+     whatsappCatalog.forEach((prod: any) => {
+        const desc = prod.description || '';
+        const matches = desc.match(/#[a-zA-Z0-9_áéíóúñÁÉÍÓÚÑ]+/g);
+        if (matches) {
+           matches.forEach((m: string) => tags.add(m));
+        }
+     });
+     return Array.from(tags);
+  }, [whatsappCatalog]);
+
   // Filtered and paginated products
   const filteredProducts = useMemo(() => {
-     return whatsappCatalog.filter((prod: any) => 
-        prod.name?.toLowerCase().includes(search.toLowerCase()) || 
-        prod.description?.toLowerCase().includes(search.toLowerCase())
-     );
-  }, [whatsappCatalog, search]);
+     let filtered = whatsappCatalog;
+     
+     if (selectedCategory) {
+         filtered = filtered.filter((prod: any) => 
+            (prod.description || '').toLowerCase().includes(selectedCategory.toLowerCase())
+         );
+     }
+     
+     if (search) {
+         filtered = filtered.filter((prod: any) => 
+            prod.name?.toLowerCase().includes(search.toLowerCase()) || 
+            prod.description?.toLowerCase().includes(search.toLowerCase())
+         );
+     }
+     
+     return filtered;
+  }, [whatsappCatalog, search, selectedCategory]);
 
   const visibleProducts = filteredProducts.slice(0, visibleCount);
 
@@ -202,10 +236,25 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API, 
              )}
           </div>
 
+          {/* CATEGORY FILTERS */}
+          {categories.length > 0 && (
+             <div className="flex overflow-x-auto gap-2 mt-2 pb-2 scrollbar-hide -mx-4 px-4">
+                <button onClick={() => { setSelectedCategory(null); setVisibleCount(10); }} className={`shrink-0 px-4 py-1.5 rounded-full text-xs font-bold transition-all border ${!selectedCategory ? 'bg-[var(--theme)] border-[var(--theme)] text-white shadow-[0_0_10px_var(--theme)]' : 'bg-black/40 border-white/10 text-white/50 hover:text-white'}`}>
+                   Todos
+                </button>
+                {categories.map((cat, idx) => (
+                   <button key={idx} onClick={() => { setSelectedCategory(cat); setVisibleCount(10); }} className={`shrink-0 px-4 py-1.5 rounded-full text-xs font-bold transition-all border ${selectedCategory === cat ? 'bg-[var(--theme)] border-[var(--theme)] text-white shadow-[0_0_10px_var(--theme)]' : 'bg-black/40 border-white/10 text-white/50 hover:text-white'}`}>
+                      {cat}
+                   </button>
+                ))}
+             </div>
+          )}
+
           {/* LIST VIEW */}
           <div className="flex flex-col gap-3 mt-2">
              {visibleProducts.map((prod: any) => {
                 const price = getProductPrice(prod, isWholesale);
+                const refCode = getProductRef(prod);
                 const imageUrl = getImageUrl(prod);
                 const inCart = cart.find(i => i.id === prod.id);
 
@@ -219,7 +268,8 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API, 
                       {/* Info */}
                       <div className="flex-1 flex flex-col py-1">
                          <h3 className="text-white/90 text-[13px] font-bold leading-snug line-clamp-2">{prod.name}</h3>
-                         <span className="text-[var(--theme)] font-black text-sm mt-1">${price.toLocaleString('es-CO')}</span>
+                         {refCode && <span className="inline-block mt-1 w-max px-1.5 py-0.5 bg-white/10 text-white/60 text-[10px] font-mono rounded border border-white/5 uppercase tracking-wider">REF: {refCode}</span>}
+                         <span className="text-[var(--theme)] font-black text-sm mt-1 block">${price.toLocaleString('es-CO')}</span>
                       </div>
 
                       {/* Add Button */}
