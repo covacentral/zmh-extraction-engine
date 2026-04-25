@@ -15,6 +15,7 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API, 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [formData, setFormData] = useState({ name: vipClient?.name || '', phone: vipClient?.phone || '', datetime: '' });
+  const [isASAP, setIsASAP] = useState(false);
 
   const getProductPrice = (product: any, wholesale: boolean) => {
       let rawPrice = product.priceAmount1000 !== undefined ? product.priceAmount1000 : product.price;
@@ -126,6 +127,7 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API, 
       setIsSubmitting(true);
       
       const formattedTime = formatTimeTo12h(formData.datetime);
+      const finalDatetime = isASAP ? 'Lo antes posible' : (formattedTime || formData.datetime);
       
       try {
           const res = await fetch(`${RENDER_API}/api/dispatch`, {
@@ -135,7 +137,7 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API, 
                  commerceId, 
                  ...formData, 
                  phone: `57${formData.phone}`,
-                 datetime: formattedTime || formData.datetime, // use 12h format
+                 datetime: finalDatetime,
                  cart, 
                  total: cartTotal, 
                  isWholesale 
@@ -350,8 +352,22 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API, 
                        )}
 
                        <div>
-                          <label className="text-[11px] font-bold text-white/50 uppercase tracking-widest mb-1.5 block ml-1">Fecha / Hora de Cita</label>
-                          <input required type="datetime-local" value={formData.datetime} onChange={e => setFormData({...formData, datetime: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-2xl p-4 text-white focus:border-[var(--theme)] focus:ring-1 focus:ring-[var(--theme)] outline-none transition-all font-medium [color-scheme:dark]" />
+                          <div className="flex items-center justify-between mb-1.5 ml-1">
+                             <label className="text-[11px] font-bold text-white/50 uppercase tracking-widest block">¿Cuándo te contactamos?</label>
+                          </div>
+                          
+                          <div className="flex gap-2 mb-2">
+                             <button type="button" onClick={() => setIsASAP(true)} className={`flex-1 py-3 rounded-xl text-sm font-bold border transition-colors ${isASAP ? 'bg-[var(--theme)] border-[var(--theme)] text-white shadow-[0_0_15px_var(--theme)]' : 'bg-black/40 border-white/10 text-white/50 hover:bg-white/5 hover:text-white'}`}>
+                                Lo antes posible
+                             </button>
+                             <button type="button" onClick={() => setIsASAP(false)} className={`flex-1 py-3 rounded-xl text-sm font-bold border transition-colors ${!isASAP ? 'bg-[var(--theme)] border-[var(--theme)] text-white shadow-[0_0_15px_var(--theme)]' : 'bg-black/40 border-white/10 text-white/50 hover:bg-white/5 hover:text-white'}`}>
+                                Elegir Fecha
+                             </button>
+                          </div>
+
+                          {!isASAP && (
+                              <input required={!isASAP} type="datetime-local" value={formData.datetime} onChange={e => setFormData({...formData, datetime: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-2xl p-4 text-white focus:border-[var(--theme)] focus:ring-1 focus:ring-[var(--theme)] outline-none transition-all font-medium [color-scheme:dark]" />
+                          )}
                        </div>
 
                        <button disabled={isSubmitting} type="submit" className="w-full bg-[var(--theme)] text-white p-4 rounded-2xl font-black text-lg mt-2 shadow-[0_10px_25px_rgba(0,0,0,0.5)] hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 disabled:scale-100 flex justify-center items-center gap-2">
