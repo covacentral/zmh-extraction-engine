@@ -49,5 +49,14 @@ export default async function CatalogoPage({ params, searchParams }: { params: {
       }
   }
 
-  return <CatalogClient commerceId={comercio} data={data} themeHex={themeHex} RENDER_API={RENDER_API} vipClient={vipClient} />;
+  let asesorData = null;
+  const asesorId = searchParams?.asesor;
+  if (asesorId && typeof asesorId === 'string') {
+      const asesorDoc = await db.collection('comercios').doc(comercio).collection('asesores').doc(asesorId).get();
+      if (asesorDoc.exists) {
+          asesorData = { id: asesorDoc.id, ...asesorDoc.data() };
+      }
+  }
+
+  return <CatalogClient commerceId={comercio} data={data} themeHex={themeHex} RENDER_API={RENDER_API} vipClient={vipClient} asesorData={asesorData} />;
 }

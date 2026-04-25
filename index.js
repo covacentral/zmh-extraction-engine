@@ -2,6 +2,7 @@ const express = require('express');
 const { default: makeWASocket, fetchLatestBaileysVersion, initAuthCreds, BufferJSON } = require('@whiskeysockets/baileys');
 const cors = require('cors');
 const admin = require('firebase-admin');
+const PDFDocument = require('pdfkit');
 
 // Prevent Baileys unhandled promise rejections from crashing the server
 process.on('unhandledRejection', (reason, promise) => {
@@ -265,14 +266,18 @@ app.get('/api/force-sync', async (req, res) => {
 app.post('/api/dispatch', async (req, res) => {
     if (!isReady || !globalSock) return res.status(503).json({ error: 'WhatsApp offline' });
     try {
-        const { commerceId, name, phone, datetime, cart = [], total = 0, isWholesale = false } = req.body;
-        if (!name || !phone || !datetime) return res.status(400).json({ error: 'Missing mandatory fields' });
+        const { commerceId, name, phone, datetime, cart = [], total = 0, isWholesale = false, isStoreSale = false, asesorName = '', asesorSection = '' } = req.body;
+        if (!name || !datetime) return res.status(400).json({ error: 'Missing mandatory fields' });
 
         const doc = await db.collection('comercios').doc(commerceId).get();
         if (!doc.exists) return res.status(404).json({ error: 'Commerce not found' });
         
         let dispatchJid = doc.data().dispatchJid;
-        if (!dispatchJid) return res.status(400).json({ error: 'Este comercio aún no ha configurado su dispatchJid (Grupo Privado) en Firestore.' });
+        if (isStoreSale && doc.data().posJid) {
+            dispatchJid = doc.data().posJid;
+        }
+
+        if (!dispatchJid) return res.status(400).json({ error: 'Este comercio aún no ha configurado su dispatchJid o posJid (Grupo Privado) en Firestore.' });
         
         // Auto-resolve group invite links to actual JIDs
         if (dispatchJid.includes('chat.whatsapp.com/')) {
@@ -282,18 +287,30 @@ app.post('/api/dispatch', async (req, res) => {
                 if (groupInfo && groupInfo.id) {
                     dispatchJid = groupInfo.id;
                     // Auto-update Firestore so we don't have to resolve it again next time
-                    await doc.ref.update({ dispatchJid: dispatchJid });
+                    if (isStoreSale && doc.data().posJid) {
+                        await doc.ref.update({ posJid: dispatchJid });
+                    } else {
+                        await doc.ref.update({ dispatchJid: dispatchJid });
+                    }
                 }
             } catch(e) {
                 console.error("Failed to resolve group invite link", e);
             }
         }
         
-        let msg = `🔔 *NUEVO PEDIDO / CITA*\n\n`;
-        msg += `👤 *Cliente:* ${name}\n`;
-        msg += `📱 *Teléfono:* +${phone.replace(/\D/g,'')}\n`;
-        msg += `🕒 *Fecha sugerida:* ${datetime}\n`;
-        msg += `🏢 *Modo:* ${isWholesale ? 'Mayorista' : 'Minorista'}\n\n`;
+        let msg = '';
+        if (isStoreSale) {
+            msg = `🏬 *NUEVA VENTA EN TIENDA*\n\n`;
+            msg += `👨‍💼 *Asesor:* ${asesorName} (${asesorSection})\n`;
+            msg += `👤 *Cliente:* ${name}\n`;
+            msg += `🏢 *Modo:* ${isWholesale ? 'Mayorista' : 'Minorista'}\n\n`;
+        } else {
+            msg = `🔔 *NUEVO PEDIDO / CITA*\n\n`;
+            msg += `👤 *Cliente:* ${name}\n`;
+            msg += `📱 *Teléfono:* +${phone.replace(/\D/g,'')}\n`;
+            msg += `🕒 *Fecha sugerida:* ${datetime}\n`;
+            msg += `🏢 *Modo:* ${isWholesale ? 'Mayorista' : 'Minorista'}\n\n`;
+        }
         
         if (cart.length > 0) {
             msg += `🛒 *CARRITO:*\n`;
@@ -301,15 +318,69 @@ app.post('/api/dispatch', async (req, res) => {
                 const ref = item.refCode ? ` [REF: ${item.refCode}]` : '';
                 msg += `- ${item.qty}x ${item.name}${ref} ($${item.price})\n`;
             });
-            msg += `\n💰 *Total Estimado:* $${total}\n\n`;
+            msg += `\n💰 *Total:* $${total}\n\n`;
         } else {
             msg += `🛒 *CARRITO:* Vacío (Solo Agendamiento)\n\n`;
         }
         
-        msg += `Para atender esta solicitud, responde a este ticket. Toca el número arriba para abrir el chat con el cliente.`;
-        
-        await globalSock.sendMessage(dispatchJid, { text: msg });
-        res.json({ ok: true, msg: 'Ticket despachado exitosamente.' });
+        if (!isStoreSale) {
+            msg += `Para atender esta solicitud, responde a este ticket. Toca el número arriba para abrir el chat con el cliente.`;
+        } else {
+            msg += `Adjunto se envía la factura de cobro.`;
+        }
+
+        if (isStoreSale) {
+            // Generate PDF Buffer
+            const docPdf = new PDFDocument({ margin: 50 });
+            let buffers = [];
+            docPdf.on('data', buffers.push.bind(buffers));
+            
+            // Build PDF Content
+            const commerceName = doc.data().businessName || 'BODEGA MAYORISTA';
+            const facCode = `FAC-${new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota', year:'2-digit', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', hour12: false }).replace(/\D/g, '')}`;
+
+            docPdf.fontSize(20).font('Helvetica-Bold').text(commerceName, { align: 'center' });
+            docPdf.moveDown();
+            docPdf.fontSize(12).font('Helvetica').text(`Factura No: ${facCode}`);
+            docPdf.text(`Fecha: ${new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' })}`);
+            docPdf.text(`Asesor: ${asesorName} (${asesorSection})`);
+            docPdf.text(`Cliente: ${name}`);
+            docPdf.text(`Tipo de Venta: ${isWholesale ? 'MAYORISTA' : 'MINORISTA'}`);
+            docPdf.moveDown();
+            
+            docPdf.font('Helvetica-Bold').text('---------------------------------------------------------');
+            docPdf.text('CANT  PRODUCTO                           PRECIO', { align: 'left' });
+            docPdf.text('---------------------------------------------------------');
+            docPdf.font('Helvetica');
+
+            cart.forEach(item => {
+                const ref = item.refCode ? `[${item.refCode}] ` : '';
+                const title = `${item.qty}x ${ref}${item.name}`.substring(0, 35);
+                const price = `$${item.price.toLocaleString('es-CO')}`;
+                docPdf.text(`${title.padEnd(36, ' ')} ${price}`);
+            });
+
+            docPdf.moveDown();
+            docPdf.font('Helvetica-Bold').text('---------------------------------------------------------');
+            docPdf.fontSize(16).text(`TOTAL: $${total.toLocaleString('es-CO')}`, { align: 'right' });
+            
+            docPdf.end();
+
+            docPdf.on('end', async () => {
+                const pdfData = Buffer.concat(buffers);
+                await globalSock.sendMessage(dispatchJid, { 
+                    document: pdfData, 
+                    mimetype: 'application/pdf', 
+                    fileName: `${facCode}.pdf`, 
+                    caption: msg 
+                });
+                res.json({ ok: true, msg: 'Ticket y Factura despachados exitosamente.' });
+            });
+
+        } else {
+            await globalSock.sendMessage(dispatchJid, { text: msg });
+            res.json({ ok: true, msg: 'Ticket despachado exitosamente.' });
+        }
     } catch (e) {
         console.error(e);
         res.status(500).json({ error: e.message });

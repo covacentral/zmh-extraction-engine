@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-export default function CatalogClient({ commerceId, data, themeHex, RENDER_API, vipClient }: any) {
+export default function CatalogClient({ commerceId, data, themeHex, RENDER_API, vipClient, asesorData }: any) {
   let { businessName, whatsappCatalog = [] } = data;
 
   const [isWholesale, setIsWholesale] = useState(!!vipClient);
@@ -162,7 +162,7 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API, 
       setIsSubmitting(true);
       
       const formattedTime = formatTimeTo12h(formData.datetime);
-      const finalDatetime = isASAP ? 'Lo antes posible' : (formattedTime || formData.datetime);
+      const finalDatetime = asesorData ? 'En tienda' : (isASAP ? 'Lo antes posible' : (formattedTime || formData.datetime));
       
       try {
           const res = await fetch(`${RENDER_API}/api/dispatch`, {
@@ -171,11 +171,14 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API, 
               body: JSON.stringify({ 
                  commerceId, 
                  ...formData, 
-                 phone: `57${formData.phone}`,
+                 phone: asesorData ? '' : `57${formData.phone}`,
                  datetime: finalDatetime,
                  cart, 
                  total: cartTotal, 
-                 isWholesale 
+                 isWholesale,
+                 isStoreSale: !!asesorData,
+                 asesorName: asesorData?.name,
+                 asesorSection: asesorData?.section
               })
           });
           
@@ -236,6 +239,17 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API, 
                  </div>
              )}
           </div>
+          {asesorData && (
+             <div className="bg-white/10 p-3 mt-2 rounded-xl border border-[var(--theme)]/30 flex items-center justify-between">
+                <div>
+                   <span className="text-[10px] font-bold text-[var(--theme)] uppercase tracking-widest block mb-0.5">Venta en Tienda (POS)</span>
+                   <span className="text-white text-sm font-bold block">{asesorData.name}</span>
+                </div>
+                <div className="text-right">
+                   <span className="text-white/50 text-[10px] block uppercase font-bold tracking-wider">{asesorData.section}</span>
+                </div>
+             </div>
+          )}
 
           {/* CATEGORY FILTERS */}
           {categories.length > 0 && (
@@ -367,7 +381,7 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API, 
                                 </div>
                              ))}
                              <div className="flex justify-between items-center mt-3 pt-3 border-t border-white/10">
-                                <span className="text-white/50 text-xs uppercase font-bold">Total Estimado</span>
+                                <span className="text-white/50 text-xs uppercase font-bold">{asesorData ? 'Total' : 'Total Estimado'}</span>
                                 <span className="text-[var(--theme)] font-black text-lg">${cartTotal.toLocaleString('es-CO')}</span>
                              </div>
                           </div>
@@ -386,45 +400,49 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API, 
                        ) : (
                           <>
                              <div>
-                                <label className="text-[11px] font-bold text-white/50 uppercase tracking-widest mb-1.5 block ml-1">Tu Nombre</label>
+                                <label className="text-[11px] font-bold text-white/50 uppercase tracking-widest mb-1.5 block ml-1">{asesorData ? 'Nombre del Cliente' : 'Tu Nombre'}</label>
                                 <input required type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-2xl p-4 text-white placeholder-white/20 focus:border-[var(--theme)] focus:ring-1 focus:ring-[var(--theme)] outline-none transition-all font-medium" placeholder="¿Cómo te llamas?" />
                              </div>
                              
-                             <div>
-                                <label className="text-[11px] font-bold text-white/50 uppercase tracking-widest mb-1.5 block ml-1">Tu WhatsApp</label>
-                                <div className="flex bg-black/40 border border-white/10 rounded-2xl overflow-hidden focus-within:border-[var(--theme)] focus-within:ring-1 focus-within:ring-[var(--theme)] transition-all">
-                                   <div className="bg-black/60 px-4 flex items-center justify-center text-white/70 font-bold border-r border-white/10">
-                                      +57
-                                   </div>
-                                   <input required minLength={10} maxLength={10} pattern="[0-9]{10}" title="El número debe tener exactamente 10 dígitos" type="tel" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value.replace(/\D/g, '').slice(0, 10)})} className="w-full bg-transparent p-4 text-white placeholder-white/20 outline-none font-medium" placeholder="300 000 0000" />
-                                </div>
-                             </div>
+                             {!asesorData && (
+                                 <div>
+                                    <label className="text-[11px] font-bold text-white/50 uppercase tracking-widest mb-1.5 block ml-1">Tu WhatsApp</label>
+                                    <div className="flex bg-black/40 border border-white/10 rounded-2xl overflow-hidden focus-within:border-[var(--theme)] focus-within:ring-1 focus-within:ring-[var(--theme)] transition-all">
+                                       <div className="bg-black/60 px-4 flex items-center justify-center text-white/70 font-bold border-r border-white/10">
+                                          +57
+                                       </div>
+                                       <input required minLength={10} maxLength={10} pattern="[0-9]{10}" title="El número debe tener exactamente 10 dígitos" type="tel" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value.replace(/\D/g, '').slice(0, 10)})} className="w-full bg-transparent p-4 text-white placeholder-white/20 outline-none font-medium" placeholder="300 000 0000" />
+                                    </div>
+                                 </div>
+                             )}
                           </>
                        )}
 
-                       <div>
-                          <div className="flex items-center justify-between mb-1.5 ml-1">
-                             <label className="text-[11px] font-bold text-white/50 uppercase tracking-widest block">¿Cuándo te contactamos?</label>
-                          </div>
-                          
-                          <div className="flex gap-2 mb-2">
-                             <button type="button" onClick={() => setIsASAP(true)} className={`flex-1 py-3 rounded-xl text-sm font-bold border transition-colors ${isASAP ? 'bg-[var(--theme)] border-[var(--theme)] text-white shadow-[0_0_15px_var(--theme)]' : 'bg-black/40 border-white/10 text-white/50 hover:bg-white/5 hover:text-white'}`}>
-                                Lo antes posible
-                             </button>
-                             <button type="button" onClick={() => setIsASAP(false)} className={`flex-1 py-3 rounded-xl text-sm font-bold border transition-colors ${!isASAP ? 'bg-[var(--theme)] border-[var(--theme)] text-white shadow-[0_0_15px_var(--theme)]' : 'bg-black/40 border-white/10 text-white/50 hover:bg-white/5 hover:text-white'}`}>
-                                Elegir Fecha
-                             </button>
-                          </div>
+                       {!asesorData && (
+                           <div>
+                              <div className="flex items-center justify-between mb-1.5 ml-1">
+                                 <label className="text-[11px] font-bold text-white/50 uppercase tracking-widest block">¿Cuándo te contactamos?</label>
+                              </div>
+                              
+                              <div className="flex gap-2 mb-2">
+                                 <button type="button" onClick={() => setIsASAP(true)} className={`flex-1 py-3 rounded-xl text-sm font-bold border transition-colors ${isASAP ? 'bg-[var(--theme)] border-[var(--theme)] text-white shadow-[0_0_15px_var(--theme)]' : 'bg-black/40 border-white/10 text-white/50 hover:bg-white/5 hover:text-white'}`}>
+                                    Lo antes posible
+                                 </button>
+                                 <button type="button" onClick={() => setIsASAP(false)} className={`flex-1 py-3 rounded-xl text-sm font-bold border transition-colors ${!isASAP ? 'bg-[var(--theme)] border-[var(--theme)] text-white shadow-[0_0_15px_var(--theme)]' : 'bg-black/40 border-white/10 text-white/50 hover:bg-white/5 hover:text-white'}`}>
+                                    Elegir Fecha
+                                 </button>
+                              </div>
 
-                          {!isASAP && (
-                              <input required={!isASAP} type="datetime-local" value={formData.datetime} onChange={e => setFormData({...formData, datetime: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-2xl p-4 text-white focus:border-[var(--theme)] focus:ring-1 focus:ring-[var(--theme)] outline-none transition-all font-medium [color-scheme:dark]" />
-                          )}
-                       </div>
+                              {!isASAP && (
+                                  <input required={!isASAP} type="datetime-local" value={formData.datetime} onChange={e => setFormData({...formData, datetime: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-2xl p-4 text-white focus:border-[var(--theme)] focus:ring-1 focus:ring-[var(--theme)] outline-none transition-all font-medium [color-scheme:dark]" />
+                              )}
+                           </div>
+                       )}
 
                        <button disabled={isSubmitting} type="submit" className="w-full bg-[var(--theme)] text-white p-4 rounded-2xl font-black text-lg mt-2 shadow-[0_10px_25px_rgba(0,0,0,0.5)] hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 disabled:scale-100 flex justify-center items-center gap-2">
                           {isSubmitting ? (
                              <><svg className="animate-spin h-5 w-5 text-white" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> <span>Procesando...</span></>
-                          ) : 'Enviar Ticket al Comercio'}
+                          ) : (asesorData ? 'Generar Factura de Venta' : 'Enviar Ticket al Comercio')}
                        </button>
                     </form>
                  )}
