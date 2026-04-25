@@ -225,7 +225,7 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API, 
                          {isMounted && inCart ? (
                             <div className="flex items-center bg-white/5 rounded-full overflow-hidden border border-[var(--theme)]/30">
                                <button onClick={() => setQty(prod.id, (Number(inCart.qty) || 0) - 1)} className="w-8 h-8 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-colors">-</button>
-                               <span className="w-6 text-center font-bold text-sm text-[var(--theme)]">{inCart.qty}</span>
+                               <input type="text" inputMode="numeric" pattern="[0-9]*" value={inCart.qty} onChange={(e) => setQty(prod.id, e.target.value)} onBlur={() => { if (!inCart.qty || Number(inCart.qty) < 1) setQty(prod.id, 1); }} className="w-10 text-center bg-transparent border-x border-white/5 font-bold text-sm outline-none text-[var(--theme)] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
                                <button onClick={() => setQty(prod.id, (Number(inCart.qty) || 0) + 1)} className="w-8 h-8 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-colors">+</button>
                             </div>
                          ) : (
