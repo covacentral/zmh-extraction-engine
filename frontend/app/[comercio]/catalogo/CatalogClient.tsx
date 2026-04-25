@@ -2,10 +2,10 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }: any) {
+export default function CatalogClient({ commerceId, data, themeHex, RENDER_API, vipClient }: any) {
   let { businessName, whatsappCatalog = [] } = data;
 
-  const [isWholesale, setIsWholesale] = useState(false);
+  const [isWholesale, setIsWholesale] = useState(!!vipClient);
   const [search, setSearch] = useState('');
   const [visibleCount, setVisibleCount] = useState(10);
   
@@ -13,7 +13,7 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
   const [showCheckout, setShowCheckout] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
-  const [formData, setFormData] = useState({ name: '', phone: '', datetime: '' });
+  const [formData, setFormData] = useState({ name: vipClient?.name || '', phone: vipClient?.phone || '', datetime: '' });
 
   const getProductPrice = (product: any, wholesale: boolean) => {
       let rawPrice = product.priceAmount1000 !== undefined ? product.priceAmount1000 : product.price;
@@ -170,10 +170,16 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
 
           <div className="flex justify-between items-center mt-2">
              <h2 className="text-white text-xl font-black tracking-tight">Catálogo</h2>
-             <div className="flex items-center gap-1 bg-black/40 p-1 rounded-full border border-white/10">
-                <button onClick={() => setIsWholesale(false)} className={`px-4 py-1.5 rounded-full text-[11px] uppercase tracking-wider font-bold transition-all ${!isWholesale ? 'bg-white text-black shadow-md' : 'text-white/50 hover:text-white'}`}>Normal</button>
-                <button onClick={() => setIsWholesale(true)} className={`px-4 py-1.5 rounded-full text-[11px] uppercase tracking-wider font-bold transition-all ${isWholesale ? 'bg-[var(--theme)] text-white shadow-[0_0_10px_var(--theme)]' : 'text-white/50 hover:text-white'}`}>Mayorista</button>
-             </div>
+             {vipClient ? (
+                 <div className="flex items-center gap-1 bg-[var(--theme)]/20 text-[var(--theme)] px-3 py-1.5 rounded-full border border-[var(--theme)]/30">
+                    <span className="text-[11px] uppercase tracking-wider font-bold">🌟 VIP Activo</span>
+                 </div>
+             ) : (
+                 <div className="flex items-center gap-1 bg-black/40 p-1 rounded-full border border-white/10">
+                    <button onClick={() => setIsWholesale(false)} className={`px-4 py-1.5 rounded-full text-[11px] uppercase tracking-wider font-bold transition-all ${!isWholesale ? 'bg-white text-black shadow-md' : 'text-white/50 hover:text-white'}`}>Normal</button>
+                    <button onClick={() => setIsWholesale(true)} className={`px-4 py-1.5 rounded-full text-[11px] uppercase tracking-wider font-bold transition-all ${isWholesale ? 'bg-[var(--theme)] text-white shadow-[0_0_10px_var(--theme)]' : 'text-white/50 hover:text-white'}`}>Mayorista</button>
+                 </div>
+             )}
           </div>
 
           {/* LIST VIEW */}
@@ -294,20 +300,34 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
                           </div>
                        )}
 
-                       <div>
-                          <label className="text-[11px] font-bold text-white/50 uppercase tracking-widest mb-1.5 block ml-1">Tu Nombre</label>
-                          <input required type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-2xl p-4 text-white placeholder-white/20 focus:border-[var(--theme)] focus:ring-1 focus:ring-[var(--theme)] outline-none transition-all font-medium" placeholder="¿Cómo te llamas?" />
-                       </div>
-                       
-                       <div>
-                          <label className="text-[11px] font-bold text-white/50 uppercase tracking-widest mb-1.5 block ml-1">Tu WhatsApp</label>
-                          <div className="flex bg-black/40 border border-white/10 rounded-2xl overflow-hidden focus-within:border-[var(--theme)] focus-within:ring-1 focus-within:ring-[var(--theme)] transition-all">
-                             <div className="bg-black/60 px-4 flex items-center justify-center text-white/70 font-bold border-r border-white/10">
-                                +57
-                             </div>
-                             <input required minLength={10} maxLength={10} pattern="[0-9]{10}" title="El número debe tener exactamente 10 dígitos" type="tel" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value.replace(/\D/g, '').slice(0, 10)})} className="w-full bg-transparent p-4 text-white placeholder-white/20 outline-none font-medium" placeholder="300 000 0000" />
+                       {vipClient ? (
+                          <div className="bg-white/10 p-4 rounded-2xl border border-[var(--theme)]/30 flex items-center justify-between">
+                              <div>
+                                  <span className="text-[11px] font-bold text-[var(--theme)] uppercase tracking-widest block mb-1">Facturando a VIP</span>
+                                  <span className="text-white font-bold">{vipClient.name}</span>
+                              </div>
+                              <div className="text-right">
+                                  <span className="text-white/50 text-xs block">+57 {vipClient.phone}</span>
+                              </div>
                           </div>
-                       </div>
+                       ) : (
+                          <>
+                             <div>
+                                <label className="text-[11px] font-bold text-white/50 uppercase tracking-widest mb-1.5 block ml-1">Tu Nombre</label>
+                                <input required type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-2xl p-4 text-white placeholder-white/20 focus:border-[var(--theme)] focus:ring-1 focus:ring-[var(--theme)] outline-none transition-all font-medium" placeholder="¿Cómo te llamas?" />
+                             </div>
+                             
+                             <div>
+                                <label className="text-[11px] font-bold text-white/50 uppercase tracking-widest mb-1.5 block ml-1">Tu WhatsApp</label>
+                                <div className="flex bg-black/40 border border-white/10 rounded-2xl overflow-hidden focus-within:border-[var(--theme)] focus-within:ring-1 focus-within:ring-[var(--theme)] transition-all">
+                                   <div className="bg-black/60 px-4 flex items-center justify-center text-white/70 font-bold border-r border-white/10">
+                                      +57
+                                   </div>
+                                   <input required minLength={10} maxLength={10} pattern="[0-9]{10}" title="El número debe tener exactamente 10 dígitos" type="tel" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value.replace(/\D/g, '').slice(0, 10)})} className="w-full bg-transparent p-4 text-white placeholder-white/20 outline-none font-medium" placeholder="300 000 0000" />
+                                </div>
+                             </div>
+                          </>
+                       )}
 
                        <div>
                           <label className="text-[11px] font-bold text-white/50 uppercase tracking-widest mb-1.5 block ml-1">Fecha / Hora de Cita</label>

@@ -18,7 +18,7 @@ if (!admin.apps.length) {
 
 const db = admin.firestore();
 
-export default async function CatalogoPage({ params }: { params: { comercio: string } }) {
+export default async function CatalogoPage({ params, searchParams }: { params: { comercio: string }, searchParams: { [key: string]: string | string[] | undefined } }) {
   const { comercio } = params;
   
   if (!comercio) return notFound();
@@ -40,5 +40,14 @@ export default async function CatalogoPage({ params }: { params: { comercio: str
   const themeHex = data.themeHex || '#25D366';
   const RENDER_API = process.env.NEXT_PUBLIC_RENDER_API || 'https://zmh-extraction-engine.onrender.com';
 
-  return <CatalogClient commerceId={comercio} data={data} themeHex={themeHex} RENDER_API={RENDER_API} />;
+  let vipClient = null;
+  const vipId = searchParams?.vip;
+  if (vipId && typeof vipId === 'string') {
+      const clientDoc = await db.collection('comercios').doc(comercio).collection('clientes').doc(vipId).get();
+      if (clientDoc.exists) {
+          vipClient = { id: clientDoc.id, ...clientDoc.data() };
+      }
+  }
+
+  return <CatalogClient commerceId={comercio} data={data} themeHex={themeHex} RENDER_API={RENDER_API} vipClient={vipClient} />;
 }
