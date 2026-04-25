@@ -337,7 +337,10 @@ app.post('/api/dispatch', async (req, res) => {
             
             // Build PDF Content
             const commerceName = doc.data().businessName || 'BODEGA MAYORISTA';
-            const facCode = `FAC-${new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota', year:'2-digit', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', hour12: false }).replace(/\D/g, '')}`;
+            const now = new Date();
+            const timeStr = now.toLocaleString('es-CO', { timeZone: 'America/Bogota', year:'2-digit', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', second:'2-digit', hour12: false }).replace(/\D/g, '');
+            const ms = now.getMilliseconds().toString().padStart(3, '0');
+            const facCode = `FAC-${timeStr.slice(0, 10)}-${timeStr.slice(10)}${ms}`;
 
             docPdf.fontSize(20).font('Helvetica-Bold').text(commerceName, { align: 'center' });
             docPdf.moveDown();
