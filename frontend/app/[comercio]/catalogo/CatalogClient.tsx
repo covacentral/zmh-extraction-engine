@@ -10,6 +10,7 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API, 
   const [visibleCount, setVisibleCount] = useState(10);
   
   const [cart, setCart] = useState<any[]>([]);
+  const [isMounted, setIsMounted] = useState(false);
   const [showCheckout, setShowCheckout] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -89,6 +90,22 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API, 
      });
   }, [isWholesale, whatsappCatalog]);
 
+  // Load cart from localStorage on mount
+  useEffect(() => {
+     setIsMounted(true);
+     const savedCart = localStorage.getItem(`cart_${commerceId}`);
+     if (savedCart) {
+        try { setCart(JSON.parse(savedCart)); } catch(e){}
+     }
+  }, [commerceId]);
+
+  // Save cart to localStorage on changes
+  useEffect(() => {
+     if (isMounted) {
+        localStorage.setItem(`cart_${commerceId}`, JSON.stringify(cart));
+     }
+  }, [cart, commerceId, isMounted]);
+
   const cartTotal = cart.reduce((acc, item) => acc + (item.price * (Number(item.qty) || 0)), 0);
 
   // Time formatter
@@ -137,6 +154,7 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API, 
           if (result.ok) {
               setSuccess(true);
               setCart([]);
+              localStorage.removeItem(`cart_${commerceId}`);
           } else {
               alert(result.error || 'Error enviando solicitud');
           }
@@ -204,10 +222,12 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API, 
 
                       {/* Add Button */}
                       <div className="shrink-0 pr-1">
-                         {inCart ? (
-                            <button onClick={() => removeProduct(prod.id)} className="w-10 h-10 rounded-full flex items-center justify-center bg-green-500 text-white shadow-[0_0_15px_rgba(34,197,94,0.4)] hover:bg-green-600 transition-colors">
-                               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                            </button>
+                         {isMounted && inCart ? (
+                            <div className="flex items-center bg-white/5 rounded-full overflow-hidden border border-[var(--theme)]/30">
+                               <button onClick={() => setQty(prod.id, (Number(inCart.qty) || 0) - 1)} className="w-8 h-8 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-colors">-</button>
+                               <span className="w-6 text-center font-bold text-sm text-[var(--theme)]">{inCart.qty}</span>
+                               <button onClick={() => setQty(prod.id, (Number(inCart.qty) || 0) + 1)} className="w-8 h-8 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-colors">+</button>
+                            </div>
                          ) : (
                             <button onClick={() => addToCart(prod, price)} className="w-10 h-10 rounded-full flex items-center justify-center bg-white/10 text-white hover:bg-white/20 border border-white/10 transition-colors">
                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
