@@ -100,10 +100,12 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
      }
      
      if (search) {
-         filtered = filtered.filter((prod: any) => 
-            prod.name?.toLowerCase().includes(search.toLowerCase()) || 
-            prod.description?.toLowerCase().includes(search.toLowerCase())
-         );
+         const searchTerms = search.toLowerCase().trim().split(/\s+/);
+         filtered = filtered.filter((prod: any) => {
+             const refCode = getProductRef(prod) || '';
+             const searchText = `${prod.name || ''} ${prod.description || ''} ${refCode}`.toLowerCase();
+             return searchTerms.every(term => searchText.includes(term));
+         });
      }
      
      return filtered;
@@ -302,24 +304,34 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
                 const refCode = getProductRef(prod);
                 const imageUrl = getImageUrl(prod);
                 const inCart = cart.find(i => i.id === prod.id);
+                const isOut = prod.isHidden === true;
 
                 return (
-                   <div key={prod.id} className="bg-white/5 hover:bg-white/10 rounded-3xl p-2.5 flex gap-4 items-center border border-white/5 transition-colors">
+                   <div key={prod.id} className={`bg-white/5 hover:bg-white/10 rounded-3xl p-2.5 flex gap-4 items-center border border-white/5 transition-colors ${isOut ? 'opacity-70' : ''}`}>
                       {/* Thumbnail */}
-                      <div className="w-20 h-20 shrink-0 bg-zinc-900 rounded-2xl overflow-hidden relative border border-white/5">
+                      <div className={`w-20 h-20 shrink-0 bg-zinc-900 rounded-2xl overflow-hidden relative border border-white/5 ${isOut ? 'grayscale opacity-75' : ''}`}>
                          {imageUrl ? <img src={imageUrl} alt={prod.name} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-white/20"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg></div>}
+                         {isOut && (
+                            <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                               <span className="text-white text-[10px] font-black tracking-widest uppercase bg-red-600/90 px-1.5 py-0.5 rounded border border-red-500 shadow-lg rotate-[-15deg]">Agotado</span>
+                            </div>
+                         )}
                       </div>
                       
                       {/* Info */}
                       <div className="flex-1 flex flex-col py-1">
-                         <h3 className="text-white/90 text-[13px] font-bold leading-snug line-clamp-2">{prod.name}</h3>
+                         <h3 className={`text-white/90 text-[13px] font-bold leading-snug line-clamp-2 ${isOut ? 'line-through text-white/50' : ''}`}>{prod.name}</h3>
                          {refCode && <span className="inline-block mt-1 w-max px-1.5 py-0.5 bg-white/10 text-white/60 text-[10px] font-mono rounded border border-white/5 uppercase tracking-wider">REF: {refCode}</span>}
-                         <span className="text-[var(--theme)] font-black text-sm mt-1 block">${price.toLocaleString('es-CO')}</span>
+                         <span className={`${isOut ? 'text-white/40' : 'text-[var(--theme)]'} font-black text-sm mt-1 block`}>${price.toLocaleString('es-CO')}</span>
                       </div>
 
                       {/* Add Button */}
                       <div className="shrink-0 pr-1">
-                         {isMounted && inCart ? (
+                         {isOut ? (
+                            <div className="w-10 h-10 rounded-full flex items-center justify-center bg-black/40 text-red-500/50 border border-red-500/20">
+                               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line></svg>
+                            </div>
+                         ) : isMounted && inCart ? (
                             <div className="flex items-center bg-white/5 rounded-full overflow-hidden border border-[var(--theme)]/30">
                                <button onClick={() => setQty(prod.id, (Number(inCart.qty) || 0) - 1)} className="w-8 h-8 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-colors">-</button>
                                <input type="text" inputMode="numeric" pattern="[0-9]*" value={inCart.qty} onChange={(e) => setQty(prod.id, e.target.value)} onBlur={() => { if (!inCart.qty || Number(inCart.qty) < 1) setQty(prod.id, 1); }} className="w-10 text-center bg-transparent border-x border-white/5 font-bold text-sm outline-none text-[var(--theme)] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
