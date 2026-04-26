@@ -512,52 +512,56 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
            >
               <motion.div 
                 initial={{ scale: 0.9, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.9, opacity: 0, y: 20 }} transition={{ duration: 0.15, ease: "easeOut" }}
-                className="bg-zinc-950 w-[95%] sm:w-full sm:max-w-md rounded-[2.5rem] overflow-hidden border sm:border border-white/10 max-h-[90vh] flex flex-col shadow-[0_-20px_50px_rgba(0,0,0,0.8)] relative mb-4 sm:mb-0"
+                className="bg-zinc-950 w-[95%] sm:w-full sm:max-w-md rounded-[2.5rem] overflow-hidden border sm:border border-white/10 h-[85vh] flex flex-col shadow-[0_-20px_50px_rgba(0,0,0,0.8)] relative mb-4 sm:mb-0"
                 style={{ '--theme': themeHex } as any}
               >
-                 {/* Header image area */}
-                 <div className="relative w-full aspect-square bg-zinc-900 shrink-0">
-                    {getHighResImageUrl(selectedProduct) ? (
-                        <img src={getHighResImageUrl(selectedProduct)} alt={selectedProduct.name} className={`w-full h-full object-cover ${selectedProduct.isHidden ? 'grayscale opacity-75' : ''}`} />
-                    ) : (
-                        <div className="w-full h-full flex items-center justify-center text-white/20">
-                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
-                        </div>
-                    )}
-                    
-                    {selectedProduct.isHidden && (
-                        <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
-                            <span className="text-white text-3xl font-black tracking-widest uppercase bg-red-600/90 px-6 py-2 rounded-xl border-4 border-red-500 shadow-2xl rotate-[-15deg]">Agotado</span>
-                        </div>
-                    )}
+                 {/* Fixed Close Button */}
+                 <button onClick={() => setSelectedProduct(null)} className="absolute top-4 right-4 z-20 w-10 h-10 flex items-center justify-center bg-black/60 backdrop-blur-md rounded-full text-white/90 hover:bg-black/80 hover:text-white transition-colors border border-white/20 shadow-[0_4px_15px_rgba(0,0,0,0.5)]">
+                     ✕
+                 </button>
 
-                    <button onClick={() => setSelectedProduct(null)} className="absolute top-4 right-4 w-10 h-10 flex items-center justify-center bg-black/50 backdrop-blur-md rounded-full text-white/90 hover:bg-black/70 hover:text-white transition-colors border border-white/10">
-                        ✕
-                    </button>
-                 </div>
-
-                 {/* Info Area */}
-                 <div className="p-6 overflow-y-auto flex-1 flex flex-col gap-4">
-                     <div>
-                         <h2 className={`text-xl font-bold text-white leading-tight ${selectedProduct.isHidden ? 'line-through text-white/50' : ''}`}>{selectedProduct.name}</h2>
-                         <div className="flex items-center justify-between mt-2">
-                             <span className={`${selectedProduct.isHidden ? 'text-white/40' : 'text-[var(--theme)]'} font-black text-2xl`}>${getProductPrice(selectedProduct, isWholesale).toLocaleString('es-CO')}</span>
-                             {getProductRef(selectedProduct) && (
-                                 <span className="px-2 py-1 bg-white/10 text-white/60 text-xs font-mono rounded border border-white/5 uppercase tracking-wider">REF: {getProductRef(selectedProduct)}</span>
-                             )}
-                         </div>
+                 {/* Scrollable Content (Image + Info) */}
+                 <div className="flex-1 overflow-y-auto scrollbar-hide">
+                     {/* Image Area */}
+                     <div className="relative w-full bg-black flex items-center justify-center min-h-[40vh]">
+                        {getHighResImageUrl(selectedProduct) ? (
+                            <img src={getHighResImageUrl(selectedProduct)} alt={selectedProduct.name} className={`w-full h-auto object-contain max-h-[55vh] ${selectedProduct.isHidden ? 'grayscale opacity-75' : ''}`} />
+                        ) : (
+                            <div className="w-full h-[40vh] flex items-center justify-center text-white/20">
+                                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+                            </div>
+                        )}
+                        
+                        {selectedProduct.isHidden && (
+                            <div className="absolute inset-0 bg-black/60 flex items-center justify-center pointer-events-none">
+                                <span className="text-white text-3xl font-black tracking-widest uppercase bg-red-600/90 px-6 py-2 rounded-xl border-4 border-red-500 shadow-2xl rotate-[-15deg]">Agotado</span>
+                            </div>
+                        )}
                      </div>
 
-                     {selectedProduct.description && (
-                         <div className="bg-white/5 rounded-2xl p-4 border border-white/5 mt-2">
-                             <h4 className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-2">Descripción</h4>
-                             <p className="text-white/80 text-sm whitespace-pre-wrap leading-relaxed">{selectedProduct.description}</p>
+                     {/* Info Area */}
+                     <div className="p-5 flex flex-col gap-4">
+                         <div>
+                             <h2 className={`text-xl font-bold text-white leading-tight ${selectedProduct.isHidden ? 'line-through text-white/50' : ''}`}>{selectedProduct.name}</h2>
+                             <div className="flex items-center justify-between mt-3">
+                                 <span className={`${selectedProduct.isHidden ? 'text-white/40' : 'text-[var(--theme)]'} font-black text-2xl`}>${getProductPrice(selectedProduct, isWholesale).toLocaleString('es-CO')}</span>
+                                 {getProductRef(selectedProduct) && (
+                                     <span className="px-2 py-1 bg-white/10 text-white/60 text-xs font-mono rounded border border-white/5 uppercase tracking-wider">REF: {getProductRef(selectedProduct)}</span>
+                                 )}
+                             </div>
                          </div>
-                     )}
+
+                         {selectedProduct.description && (
+                             <div className="bg-white/5 rounded-2xl p-5 border border-white/5 mt-1 mb-2">
+                                 <h4 className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-3">Descripción de WhatsApp</h4>
+                                 <p className="text-white/80 text-[13px] whitespace-pre-wrap leading-relaxed">{selectedProduct.description}</p>
+                             </div>
+                         )}
+                     </div>
                  </div>
 
-                 {/* Footer Actions */}
-                 <div className="p-6 pt-2 bg-zinc-950 border-t border-white/5 shrink-0">
+                 {/* Sticky Footer Actions */}
+                 <div className="p-5 bg-zinc-950 border-t border-white/10 shrink-0 z-10 shadow-[0_-10px_30px_rgba(0,0,0,0.8)] pb-8 sm:pb-5">
                      {(() => {
                          const inCart = cart.find(i => i.id === selectedProduct.id);
                          const isOut = selectedProduct.isHidden === true;
