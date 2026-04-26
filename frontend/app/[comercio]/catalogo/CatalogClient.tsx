@@ -432,7 +432,7 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
                              </div>
 
                              {cart.map(item => {
-                                 const itemPrice = getProductPrice(item, isWholesale);
+                                 const itemPrice = item.price;
                                  return (
                                      <div key={item.id} className="border-b border-zinc-200 py-2 text-[11px] flex flex-col gap-1">
                                          <div className="flex items-start">
