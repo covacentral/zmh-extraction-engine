@@ -402,14 +402,58 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
                 style={{ '--theme': themeHex } as any}
               >
                  {success ? (
-                    <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="text-center py-10">
-                       <div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-6 shadow-[0_0_30px_rgba(34,197,94,0.4)]">
-                         <svg className="w-10 h-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
-                       </div>
-                       <h2 className="text-2xl font-black text-white mb-2">¡Ticket Generado!</h2>
-                       <p className="text-white/70 mb-8 leading-relaxed">El comercio ha recibido tu orden internamente. Un asesor validará tu agendamiento y te escribirá a WhatsApp.</p>
-                       <button onClick={() => { setSuccess(false); setShowCheckout(false); }} className="w-full bg-white/10 hover:bg-white/20 active:scale-95 transition-all text-white p-4 rounded-2xl font-bold">Cerrar</button>
-                    </motion.div>
+                     <div className="flex flex-col items-center justify-center py-4 text-center gap-5 w-full">
+                         <div className="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center shrink-0">
+                             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                         </div>
+                         <div>
+                             <h3 className="text-2xl font-black text-white mb-2">{isStoreSale ? '¡Pedido Confirmado!' : '¡Solicitud Recibida!'}</h3>
+                             <p className="text-white/70 text-sm leading-relaxed px-4">
+                                {isStoreSale 
+                                    ? 'Tu orden ha sido registrada exitosamente.' 
+                                    : 'Tu información ha sido registrada exitosamente. Nos pondremos en contacto contigo a la brevedad posible.'}
+                             </p>
+                         </div>
+                         
+                         {/* White Receipt Preview */}
+                         <div className="w-full bg-[#f8f9fa] text-zinc-900 p-5 rounded-2xl shadow-xl font-mono text-left text-xs leading-relaxed max-h-[40vh] overflow-y-auto border-t-8 border-zinc-800 relative">
+                             {/* Zigzag bottom edge effect for receipt */}
+                             <div className="absolute top-0 left-0 w-full h-2 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMCIgaGVpZ2h0PSIxMCI+PHBvbHlnb24gZmlsbD0iI2Y4ZjlmYSIgcG9pbnRzPSIwLDEwIDUsMCAxMCwxMCAiLz48L3N2Zz4=')] opacity-0"></div>
+                             
+                             <div className="text-center font-bold mb-4 border-b border-zinc-300 pb-3">
+                                 <h4 className="text-base tracking-widest uppercase">Recibo de Caja</h4>
+                                 <div className="text-[10px] text-zinc-500 mt-1 uppercase tracking-wider">{isStoreSale ? 'Orden de Compra' : 'Cotización'}</div>
+                             </div>
+                             
+                             <div className="flex border-b border-zinc-300 pb-2 mb-2 font-bold text-[10px] text-zinc-600 tracking-wider">
+                                 <div className="w-8">CANT</div>
+                                 <div className="flex-1 px-2">PRODUCTO</div>
+                                 <div className="text-right w-20">SUBTOTAL</div>
+                             </div>
+
+                             {cart.map(item => {
+                                 const itemPrice = getProductPrice(item, isWholesale);
+                                 return (
+                                     <div key={item.id} className="flex border-b border-zinc-200 py-2 text-[11px] items-center">
+                                         <div className="w-8 font-bold">{item.qty}x</div>
+                                         <div className="flex-1 px-2 leading-tight">
+                                            {item.refCode && <span className="text-zinc-500 mr-1">[{item.refCode}]</span>}
+                                            {item.name}
+                                         </div>
+                                         <div className="text-right w-20 whitespace-nowrap font-medium">${(item.qty * itemPrice).toLocaleString('es-CO')}</div>
+                                     </div>
+                                 );
+                             })}
+
+                             <div className="mt-4 pt-3 border-t-2 border-zinc-400 text-right font-black text-lg text-zinc-900">
+                                 TOTAL: ${total.toLocaleString('es-CO')}
+                             </div>
+                         </div>
+
+                         <button onClick={() => { setShowCheckout(false); setSuccess(false); setCart([]); setClientInfo({ name: '', phone: '', schedule: 'Lo antes posible' }); }} className="mt-2 w-full py-4 bg-[var(--theme)] text-white rounded-2xl font-bold hover:scale-[1.02] transition-transform shadow-lg uppercase tracking-wider text-sm">
+                             Cerrar y Volver
+                         </button>
+                     </div>
                  ) : (
                     <form onSubmit={handleCheckout} className="flex flex-col gap-5">
                        <div className="flex justify-between items-center mb-2">
