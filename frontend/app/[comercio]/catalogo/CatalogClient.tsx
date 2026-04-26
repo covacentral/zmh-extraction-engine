@@ -446,7 +446,7 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
                              })}
 
                              <div className="mt-4 pt-3 border-t-2 border-zinc-400 text-right font-black text-lg text-zinc-900">
-                                 TOTAL: ${total.toLocaleString('es-CO')}
+                                 TOTAL: ${cartTotal.toLocaleString('es-CO')}
                              </div>
                          </div>
 
