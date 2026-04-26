@@ -3,6 +3,7 @@ const { default: makeWASocket, fetchLatestBaileysVersion, initAuthCreds, BufferJ
 const cors = require('cors');
 const admin = require('firebase-admin');
 const PDFDocument = require('pdfkit');
+const cron = require('node-cron');
 
 // Prevent Baileys unhandled promise rejections from crashing the server
 process.on('unhandledRejection', (reason, promise) => {
@@ -233,18 +234,32 @@ const syncCatalogs = async () => {
                          // We serialize to JSON and back to strip all undefined values cleanly.
                          const sanitizedProducts = JSON.parse(JSON.stringify(products));
                          
-                         // Store catalog in separate collection to prevent bloating the commerce document
-                         await db.collection('catalogos').doc(doc.id).set({
-                             whatsappCatalog: sanitizedProducts,
-                             updatedAt: admin.firestore.FieldValue.serverTimestamp()
-                         });
+                         // Fetch existing catalog to compare
+                         const existingCatalogDoc = await db.collection('catalogos').doc(doc.id).get();
+                         let shouldWrite = true;
+                         
+                         if (existingCatalogDoc.exists) {
+                             const existingData = existingCatalogDoc.data().whatsappCatalog;
+                             if (JSON.stringify(existingData) === JSON.stringify(sanitizedProducts)) {
+                                 shouldWrite = false;
+                             }
+                         }
+                         
+                         if (shouldWrite) {
+                             // Store catalog in separate collection to prevent bloating the commerce document
+                             await db.collection('catalogos').doc(doc.id).set({
+                                 whatsappCatalog: sanitizedProducts,
+                                 updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                             });
+                             console.log(`Catálogo actualizado para ${data.businessName}: ${products.length} productos guardados en /catalogos/${doc.id}.`);
+                         } else {
+                             console.log(`Catálogo sin cambios para ${data.businessName}, omitiendo escritura.`);
+                         }
                          
                          // Remove legacy field from main document if it exists to clean up Read payloads
                          if (data.whatsappCatalog) {
                              await doc.ref.update({ whatsappCatalog: admin.firestore.FieldValue.delete() });
                          }
-                         
-                         console.log(`Catálogo sincronizado para ${data.businessName}: ${products.length} productos guardados en /catalogos/${doc.id}.`);
                      }
                  } catch(err) {
                      console.error('Error sincronizando catálogo para', targetJid, err.message);
@@ -254,8 +269,11 @@ const syncCatalogs = async () => {
     } catch(e) { console.error('Cron error:', e.message); }
 };
 
-// Cronjob: Sincronizar cada 30 minutos
-setInterval(syncCatalogs, 30 * 60 * 1000);
+// Cronjob: Sincronizar a las 9 AM y 9 PM Hora Colombia
+cron.schedule('0 9,21 * * *', () => {
+    console.log("Iniciando sincronización programada (9 AM / 9 PM - Bogotá)");
+    syncCatalogs();
+}, { timezone: "America/Bogota" });
 
 app.get('/api/force-sync', async (req, res) => {
     if (!isReady || !globalSock) return res.status(503).json({ error: 'WhatsApp offline' });

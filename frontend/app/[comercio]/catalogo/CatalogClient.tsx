@@ -1,11 +1,17 @@
 'use client';
 import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useSearchParams } from 'next/navigation';
+import { getVipClient, getAsesor } from '../../actions/getUserData';
 
-export default function CatalogClient({ commerceId, data, themeHex, RENDER_API, vipClient, asesorData }: any) {
+export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }: any) {
   let { businessName, whatsappCatalog = [] } = data;
 
-  const [isWholesale, setIsWholesale] = useState(!!vipClient);
+  const searchParams = useSearchParams();
+  const [vipClient, setVipClient] = useState<any>(null);
+  const [asesorData, setAsesorData] = useState<any>(null);
+
+  const [isWholesale, setIsWholesale] = useState(false);
   const [search, setSearch] = useState('');
   const [visibleCount, setVisibleCount] = useState(10);
   
@@ -14,10 +20,34 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API, 
   const [showCheckout, setShowCheckout] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
-  const [formData, setFormData] = useState({ name: vipClient?.name || '', phone: vipClient?.phone || '', datetime: '' });
+  const [formData, setFormData] = useState({ name: '', phone: '', datetime: '' });
   const [isASAP, setIsASAP] = useState(false);
 
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+
+  useEffect(() => {
+     const vipId = searchParams.get('vip');
+     const asesorId = searchParams.get('asesor');
+
+     if (vipId) {
+         getVipClient(commerceId, vipId).then(client => {
+             if (client) {
+                 setVipClient(client);
+                 setIsWholesale(true);
+                 setFormData(prev => ({ ...prev, name: client.name || '', phone: client.phone || '' }));
+             }
+         });
+     }
+
+     if (asesorId) {
+         getAsesor(commerceId, asesorId).then(asesor => {
+             if (asesor) {
+                 setAsesorData(asesor);
+                 setIsWholesale(true); // Asesor can switch, default to wholesale
+             }
+         });
+     }
+  }, [searchParams, commerceId]);
 
   const getProductPrice = (product: any, wholesale: boolean) => {
       let rawPrice = product.priceAmount1000 !== undefined ? product.priceAmount1000 : product.price;

@@ -10,6 +10,7 @@
     "qrcode-terminal": "^0.12.0",
     "cors": "^2.8.5",
     "firebase-admin": "^12.1.0",
-    "pdfkit": "^0.15.0"
+    "pdfkit": "^0.15.0",
+    "node-cron": "^3.0.3"
   }
 }
