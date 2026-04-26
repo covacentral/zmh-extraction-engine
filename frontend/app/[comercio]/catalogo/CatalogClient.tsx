@@ -247,7 +247,7 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
   };
 
   return (
-    <main className="flex flex-col items-center p-4 min-h-screen w-full relative bg-black font-sans pb-32" style={{ '--theme': themeHex } as any}>
+    <main className="flex flex-col items-center p-4 min-h-screen w-[100vw] overflow-x-hidden relative bg-black font-sans pb-32" style={{ '--theme': themeHex } as any}>
        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[120%] h-64 opacity-20 blur-[100px] pointer-events-none z-0" style={{ backgroundColor: 'var(--theme)' }} />
 
        <div className="w-full max-w-lg z-10 flex flex-col gap-4 pt-20">
