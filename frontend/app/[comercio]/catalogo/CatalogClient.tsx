@@ -235,8 +235,6 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
           const result = await res.json();
           if (result.ok) {
               setSuccess(true);
-              setCart([]);
-              localStorage.removeItem(`cart_${commerceId}`);
           } else {
               alert(result.error || 'Error enviando solicitud');
           }
