@@ -331,6 +331,9 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
                          <h3 className={`text-white/90 text-[13px] font-bold leading-snug line-clamp-2 ${isOut ? 'line-through text-white/50' : ''}`}>{prod.name}</h3>
                          {refCode && <span className="inline-block mt-1 w-max px-1.5 py-0.5 bg-white/10 text-white/60 text-[10px] font-mono rounded border border-white/5 uppercase tracking-wider">REF: {refCode}</span>}
                          <span className={`${isOut ? 'text-white/40' : 'text-[var(--theme)]'} font-black text-sm mt-1 block`}>${price.toLocaleString('es-CO')}</span>
+                         {inCart && Number(inCart.qty) > 1 && (
+                             <span className="text-[var(--theme)]/70 text-[11px] block mt-0.5 font-bold">Subtotal: ${(price * Number(inCart.qty)).toLocaleString('es-CO')}</span>
+                         )}
                       </div>
 
                       {/* Add Button */}
@@ -473,6 +476,9 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
                                    <div className="flex-1 pr-4">
                                        <span className="font-medium line-clamp-1">{item.name}</span>
                                        <span className="text-white/40 text-[10px] block">${item.price.toLocaleString('es-CO')} c/u</span>
+                                       {Number(item.qty) > 1 && (
+                                           <span className="text-white/70 text-[11px] block font-bold mt-0.5">Subtotal: ${(item.price * Number(item.qty)).toLocaleString('es-CO')}</span>
+                                       )}
                                    </div>
                                     <div className="flex items-center bg-white/5 rounded-xl overflow-hidden border border-white/5">
                                       <button type="button" onClick={() => setQty(item.id, (Number(item.qty) || 0) - 1)} className="w-8 h-8 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-colors">-</button>
@@ -592,10 +598,15 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
                      <div className="p-5 flex flex-col gap-4">
                          <div>
                              <h2 className={`text-xl font-bold text-white leading-tight ${selectedProduct.isHidden ? 'line-through text-white/50' : ''}`}>{selectedProduct.name}</h2>
-                             <div className="flex items-center justify-between mt-3">
-                                 <span className={`${selectedProduct.isHidden ? 'text-white/40' : 'text-[var(--theme)]'} font-black text-2xl`}>${getProductPrice(selectedProduct, isWholesale).toLocaleString('es-CO')}</span>
+                             <div className="flex items-start justify-between mt-3">
+                                 <div>
+                                     <span className={`${selectedProduct.isHidden ? 'text-white/40' : 'text-[var(--theme)]'} font-black text-2xl block`}>${getProductPrice(selectedProduct, isWholesale).toLocaleString('es-CO')}</span>
+                                     {inCart && Number(inCart.qty) > 1 && (
+                                         <span className="text-[var(--theme)]/70 text-sm block font-bold mt-1">Subtotal: ${(getProductPrice(selectedProduct, isWholesale) * Number(inCart.qty)).toLocaleString('es-CO')}</span>
+                                     )}
+                                 </div>
                                  {getProductRef(selectedProduct) && (
-                                     <span className="px-2 py-1 bg-white/10 text-white/60 text-xs font-mono rounded border border-white/5 uppercase tracking-wider">REF: {getProductRef(selectedProduct)}</span>
+                                     <span className="px-2 py-1 bg-white/10 text-white/60 text-xs font-mono rounded border border-white/5 uppercase tracking-wider mt-1.5">REF: {getProductRef(selectedProduct)}</span>
                                  )}
                              </div>
                          </div>
