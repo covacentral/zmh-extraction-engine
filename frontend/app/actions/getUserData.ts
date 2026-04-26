@@ -23,7 +23,7 @@ export async function getVipClient(comercio: string, vipId: string) {
     try {
         const clientDoc = await db.collection('comercios').doc(comercio).collection('clientes').doc(vipId).get();
         if (clientDoc.exists) {
-            return { id: clientDoc.id, ...clientDoc.data() };
+            return JSON.parse(JSON.stringify({ id: clientDoc.id, ...clientDoc.data() }));
         }
     } catch(e) {
         console.error("Error fetching VIP:", e);
@@ -36,7 +36,7 @@ export async function getAsesor(comercio: string, asesorId: string) {
     try {
         const asesorDoc = await db.collection('comercios').doc(comercio).collection('asesores').doc(asesorId).get();
         if (asesorDoc.exists) {
-            return { id: asesorDoc.id, ...asesorDoc.data() };
+            return JSON.parse(JSON.stringify({ id: asesorDoc.id, ...asesorDoc.data() }));
         }
     } catch(e) {
         console.error("Error fetching Asesor:", e);
