@@ -18,6 +18,7 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
   const [cart, setCart] = useState<any[]>([]);
   const [isMounted, setIsMounted] = useState(false);
   const [showCheckout, setShowCheckout] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [formData, setFormData] = useState({ name: '', phone: '', datetime: '' });
@@ -307,7 +308,7 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
                 const isOut = prod.isHidden === true;
 
                 return (
-                   <div key={prod.id} className={`bg-white/5 hover:bg-white/10 rounded-3xl p-2.5 flex gap-4 items-center border border-white/5 transition-colors ${isOut ? 'opacity-70' : ''}`}>
+                   <div key={prod.id} onClick={() => setSelectedProduct(prod)} className={`bg-white/5 hover:bg-white/10 rounded-3xl p-2.5 flex gap-4 items-center border border-white/5 transition-colors cursor-pointer ${isOut ? 'opacity-70' : ''}`}>
                       {/* Thumbnail */}
                       <div className={`w-20 h-20 shrink-0 bg-zinc-900 rounded-2xl overflow-hidden relative border border-white/5 ${isOut ? 'grayscale opacity-75' : ''}`}>
                          {imageUrl ? <img src={imageUrl} alt={prod.name} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-white/20"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg></div>}
@@ -326,7 +327,7 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
                       </div>
 
                       {/* Add Button */}
-                      <div className="shrink-0 pr-1">
+                      <div className="shrink-0 pr-1 p-2 -m-2" onClick={(e) => e.stopPropagation()}>
                          {isOut ? (
                             <div className="w-10 h-10 rounded-full flex items-center justify-center bg-black/40 text-red-500/50 border border-red-500/20">
                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line></svg>
@@ -492,6 +493,99 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
            </motion.div>
          )}
       </AnimatePresence>
+
+       {/* PRODUCT DETAILS MODAL */}
+       <AnimatePresence>
+         {selectedProduct && (
+           <motion.div 
+             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}
+             className="fixed inset-0 bg-black/90 z-[110] flex items-end sm:items-center justify-center p-2"
+           >
+              <motion.div 
+                initial={{ scale: 0.9, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.9, opacity: 0, y: 20 }} transition={{ duration: 0.15, ease: "easeOut" }}
+                className="bg-zinc-950 w-[95%] sm:w-full sm:max-w-md rounded-[2.5rem] overflow-hidden border sm:border border-white/10 max-h-[90vh] flex flex-col shadow-[0_-20px_50px_rgba(0,0,0,0.8)] relative mb-4 sm:mb-0"
+                style={{ '--theme': themeHex } as any}
+              >
+                 {/* Header image area */}
+                 <div className="relative w-full aspect-square bg-zinc-900 shrink-0">
+                    {getImageUrl(selectedProduct) ? (
+                        <img src={getImageUrl(selectedProduct)} alt={selectedProduct.name} className={`w-full h-full object-cover ${selectedProduct.isHidden ? 'grayscale opacity-75' : ''}`} />
+                    ) : (
+                        <div className="w-full h-full flex items-center justify-center text-white/20">
+                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+                        </div>
+                    )}
+                    
+                    {selectedProduct.isHidden && (
+                        <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                            <span className="text-white text-3xl font-black tracking-widest uppercase bg-red-600/90 px-6 py-2 rounded-xl border-4 border-red-500 shadow-2xl rotate-[-15deg]">Agotado</span>
+                        </div>
+                    )}
+
+                    <button onClick={() => setSelectedProduct(null)} className="absolute top-4 right-4 w-10 h-10 flex items-center justify-center bg-black/50 backdrop-blur-md rounded-full text-white/90 hover:bg-black/70 hover:text-white transition-colors border border-white/10">
+                        ✕
+                    </button>
+                 </div>
+
+                 {/* Info Area */}
+                 <div className="p-6 overflow-y-auto flex-1 flex flex-col gap-4">
+                     <div>
+                         <h2 className={`text-xl font-bold text-white leading-tight ${selectedProduct.isHidden ? 'line-through text-white/50' : ''}`}>{selectedProduct.name}</h2>
+                         <div className="flex items-center justify-between mt-2">
+                             <span className={`${selectedProduct.isHidden ? 'text-white/40' : 'text-[var(--theme)]'} font-black text-2xl`}>${getProductPrice(selectedProduct, isWholesale).toLocaleString('es-CO')}</span>
+                             {getProductRef(selectedProduct) && (
+                                 <span className="px-2 py-1 bg-white/10 text-white/60 text-xs font-mono rounded border border-white/5 uppercase tracking-wider">REF: {getProductRef(selectedProduct)}</span>
+                             )}
+                         </div>
+                     </div>
+
+                     {selectedProduct.description && (
+                         <div className="bg-white/5 rounded-2xl p-4 border border-white/5 mt-2">
+                             <h4 className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-2">Descripción</h4>
+                             <p className="text-white/80 text-sm whitespace-pre-wrap leading-relaxed">{selectedProduct.description}</p>
+                         </div>
+                     )}
+                 </div>
+
+                 {/* Footer Actions */}
+                 <div className="p-6 pt-2 bg-zinc-950 border-t border-white/5 shrink-0">
+                     {(() => {
+                         const inCart = cart.find(i => i.id === selectedProduct.id);
+                         const isOut = selectedProduct.isHidden === true;
+                         const price = getProductPrice(selectedProduct, isWholesale);
+
+                         if (isOut) {
+                             return (
+                                 <div className="w-full bg-black/40 text-red-500/50 p-4 rounded-2xl border border-red-500/20 flex justify-center items-center gap-2 font-bold">
+                                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line></svg>
+                                     Producto Agotado
+                                 </div>
+                             );
+                         }
+
+                         if (isMounted && inCart) {
+                             return (
+                                 <div className="flex items-center justify-between bg-white/5 rounded-2xl overflow-hidden border border-[var(--theme)]/30 p-1">
+                                     <button onClick={() => setQty(selectedProduct.id, (Number(inCart.qty) || 0) - 1)} className="w-14 h-12 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-colors rounded-xl text-xl font-medium">-</button>
+                                     <input type="text" inputMode="numeric" pattern="[0-9]*" value={inCart.qty} onChange={(e) => setQty(selectedProduct.id, e.target.value)} onBlur={() => { if (!inCart.qty || Number(inCart.qty) < 1) setQty(selectedProduct.id, 1); }} className="w-16 text-center bg-transparent font-black text-xl outline-none text-[var(--theme)] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+                                     <button onClick={() => setQty(selectedProduct.id, (Number(inCart.qty) || 0) + 1)} className="w-14 h-12 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-colors rounded-xl text-xl font-medium">+</button>
+                                 </div>
+                             );
+                         }
+
+                         return (
+                             <button onClick={() => addToCart(selectedProduct, price)} className="w-full bg-white/10 text-white hover:bg-white/20 p-4 rounded-2xl border border-white/10 transition-colors flex justify-center items-center gap-2 font-bold shadow-lg">
+                                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                                 Agregar al Pedido
+                             </button>
+                         );
+                     })()}
+                 </div>
+              </motion.div>
+           </motion.div>
+         )}
+       </AnimatePresence>
     </main>
+
   );
 }
