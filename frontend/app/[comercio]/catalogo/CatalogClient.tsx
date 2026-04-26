@@ -244,6 +244,8 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
       setIsSubmitting(false);
   };
 
+  const selectedProductInCart = selectedProduct ? cart.find(i => i.id === selectedProduct.id) : null;
+
   return (
     <main className="flex flex-col items-center p-4 min-h-screen w-[100vw] overflow-x-hidden relative bg-black font-sans pb-32" style={{ '--theme': themeHex } as any}>
        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[120%] h-64 opacity-20 blur-[100px] pointer-events-none z-0" style={{ backgroundColor: 'var(--theme)' }} />
@@ -314,7 +316,9 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
                 const inCart = cart.find(i => i.id === prod.id);
                 const isOut = prod.isHidden === true;
 
-                return (
+                const selectedProductInCart = selectedProduct ? cart.find(i => i.id === selectedProduct.id) : null;
+
+  return (
                    <div key={prod.id} onClick={() => setSelectedProduct(prod)} className={`bg-white/5 hover:bg-white/10 rounded-3xl p-2.5 flex gap-4 items-center border border-white/5 transition-colors cursor-pointer ${isOut ? 'opacity-70' : ''}`}>
                       {/* Thumbnail */}
                       <div className={`w-20 h-20 shrink-0 bg-zinc-900 rounded-2xl overflow-hidden relative border border-white/5 ${isOut ? 'grayscale opacity-75' : ''}`}>
@@ -436,7 +440,9 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
 
                              {cart.map(item => {
                                  const itemPrice = item.price;
-                                 return (
+                                 const selectedProductInCart = selectedProduct ? cart.find(i => i.id === selectedProduct.id) : null;
+
+  return (
                                      <div key={item.id} className="border-b border-zinc-200 py-2 text-[11px] flex flex-col gap-1">
                                          <div className="flex items-start">
                                             <span className="font-bold w-6 shrink-0">{item.qty}x</span>
@@ -601,8 +607,8 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
                              <div className="flex items-start justify-between mt-3">
                                  <div>
                                      <span className={`${selectedProduct.isHidden ? 'text-white/40' : 'text-[var(--theme)]'} font-black text-2xl block`}>${getProductPrice(selectedProduct, isWholesale).toLocaleString('es-CO')}</span>
-                                     {inCart && Number(inCart.qty) > 1 && (
-                                         <span className="text-[var(--theme)]/70 text-sm block font-bold mt-1">Subtotal: ${(getProductPrice(selectedProduct, isWholesale) * Number(inCart.qty)).toLocaleString('es-CO')}</span>
+                                     {selectedProductInCart && Number(selectedProductInCart.qty) > 1 && (
+                                         <span className="text-[var(--theme)]/70 text-sm block font-bold mt-1">Subtotal: ${(getProductPrice(selectedProduct, isWholesale) * Number(selectedProductInCart.qty)).toLocaleString('es-CO')}</span>
                                      )}
                                  </div>
                                  {getProductRef(selectedProduct) && (
@@ -628,7 +634,9 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
                          const price = getProductPrice(selectedProduct, isWholesale);
 
                          if (isOut) {
-                             return (
+                             const selectedProductInCart = selectedProduct ? cart.find(i => i.id === selectedProduct.id) : null;
+
+  return (
                                  <div className="w-full bg-black/40 text-red-500/50 p-4 rounded-2xl border border-red-500/20 flex justify-center items-center gap-2 font-bold">
                                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line></svg>
                                      Producto Agotado
@@ -637,7 +645,9 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
                          }
 
                          if (isMounted && inCart) {
-                             return (
+                             const selectedProductInCart = selectedProduct ? cart.find(i => i.id === selectedProduct.id) : null;
+
+  return (
                                  <div className="flex items-center justify-between bg-white/5 rounded-2xl overflow-hidden border border-[var(--theme)]/30 p-1">
                                      <button onClick={() => setQty(selectedProduct.id, (Number(inCart.qty) || 0) - 1)} className="w-14 h-12 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-colors rounded-xl text-xl font-medium">-</button>
                                      <input type="text" inputMode="numeric" pattern="[0-9]*" value={inCart.qty} onChange={(e) => setQty(selectedProduct.id, e.target.value)} onBlur={() => { if (!inCart.qty || Number(inCart.qty) < 1) setQty(selectedProduct.id, 1); }} className="w-16 text-center bg-transparent font-black text-xl outline-none text-[var(--theme)] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
@@ -646,7 +656,9 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
                              );
                          }
 
-                         return (
+                         const selectedProductInCart = selectedProduct ? cart.find(i => i.id === selectedProduct.id) : null;
+
+  return (
                              <button onClick={() => addToCart(selectedProduct, price)} className="w-full bg-white/10 text-white hover:bg-white/20 p-4 rounded-2xl border border-white/10 transition-colors flex justify-center items-center gap-2 font-bold shadow-lg">
                                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                                  Agregar al Pedido
