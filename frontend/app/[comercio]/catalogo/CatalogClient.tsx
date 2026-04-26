@@ -407,9 +407,9 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
                              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
                          </div>
                          <div>
-                             <h3 className="text-2xl font-black text-white mb-2">{isStoreSale ? '¡Pedido Confirmado!' : '¡Solicitud Recibida!'}</h3>
+                             <h3 className="text-2xl font-black text-white mb-2">{!!asesorData ? '¡Pedido Confirmado!' : '¡Solicitud Recibida!'}</h3>
                              <p className="text-white/70 text-sm leading-relaxed px-4">
-                                {isStoreSale 
+                                {!!asesorData 
                                     ? 'Tu orden ha sido registrada exitosamente.' 
                                     : 'Tu información ha sido registrada exitosamente. Nos pondremos en contacto contigo a la brevedad posible.'}
                              </p>
@@ -422,7 +422,7 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
                              
                              <div className="text-center font-bold mb-4 border-b border-zinc-300 pb-3">
                                  <h4 className="text-base tracking-widest uppercase">Recibo de Caja</h4>
-                                 <div className="text-[10px] text-zinc-500 mt-1 uppercase tracking-wider">{isStoreSale ? 'Orden de Compra' : 'Cotización'}</div>
+                                 <div className="text-[10px] text-zinc-500 mt-1 uppercase tracking-wider">{!!asesorData ? 'Orden de Compra' : 'Cotización'}</div>
                              </div>
                              
                              <div className="flex border-b border-zinc-300 pb-2 mb-2 font-bold text-[10px] text-zinc-600 tracking-wider">
@@ -450,7 +450,7 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
                              </div>
                          </div>
 
-                         <button onClick={() => { setShowCheckout(false); setSuccess(false); setCart([]); setClientInfo({ name: '', phone: '', schedule: 'Lo antes posible' }); }} className="mt-2 w-full py-4 bg-[var(--theme)] text-white rounded-2xl font-bold hover:scale-[1.02] transition-transform shadow-lg uppercase tracking-wider text-sm">
+                         <button onClick={() => { setShowCheckout(false); setSuccess(false); setCart([]); localStorage.removeItem(`cart_${commerceId}`); }} className="mt-2 w-full py-4 bg-[var(--theme)] text-white rounded-2xl font-bold hover:scale-[1.02] transition-transform shadow-lg uppercase tracking-wider text-sm">
                              Cerrar y Volver
                          </button>
                      </div>
