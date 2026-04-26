@@ -423,22 +423,29 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
                                  <div className="text-[10px] text-zinc-500 mt-1 uppercase tracking-wider">{!!asesorData ? 'Orden de Compra' : 'Cotización'}</div>
                              </div>
                              
-                             <div className="flex border-b border-zinc-300 pb-2 mb-2 font-bold text-[10px] text-zinc-600 tracking-wider">
-                                 <div className="w-8">CANT</div>
-                                 <div className="flex-1 px-2">PRODUCTO</div>
-                                 <div className="text-right w-20">SUBTOTAL</div>
+                             <div className="border-b border-zinc-300 pb-2 mb-2 font-bold text-[10px] text-zinc-600 tracking-wider flex flex-col gap-1">
+                                 <div>CANT | REF | PRODUCTO</div>
+                                 <div className="flex justify-between pl-6">
+                                     <span>V.UNIT</span>
+                                     <span>SUBTOTAL</span>
+                                 </div>
                              </div>
 
                              {cart.map(item => {
                                  const itemPrice = getProductPrice(item, isWholesale);
                                  return (
-                                     <div key={item.id} className="flex border-b border-zinc-200 py-2 text-[11px] items-center">
-                                         <div className="w-8 font-bold">{item.qty}x</div>
-                                         <div className="flex-1 px-2 leading-tight">
-                                            {item.refCode && <span className="text-zinc-500 mr-1">[{item.refCode}]</span>}
-                                            {item.name}
+                                     <div key={item.id} className="border-b border-zinc-200 py-2 text-[11px] flex flex-col gap-1">
+                                         <div className="flex items-start">
+                                            <span className="font-bold w-6 shrink-0">{item.qty}x</span>
+                                            <span className="flex-1 leading-tight">
+                                                {item.refCode && <span className="text-zinc-500 mr-1">[{item.refCode}]</span>}
+                                                {item.name}
+                                            </span>
                                          </div>
-                                         <div className="text-right w-20 whitespace-nowrap font-medium">${(item.qty * itemPrice).toLocaleString('es-CO')}</div>
+                                         <div className="flex justify-between pl-6 text-zinc-600 font-medium">
+                                            <span>${itemPrice.toLocaleString('es-CO')}</span>
+                                            <span className="text-zinc-900">${(item.qty * itemPrice).toLocaleString('es-CO')}</span>
+                                         </div>
                                      </div>
                                  );
                              })}
