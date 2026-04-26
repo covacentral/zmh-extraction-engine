@@ -307,8 +307,8 @@ app.post('/api/dispatch', async (req, res) => {
         }
 
         if (isStoreSale) {
-            // Generate PDF Buffer
-            const docPdf = new PDFDocument({ margin: 50 });
+            // Generate PDF Buffer for 80mm Thermal Printer (approx 226 points width)
+            const docPdf = new PDFDocument({ size: [226, 800], margin: 10 });
             let buffers = [];
             docPdf.on('data', buffers.push.bind(buffers));
             
@@ -317,32 +317,50 @@ app.post('/api/dispatch', async (req, res) => {
             const now = new Date();
             const timeStr = now.toLocaleString('es-CO', { timeZone: 'America/Bogota', year:'2-digit', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', second:'2-digit', hour12: false }).replace(/\D/g, '');
             const ms = now.getMilliseconds().toString().padStart(3, '0');
-            const facCode = `FAC-${timeStr.slice(0, 10)}-${timeStr.slice(10)}${ms}`;
+            const facCode = `REC-${timeStr.slice(0, 10)}-${timeStr.slice(10)}${ms}`;
 
-            docPdf.fontSize(20).font('Helvetica-Bold').text(commerceName, { align: 'center' });
-            docPdf.moveDown();
-            docPdf.fontSize(12).font('Helvetica').text(`Factura No: ${facCode}`);
-            docPdf.text(`Fecha: ${new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' })}`);
-            docPdf.text(`Asesor: ${asesorName} (${asesorSection})`);
-            docPdf.text(`Cliente: ${name}`);
-            docPdf.text(`Tipo de Venta: ${isWholesale ? 'MAYORISTA' : 'MINORISTA'}`);
-            docPdf.moveDown();
+            docPdf.font('Courier-Bold').fontSize(12).text(commerceName, { align: 'center' });
+            docPdf.moveDown(0.5);
             
-            docPdf.font('Helvetica-Bold').text('---------------------------------------------------------');
-            docPdf.text('CANT  PRODUCTO                           PRECIO', { align: 'left' });
-            docPdf.text('---------------------------------------------------------');
-            docPdf.font('Helvetica');
+            docPdf.font('Courier').fontSize(9);
+            docPdf.text(`Recibo de Caja: ${facCode}`, { align: 'center' });
+            docPdf.text(`Fecha: ${new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' })}`, { align: 'center' });
+            docPdf.text(`Asesor: ${asesorName}`, { align: 'center' });
+            docPdf.text(`Cliente: ${name}`, { align: 'center' });
+            docPdf.text(`Tipo: ${isWholesale ? 'MAYORISTA' : 'MINORISTA'}`, { align: 'center' });
+            docPdf.moveDown(0.5);
+            
+            docPdf.font('Courier-Bold');
+            docPdf.text('--------------------------------------', { align: 'center' });
+            docPdf.text('CANT REF  PRODUCTO', { align: 'left' });
+            docPdf.text('       V.UNIT           SUBTOTAL', { align: 'left' });
+            docPdf.text('--------------------------------------', { align: 'center' });
+            docPdf.font('Courier');
 
             cart.forEach(item => {
-                const ref = item.refCode ? `[${item.refCode}] ` : '';
-                const title = `${item.qty}x ${ref}${item.name}`.substring(0, 35);
-                const price = `$${item.price.toLocaleString('es-CO')}`;
-                docPdf.text(`${title.padEnd(36, ' ')} ${price}`);
+                const ref = (item.refCode || '').substring(0, 4).padEnd(4, ' ');
+                const qty = String(item.qty).padStart(2, ' ') + 'x';
+                const prodName = (item.name || '').substring(0, 27);
+                
+                // Line 1: CANT REF PRODUCTO
+                docPdf.text(`${qty} ${ref} ${prodName}`, { align: 'left' });
+                
+                // Line 2: V.UNIT and SUBTOTAL
+                const unitPrice = `$${item.price.toLocaleString('es-CO')}`;
+                const subTotal = `$${(item.qty * item.price).toLocaleString('es-CO')}`;
+                
+                // Max line length for Courier 9pt on 206pt usable width is ~38 chars.
+                const line2Prefix = `       ${unitPrice}`;
+                const paddingNeeded = Math.max(0, 38 - line2Prefix.length - subTotal.length);
+                const line2 = line2Prefix + ' '.repeat(paddingNeeded) + subTotal;
+                
+                docPdf.text(line2, { align: 'left' });
+                docPdf.moveDown(0.2);
             });
 
-            docPdf.moveDown();
-            docPdf.font('Helvetica-Bold').text('---------------------------------------------------------');
-            docPdf.fontSize(16).text(`TOTAL: $${total.toLocaleString('es-CO')}`, { align: 'right' });
+            docPdf.font('Courier-Bold');
+            docPdf.text('--------------------------------------', { align: 'center' });
+            docPdf.fontSize(11).text(`TOTAL: $${total.toLocaleString('es-CO')}`, { align: 'right' });
             
             docPdf.end();
 
