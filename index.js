@@ -204,81 +204,40 @@ app.get('/api/seed', async (req, res) => {
 
 app.use(express.json());
 
-const syncCatalogs = async () => {
-    if (!isReady || !globalSock || !db) return;
-    try {
-        const snapshot = await db.collection('comercios').get();
-        for (const doc of snapshot.docs) {
-            const data = doc.data();
-            const sourceJid = data.catalogJid || data.avatarJid;
-            
-            if (sourceJid) {
-                 const targetJid = sourceJid.includes('@') ? sourceJid : `${sourceJid}@s.whatsapp.net`;
-                 try {
-                     let products = [];
-                     if (typeof globalSock.getCatalog === 'function') {
-                         const catalog = await globalSock.getCatalog({ jid: targetJid });
-                         if (catalog && catalog.products) products = catalog.products;
-                     } else {
-                         const result = await globalSock.query({
-                             tag: 'iq',
-                             attrs: { to: 's.whatsapp.net', type: 'get', xmlns: 'w:biz:catalog' },
-                             content: [{ tag: 'product_catalog', attrs: { jid: targetJid, allow_paged: 'true' } }]
-                         });
-                         // Basic fallback parsing if getCatalog is missing
-                         products = result?.content || [];
-                     }
-                     
-                     if (products.length > 0) {
-                         // Firestore crashes if there are undefined values in the array (like retailerId: undefined)
-                         // We serialize to JSON and back to strip all undefined values cleanly.
-                         const sanitizedProducts = JSON.parse(JSON.stringify(products));
-                         
-                         // Fetch existing catalog to compare
-                         const existingCatalogDoc = await db.collection('catalogos').doc(doc.id).get();
-                         let shouldWrite = true;
-                         
-                         if (existingCatalogDoc.exists) {
-                             const existingData = existingCatalogDoc.data().whatsappCatalog;
-                             if (JSON.stringify(existingData) === JSON.stringify(sanitizedProducts)) {
-                                 shouldWrite = false;
-                             }
-                         }
-                         
-                         if (shouldWrite) {
-                             // Store catalog in separate collection to prevent bloating the commerce document
-                             await db.collection('catalogos').doc(doc.id).set({
-                                 whatsappCatalog: sanitizedProducts,
-                                 updatedAt: admin.firestore.FieldValue.serverTimestamp()
-                             });
-                             console.log(`Catálogo actualizado para ${data.businessName}: ${products.length} productos guardados en /catalogos/${doc.id}.`);
-                         } else {
-                             console.log(`Catálogo sin cambios para ${data.businessName}, omitiendo escritura.`);
-                         }
-                         
-                         // Remove legacy field from main document if it exists to clean up Read payloads
-                         if (data.whatsappCatalog) {
-                             await doc.ref.update({ whatsappCatalog: admin.firestore.FieldValue.delete() });
-                         }
-                     }
-                 } catch(err) {
-                     console.error('Error sincronizando catálogo para', targetJid, err.message);
-                 }
-            }
-        }
-    } catch(e) { console.error('Cron error:', e.message); }
-};
-
-// Cronjob: Sincronizar a las 9 AM y 9 PM Hora Colombia
-cron.schedule('0 9,21 * * *', () => {
-    console.log("Iniciando sincronización programada (9 AM / 9 PM - Bogotá)");
-    syncCatalogs();
-}, { timezone: "America/Bogota" });
-
-app.get('/api/force-sync', async (req, res) => {
+// API Pasarela: Fetch Catalog directly from WhatsApp
+app.get('/api/catalog/:jid', async (req, res) => {
     if (!isReady || !globalSock) return res.status(503).json({ error: 'WhatsApp offline' });
-    await syncCatalogs();
-    res.json({ ok: true, msg: 'Sincronización forzada completada' });
+    
+    const { jid } = req.params;
+    if (!jid) return res.status(400).json({ error: 'Missing JID' });
+    
+    const targetJid = jid.includes('@') ? jid : `${jid}@s.whatsapp.net`;
+    
+    try {
+        let products = [];
+        if (typeof globalSock.getCatalog === 'function') {
+            const catalog = await globalSock.getCatalog({ jid: targetJid });
+            if (catalog && catalog.products) products = catalog.products;
+        } else {
+            const result = await globalSock.query({
+                tag: 'iq',
+                attrs: { to: 's.whatsapp.net', type: 'get', xmlns: 'w:biz:catalog' },
+                content: [{ tag: 'product_catalog', attrs: { jid: targetJid, allow_paged: 'true' } }]
+            });
+            products = result?.content || [];
+        }
+        
+        // Serialize to strip undefined values to ensure clean JSON output
+        const sanitizedProducts = JSON.parse(JSON.stringify(products));
+        
+        // Cache headers to instruct edge networks (like Vercel) if they fetch this
+        res.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
+        res.json({ ok: true, products: sanitizedProducts });
+        
+    } catch(err) {
+        console.error('Error fetching catalog API Pasarela:', targetJid, err.message);
+        res.status(500).json({ error: 'Failed to fetch catalog', details: err.message });
+    }
 });
 
 app.post('/api/dispatch', async (req, res) => {
