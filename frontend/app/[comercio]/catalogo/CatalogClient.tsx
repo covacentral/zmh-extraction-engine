@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { getVipClient, getAsesor } from '../../actions/getUserData';
 
 export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }: any) {
-  const isRestaurant = data?.profile?.description?.includes('#TIPO:RESTAURANTE') || false;
+  const isRestaurant = data?.profile?.description?.includes('#TIPO:RESTAURANTE') || whatsappCatalog.some((p:any) => p.description?.includes('#TIPO:RESTAURANTE'));
   let { businessName, whatsappCatalog = [] } = data;
 
   const searchParams = useSearchParams();
