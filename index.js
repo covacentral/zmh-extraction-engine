@@ -242,9 +242,8 @@ app.get('/api/catalog/:jid', async (req, res) => {
 app.post('/api/dispatch', async (req, res) => {
     if (!isReady || !globalSock) return res.status(503).json({ error: 'WhatsApp offline' });
     try {
-        const { commerceId, name, phone, datetime, cart = [], total = 0, isWholesale = false, isStoreSale = false, asesorName = '', asesorSection = '', businessType = 'RETAIL' } = req.body;
-        if (!name || !datetime) return res.status(400).json({ error: 'Missing mandatory fields' });
-
+        const { commerceId, name, phone, datetime, cart = [], total = 0, isWholesale = false, isStoreSale = false, asesorName = '', asesorSection = '', businessType = 'RETAIL', orderContext } = req.body;
+        
         const doc = await db.collection('comercios').doc(commerceId).get();
         if (!doc.exists) return res.status(404).json({ error: 'Commerce not found' });
         
@@ -255,14 +254,12 @@ app.post('/api/dispatch', async (req, res) => {
 
         if (!dispatchJid) return res.status(400).json({ error: 'Este comercio aún no ha configurado su dispatchJid o posJid (Grupo Privado) en Firestore.' });
         
-        // Auto-resolve group invite links to actual JIDs
         if (dispatchJid.includes('chat.whatsapp.com/')) {
             const inviteCode = dispatchJid.replace('https://chat.whatsapp.com/', '').trim();
             try {
                 const groupInfo = await globalSock.groupGetInviteInfo(inviteCode);
                 if (groupInfo && groupInfo.id) {
                     dispatchJid = groupInfo.id;
-                    // Auto-update Firestore so we don't have to resolve it again next time
                     if (isStoreSale && doc.data().posJid) {
                         await doc.ref.update({ posJid: dispatchJid });
                     } else {
@@ -275,7 +272,30 @@ app.post('/api/dispatch', async (req, res) => {
         }
         
         let msg = '';
-        if (isStoreSale) {
+        const isRestaurant = businessType === 'RESTAURANTE';
+        
+        if (isRestaurant && orderContext) {
+            msg = `🍽️ *NUEVO PEDIDO DE RESTAURANTE*\n\n`;
+            if (orderContext.mode === 'mesa') {
+                msg += `📍 *Sede:* ${orderContext.sede || 'N/A'}\n`;
+                msg += `🪑 *Mesa:* ${orderContext.mesa}\n`;
+                msg += `👤 *Cliente:* ${name || 'Sin nombre'}\n\n`;
+            } else if (orderContext.mode === 'mesero') {
+                msg += `🤵‍♂️ *Mesero:* ${orderContext.mesero || asesorName}\n`;
+                msg += `📍 *Sede:* ${orderContext.sede || 'N/A'}\n`;
+                msg += `🪑 *Mesa:* ${orderContext.mesa}\n`;
+                msg += `👤 *Cliente:* ${name || 'Sin nombre'}\n\n`;
+            } else {
+                msg += `🛵 *Tipo:* ${orderContext.deliveryType === 'delivery' ? 'Envío a Domicilio' : 'Recoger Local'}\n`;
+                msg += `👤 *Cliente:* ${name}\n`;
+                msg += `📱 *Teléfono:* +${phone.replace(/\D/g,'')}\n`;
+                if (orderContext.deliveryType === 'delivery') {
+                    msg += `📍 *Dirección:* ${orderContext.address}\n\n`;
+                } else {
+                    msg += `🕒 *Para:* ${datetime}\n\n`;
+                }
+            }
+        } else if (isStoreSale) {
             msg = `🏬 *NUEVA VENTA EN TIENDA*\n\n`;
             msg += `👨‍💼 *Asesor:* ${asesorName} (${asesorSection})\n`;
             msg += `👤 *Cliente:* ${name}\n`;
@@ -292,7 +312,8 @@ app.post('/api/dispatch', async (req, res) => {
             msg += `🛒 *CARRITO:*\n`;
             cart.forEach(item => {
                 const ref = item.refCode ? ` [REF: ${item.refCode}]` : '';
-                msg += `- ${item.qty}x ${item.name}${ref} ($${item.price})\n`;
+                const mod = (isRestaurant && item.modifier) ? (item.modifier === 'aqui' ? ' [🍽️ Aquí]' : ' [🛍️ Llevar]') : '';
+                msg += `- ${item.qty}x ${item.name}${ref}${mod} ($${item.price})\n`;
             });
             msg += `\n💰 *Total:* $${total}\n\n`;
         } else {
@@ -323,12 +344,37 @@ app.post('/api/dispatch', async (req, res) => {
             
             docPdf.font('Courier').fontSize(9);
             const isRestaurant = businessType === 'RESTAURANTE';
-            docPdf.text(isRestaurant ? `Pedido a Cocina: ${facCode}` : `Recibo de Caja: ${facCode}`, { align: 'center' });
-            docPdf.text(`Fecha: ${new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' })}`, { align: 'center' });
-            docPdf.text(`Asesor: ${asesorName}`, { align: 'center' });
-            docPdf.text(`Cliente: ${name}`, { align: 'center' });
-            docPdf.text(`Tipo: ${isWholesale ? 'MAYORISTA' : 'MINORISTA'}`, { align: 'center' });
+            
+            if (isRestaurant && orderContext) {
+                if (orderContext.mode === 'mesa') {
+                   docPdf.text(`Comanda de Mesa: ${facCode}`, { align: 'center' });
+                   docPdf.text(`Fecha: ${new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' })}`, { align: 'center' });
+                   docPdf.text(`Sede: ${orderContext.sede || 'N/A'}`, { align: 'center' });
+                   docPdf.text(`Mesa: ${orderContext.mesa}`, { align: 'center' });
+                   if (name) docPdf.text(`Cliente: ${name}`, { align: 'center' });
+                } else if (orderContext.mode === 'mesero') {
+                   docPdf.text(`Comanda: ${facCode}`, { align: 'center' });
+                   docPdf.text(`Fecha: ${new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' })}`, { align: 'center' });
+                   docPdf.text(`Sede: ${orderContext.sede || 'N/A'}`, { align: 'center' });
+                   docPdf.text(`Mesa: ${orderContext.mesa}`, { align: 'center' });
+                   docPdf.text(`Mesero: ${orderContext.mesero || asesorName}`, { align: 'center' });
+                } else {
+                   docPdf.text(`Pedido Domicilio: ${facCode}`, { align: 'center' });
+                   docPdf.text(`Fecha: ${new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' })}`, { align: 'center' });
+                   docPdf.text(`Tipo: ${orderContext.deliveryType === 'delivery' ? 'DOMICILIO' : 'RECOGER'}`, { align: 'center' });
+                   docPdf.text(`Cliente: ${name}`, { align: 'center' });
+                   docPdf.text(`Tel: ${phone.replace(/\D/g,'')}`, { align: 'center' });
+                }
+            } else {
+                docPdf.text(isRestaurant ? `Pedido a Cocina: ${facCode}` : `Recibo de Caja: ${facCode}`, { align: 'center' });
+                docPdf.text(`Fecha: ${new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' })}`, { align: 'center' });
+                docPdf.text(`Asesor: ${asesorName}`, { align: 'center' });
+                docPdf.text(`Cliente: ${name}`, { align: 'center' });
+                docPdf.text(`Tipo: ${isWholesale ? 'MAYORISTA' : 'MINORISTA'}`, { align: 'center' });
+            }
             docPdf.moveDown(0.5);
+            
+
             
             docPdf.font('Courier-Bold');
             docPdf.text('--------------------------------------', { align: 'center' });
@@ -340,7 +386,8 @@ app.post('/api/dispatch', async (req, res) => {
             cart.forEach(item => {
                 const ref = (item.refCode || '').substring(0, 4).padEnd(4, ' ');
                 const qty = String(item.qty).padStart(2, ' ') + 'x';
-                const prodName = (item.name || '').substring(0, 27);
+                const mod = (isRestaurant && item.modifier) ? (item.modifier === 'aqui' ? ' [AQ]' : ' [LL]') : '';
+                const prodName = (item.name || '').substring(0, 27 - mod.length) + mod;
                 
                 // Line 1: CANT REF PRODUCTO
                 docPdf.text(`${qty} ${ref} ${prodName}`, { align: 'left' });

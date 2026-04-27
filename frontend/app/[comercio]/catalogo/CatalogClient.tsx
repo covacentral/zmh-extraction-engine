@@ -13,6 +13,15 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
   const [asesorData, setAsesorData] = useState<any>(null);
 
   const [isWholesale, setIsWholesale] = useState(false);
+  const [consumptionMode, setConsumptionMode] = useState<'aqui'|'llevar'>('aqui');
+  const [deliveryType, setDeliveryType] = useState<'delivery'|'pickup'>('delivery');
+  
+  const sedeId = searchParams.get('sede');
+  const mesaId = searchParams.get('mesa');
+  const meseroId = searchParams.get('mesero');
+  const isMesaMode = isRestaurant && !!mesaId;
+  const isMeseroMode = isRestaurant && !!meseroId;
+  const isDeliveryMode = isRestaurant && !isMesaMode && !isMeseroMode;
   const [search, setSearch] = useState('');
   const [visibleCount, setVisibleCount] = useState(10);
   
@@ -22,7 +31,7 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
-  const [formData, setFormData] = useState({ name: '', phone: '', datetime: '' });
+  const [formData, setFormData] = useState({ name: '', phone: '', datetime: '', address: '', mesaNum: '' });
   const [isASAP, setIsASAP] = useState(false);
 
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -127,10 +136,13 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
   // Cart operations
   const addToCart = (product: any, price: number) => {
      const refCode = getProductRef(product);
+     const modifier = isRestaurant ? consumptionMode : null;
+     const cartId = isRestaurant ? `${product.id}_${modifier}` : product.id;
+
      setCart(prev => {
-        const existing = prev.find(i => i.id === product.id);
-        if (existing) return prev.map(i => i.id === product.id ? { ...i, qty: i.qty + 1 } : i);
-        return [...prev, { id: product.id, name: product.name, refCode, price, qty: 1 }];
+        const existing = prev.find(i => i.id === cartId);
+        if (existing) return prev.map(i => i.id === cartId ? { ...i, qty: Number(i.qty || 0) + 1 } : i);
+        return [...prev, { id: cartId, baseId: product.id, name: product.name, refCode, price, qty: 1, modifier }];
      });
   };
 
@@ -155,7 +167,7 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
      setCart(prev => {
         let changed = false;
         const newCart = prev.map(item => {
-            const catalogItem = whatsappCatalog.find((p: any) => p.id === item.id);
+            const catalogItem = whatsappCatalog.find((p: any) => p.id === (item.baseId || item.id));
             if (catalogItem) {
                 const newPrice = getProductPrice(catalogItem, isWholesale);
                 if (newPrice !== item.price) {
@@ -205,8 +217,18 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
       setIsSubmitting(true);
       
       const formattedTime = formatTimeTo12h(formData.datetime);
-      const finalDatetime = asesorData ? 'En tienda' : (isASAP ? 'Lo antes posible' : (formattedTime || formData.datetime));
-      
+      let finalDatetime = asesorData ? 'En tienda' : (isASAP ? 'Lo antes posible' : (formattedTime || formData.datetime));
+      if (isMesaMode || isMeseroMode) finalDatetime = 'En mesa';
+
+      const orderContext = {
+         mode: isMesaMode ? 'mesa' : (isMeseroMode ? 'mesero' : 'delivery'),
+         deliveryType: isDeliveryMode ? deliveryType : null,
+         sede: sedeId,
+         mesa: isMesaMode ? mesaId : (isMeseroMode ? formData.mesaNum : null),
+         mesero: meseroId,
+         address: formData.address
+      };
+
       try {
           const res = await fetch(`${RENDER_API}/api/dispatch`, {
               method: 'POST',
@@ -214,15 +236,16 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
               body: JSON.stringify({ 
                  commerceId, 
                  ...formData, 
-                 phone: asesorData ? '' : `57${formData.phone}`,
+                 phone: (asesorData || isMesaMode || isMeseroMode) ? '' : `57${formData.phone}`,
                  datetime: finalDatetime,
                  cart, 
                  total: cartTotal, 
                  isWholesale,
-                 isStoreSale: !!asesorData,
-               businessType: isRestaurant ? 'RESTAURANTE' : 'RETAIL',
-                 asesorName: asesorData?.name,
-                 asesorSection: asesorData?.section
+                 isStoreSale: !!asesorData || isMesaMode || isMeseroMode,
+                 businessType: isRestaurant ? 'RESTAURANTE' : 'RETAIL',
+                 asesorName: asesorData?.name || meseroId,
+                 asesorSection: asesorData?.section || sedeId,
+                 orderContext
               })
           });
           
@@ -271,15 +294,15 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
           </div>
 
           <div className="flex justify-between items-center mt-2">
-             <h2 className="text-white text-xl font-black tracking-tight">Catálogo</h2>
+             <h2 className="text-white text-xl font-black tracking-tight">{isRestaurant ? 'Menú' : 'Catálogo'}</h2>
              {vipClient ? (
                  <div className="flex items-center gap-1 bg-[var(--theme)]/20 text-[var(--theme)] px-3 py-1.5 rounded-full border border-[var(--theme)]/30">
                     <span className="text-[11px] uppercase tracking-wider font-bold">🌟 VIP Activo</span>
                  </div>
              ) : (
                  <div className="flex items-center gap-1 bg-black/40 p-1 rounded-full border border-white/10">
-                    <button onClick={() => setIsWholesale(false)} className={`px-4 py-1.5 rounded-full text-[11px] uppercase tracking-wider font-bold transition-all ${!isWholesale ? 'bg-white text-black shadow-md' : 'text-white/50 hover:text-white'}`}>Normal</button>
-                    <button onClick={() => setIsWholesale(true)} className={`px-4 py-1.5 rounded-full text-[11px] uppercase tracking-wider font-bold transition-all ${isWholesale ? 'bg-[var(--theme)] text-white shadow-[0_0_10px_var(--theme)]' : 'text-white/50 hover:text-white'}`}>Mayorista</button>
+                    <button onClick={() => isRestaurant ? setConsumptionMode('aqui') : setIsWholesale(false)} className={`px-4 py-1.5 rounded-full text-[11px] uppercase tracking-wider font-bold transition-all ${(!isRestaurant && !isWholesale) || (isRestaurant && consumptionMode === 'aqui') ? 'bg-white text-black shadow-md' : 'text-white/50 hover:text-white'}`}>{isRestaurant ? '🍽️ Aquí' : 'Normal'}</button>
+                    <button onClick={() => isRestaurant ? setConsumptionMode('llevar') : setIsWholesale(true)} className={`px-4 py-1.5 rounded-full text-[11px] uppercase tracking-wider font-bold transition-all ${(isRestaurant && consumptionMode === 'llevar') || (!isRestaurant && isWholesale) ? 'bg-[var(--theme)] text-white shadow-[0_0_10px_var(--theme)]' : 'text-white/50 hover:text-white'}`}>{isRestaurant ? '🛍️ Llevar' : 'Mayorista'}</button>
                  </div>
              )}
           </div>
@@ -315,7 +338,11 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
                 const price = getProductPrice(prod, isWholesale);
                 const refCode = getProductRef(prod);
                 const imageUrl = getImageUrl(prod);
-                const inCart = cart.find(i => i.id === prod.id);
+                const itemsInCart = cart.filter(i => (i.baseId || i.id) === prod.id);
+                const inCartAqui = itemsInCart.find(i => i.modifier === 'aqui' || !i.modifier);
+                const inCartLlevar = itemsInCart.find(i => i.modifier === 'llevar');
+                const totalQty = itemsInCart.reduce((sum, i) => sum + Number(i.qty || 0), 0);
+                const activeCartItem = isRestaurant ? (consumptionMode === 'aqui' ? inCartAqui : inCartLlevar) : inCartAqui;
                 const isOut = prod.isHidden === true;
 
                 const selectedProductInCart = selectedProduct ? cart.find(i => i.id === selectedProduct.id) : null;
@@ -337,8 +364,19 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
                          <h3 className={`text-white/90 text-[13px] font-bold leading-snug line-clamp-2 ${isOut ? 'line-through text-white/50' : ''}`}>{prod.name}</h3>
                          {refCode && <span className="inline-block mt-1 w-max px-1.5 py-0.5 bg-white/10 text-white/60 text-[10px] font-mono rounded border border-white/5 uppercase tracking-wider">REF: {refCode}</span>}
                          <span className={`${isOut ? 'text-white/40' : 'text-[var(--theme)]'} font-black text-sm mt-1 block`}>${price.toLocaleString('es-CO')}</span>
-                         {inCart && Number(inCart.qty) > 1 && (
-                             <span className="text-[var(--theme)]/70 text-[11px] block mt-0.5 font-bold">Subtotal: ${(price * Number(inCart.qty)).toLocaleString('es-CO')}</span>
+                         {itemsInCart.length > 0 && (
+                             <div className="text-[var(--theme)]/70 text-[11px] block mt-0.5 font-bold">
+                                {isRestaurant ? (
+                                    <div className="flex gap-2">
+                                        {inCartAqui && Number(inCartAqui.qty) > 0 && <span>🍽️ {inCartAqui.qty}</span>}
+                                        {inCartLlevar && Number(inCartLlevar.qty) > 0 && <span>🛍️ {inCartLlevar.qty}</span>}
+                                        <span className="text-white/30">|</span>
+                                        <span>Subtotal: ${(price * totalQty).toLocaleString('es-CO')}</span>
+                                    </div>
+                                ) : (
+                                    <span>Subtotal: ${(price * totalQty).toLocaleString('es-CO')}</span>
+                                )}
+                             </div>
                          )}
                       </div>
 
@@ -348,11 +386,11 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
                             <div className="w-10 h-10 rounded-full flex items-center justify-center bg-black/40 text-red-500/50 border border-red-500/20">
                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line></svg>
                             </div>
-                         ) : isMounted && inCart ? (
+                         ) : isMounted && activeCartItem ? (
                             <div className="flex items-center bg-white/5 rounded-full overflow-hidden border border-[var(--theme)]/30">
-                               <button onClick={() => setQty(prod.id, (Number(inCart.qty) || 0) - 1)} className="w-8 h-8 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-colors">-</button>
-                               <input type="text" inputMode="numeric" pattern="[0-9]*" value={inCart.qty} onChange={(e) => setQty(prod.id, e.target.value)} onBlur={() => { if (!inCart.qty || Number(inCart.qty) < 1) setQty(prod.id, 1); }} className="w-10 text-center bg-transparent border-x border-white/5 font-bold text-sm outline-none text-[var(--theme)] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
-                               <button onClick={() => setQty(prod.id, (Number(inCart.qty) || 0) + 1)} className="w-8 h-8 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-colors">+</button>
+                               <button onClick={() => setQty(activeCartItem.id, (Number(activeCartItem.qty) || 0) - 1)} className="w-8 h-8 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-colors">-</button>
+                               <input type="text" inputMode="numeric" pattern="[0-9]*" value={activeCartItem.qty} onChange={(e) => setQty(activeCartItem.id, e.target.value)} onBlur={() => { if (!activeCartItem.qty || Number(activeCartItem.qty) < 1) setQty(activeCartItem.id, 1); }} className="w-10 text-center bg-transparent border-x border-white/5 font-bold text-sm outline-none text-[var(--theme)] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+                               <button onClick={() => setQty(activeCartItem.id, (Number(activeCartItem.qty) || 0) + 1)} className="w-8 h-8 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-colors">+</button>
                             </div>
                          ) : (
                             <button onClick={() => addToCart(prod, price)} className="w-10 h-10 rounded-full flex items-center justify-center bg-white/10 text-white hover:bg-white/20 border border-white/10 transition-colors">
@@ -451,6 +489,7 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
                                             <span className="flex-1 leading-tight">
                                                 {item.refCode && <span className="text-zinc-500 mr-1">[{item.refCode}]</span>}
                                                 {item.name}
+                                                {isRestaurant && item.modifier && <span className="text-zinc-500 text-[9px] ml-1 uppercase">[{item.modifier === 'aqui' ? 'AQ' : 'LL'}]</span>}
                                             </span>
                                          </div>
                                          <div className="flex justify-between pl-6 text-zinc-600 font-medium">
@@ -482,7 +521,9 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
                              {cart.map(item => (
                                 <div key={item.id} className="flex justify-between items-center text-sm text-white/90 mb-4 last:mb-0">
                                    <div className="flex-1 pr-4">
-                                       <span className="font-medium line-clamp-1">{item.name}</span>
+                                       <span className="font-medium line-clamp-1">
+                                           {item.name} {isRestaurant && item.modifier && <span className="text-[10px] ml-1 opacity-70 uppercase">[{item.modifier === 'aqui' ? '🍽️ Aquí' : '🛍️ Llevar'}]</span>}
+                                       </span>
                                        <span className="text-white/40 text-[10px] block">${item.price.toLocaleString('es-CO')} c/u</span>
                                        {Number(item.qty) > 1 && (
                                            <span className="text-white/70 text-[11px] block font-bold mt-0.5">Subtotal: ${(item.price * Number(item.qty)).toLocaleString('es-CO')}</span>
@@ -502,6 +543,35 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
                           </div>
                        )}
 
+                       {isMesaMode && (
+                          <div className="bg-white/10 p-4 rounded-2xl border border-[var(--theme)]/30 flex items-center justify-between mb-4">
+                              <div>
+                                  <span className="text-[11px] font-bold text-[var(--theme)] uppercase tracking-widest block mb-1">📍 Sede {sedeId}</span>
+                                  <span className="text-white font-bold">🪑 Mesa {mesaId}</span>
+                              </div>
+                          </div>
+                       )}
+
+                       {isMeseroMode && (
+                          <div className="bg-white/10 p-4 rounded-2xl border border-[var(--theme)]/30 flex items-center justify-between mb-4">
+                              <div>
+                                  <span className="text-[11px] font-bold text-[var(--theme)] uppercase tracking-widest block mb-1">📍 Sede {sedeId}</span>
+                                  <span className="text-white font-bold">🤵‍♂️ Mesero: {meseroId}</span>
+                              </div>
+                          </div>
+                       )}
+
+                       {isDeliveryMode && (
+                           <div className="flex gap-2 mb-4 bg-black/40 p-1 rounded-xl border border-white/10">
+                              <button type="button" onClick={() => setDeliveryType('delivery')} className={`flex-1 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors ${deliveryType === 'delivery' ? 'bg-[var(--theme)] text-white shadow-[0_0_10px_var(--theme)]' : 'text-white/50 hover:text-white'}`}>
+                                 Envío a Domicilio
+                              </button>
+                              <button type="button" onClick={() => setDeliveryType('pickup')} className={`flex-1 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors ${deliveryType === 'pickup' ? 'bg-white text-black shadow-md' : 'text-white/50 hover:text-white'}`}>
+                                 Recoger Local
+                              </button>
+                           </div>
+                       )}
+
                        {vipClient ? (
                           <div className="bg-white/10 p-4 rounded-2xl border border-[var(--theme)]/30 flex items-center justify-between">
                               <div>
@@ -514,13 +584,20 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
                           </div>
                        ) : (
                           <>
+                             {isMeseroMode && (
+                                <div className="mb-4">
+                                   <label className="text-[11px] font-bold text-white/50 uppercase tracking-widest mb-1.5 block ml-1">Número de Mesa</label>
+                                   <input required type="text" value={formData.mesaNum} onChange={e => setFormData({...formData, mesaNum: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-2xl p-4 text-white placeholder-white/20 focus:border-[var(--theme)] focus:ring-1 focus:ring-[var(--theme)] outline-none transition-all font-medium" placeholder="Ej: 5" />
+                                </div>
+                             )}
+
                              <div>
-                                <label className="text-[11px] font-bold text-white/50 uppercase tracking-widest mb-1.5 block ml-1">{asesorData ? 'Nombre del Cliente' : 'Tu Nombre'}</label>
-                                <input required type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-2xl p-4 text-white placeholder-white/20 focus:border-[var(--theme)] focus:ring-1 focus:ring-[var(--theme)] outline-none transition-all font-medium" placeholder="¿Cómo te llamas?" />
+                                <label className="text-[11px] font-bold text-white/50 uppercase tracking-widest mb-1.5 block ml-1">{(isMesaMode || isMeseroMode) ? 'Nombre del Cliente (Opcional)' : (asesorData ? 'Nombre del Cliente' : 'Tu Nombre')}</label>
+                                <input required={!isMesaMode && !isMeseroMode} type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-2xl p-4 text-white placeholder-white/20 focus:border-[var(--theme)] focus:ring-1 focus:ring-[var(--theme)] outline-none transition-all font-medium" placeholder="¿Cómo te llamas?" />
                              </div>
                              
-                             {!asesorData && (
-                                 <div>
+                             {(!asesorData && !isMesaMode && !isMeseroMode) && (
+                                 <div className="mt-4">
                                     <label className="text-[11px] font-bold text-white/50 uppercase tracking-widest mb-1.5 block ml-1">Tu WhatsApp</label>
                                     <div className="flex bg-black/40 border border-white/10 rounded-2xl overflow-hidden focus-within:border-[var(--theme)] focus-within:ring-1 focus-within:ring-[var(--theme)] transition-all">
                                        <div className="bg-black/60 px-4 flex items-center justify-center text-white/70 font-bold border-r border-white/10">
@@ -530,13 +607,20 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
                                     </div>
                                  </div>
                              )}
+
+                             {(isDeliveryMode && deliveryType === 'delivery') && (
+                                 <div className="mt-4">
+                                    <label className="text-[11px] font-bold text-white/50 uppercase tracking-widest mb-1.5 block ml-1">Dirección de Entrega</label>
+                                    <input required type="text" value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-2xl p-4 text-white placeholder-white/20 focus:border-[var(--theme)] focus:ring-1 focus:ring-[var(--theme)] outline-none transition-all font-medium" placeholder="Barrio, Calle, Número, etc." />
+                                 </div>
+                             )}
                           </>
                        )}
 
-                       {!asesorData && (
-                           <div>
+                       {(!asesorData && !isMesaMode && !isMeseroMode && (!isDeliveryMode || deliveryType === 'pickup')) && (
+                           <div className="mt-4">
                               <div className="flex items-center justify-between mb-1.5 ml-1">
-                                 <label className="text-[11px] font-bold text-white/50 uppercase tracking-widest block">¿Cuándo te contactamos?</label>
+                                 <label className="text-[11px] font-bold text-white/50 uppercase tracking-widest block">¿Cuándo pasas a recoger?</label>
                               </div>
                               
                               <div className="flex gap-2 mb-2">
