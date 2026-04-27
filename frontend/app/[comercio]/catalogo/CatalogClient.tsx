@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { getVipClient, getAsesor } from '../../actions/getUserData';
 
 export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }: any) {
+  const isRestaurant = data?.profile?.description?.includes('#TIPO:RESTAURANTE') || false;
   let { businessName, whatsappCatalog = [] } = data;
 
   const searchParams = useSearchParams();
@@ -219,6 +220,7 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
                  total: cartTotal, 
                  isWholesale,
                  isStoreSale: !!asesorData,
+               businessType: isRestaurant ? 'RESTAURANTE' : 'RETAIL',
                  asesorName: asesorData?.name,
                  asesorSection: asesorData?.section
               })
@@ -412,11 +414,11 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
                              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
                          </div>
                          <div>
-                             <h3 className="text-2xl font-black text-white mb-2">{!!asesorData ? '¡Pedido Confirmado!' : '¡Solicitud Recibida!'}</h3>
+                             <h3 className="text-2xl font-black text-white mb-2">{isRestaurant ? '¡Pedido a Cocina!' : (!!asesorData ? '¡Pedido Confirmado!' : '¡Solicitud Recibida!')}</h3>
                              <p className="text-white/70 text-sm leading-relaxed px-4">
-                                {!!asesorData 
+                                {isRestaurant ? 'Tu orden ha sido enviada a cocina.' : (!!asesorData 
                                     ? 'Tu orden ha sido registrada exitosamente.' 
-                                    : 'Tu información ha sido registrada exitosamente. Nos pondremos en contacto contigo a la brevedad posible.'}
+                                    : 'Tu información ha sido registrada exitosamente. Nos pondremos en contacto contigo a la brevedad posible.')}
                              </p>
                          </div>
                          
@@ -426,8 +428,8 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
                              <div className="absolute top-0 left-0 w-full h-2 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMCIgaGVpZ2h0PSIxMCI+PHBvbHlnb24gZmlsbD0iI2Y4ZjlmYSIgcG9pbnRzPSIwLDEwIDUsMCAxMCwxMCAiLz48L3N2Zz4=')] opacity-0"></div>
                              
                              <div className="text-center font-bold mb-4 border-b border-zinc-300 pb-3">
-                                 <h4 className="text-base tracking-widest uppercase">Recibo de Caja</h4>
-                                 <div className="text-[10px] text-zinc-500 mt-1 uppercase tracking-wider">{!!asesorData ? 'Orden de Compra' : 'Cotización'}</div>
+                                 <h4 className="text-base tracking-widest uppercase">{isRestaurant ? 'Cuenta de Mesa' : 'Recibo de Caja'}</h4>
+                                 <div className="text-[10px] text-zinc-500 mt-1 uppercase tracking-wider">{isRestaurant ? 'Comanda' : (!!asesorData ? 'Orden de Compra' : 'Cotización')}</div>
                              </div>
                              
                              <div className="border-b border-zinc-300 pb-2 mb-2 font-bold text-[10px] text-zinc-600 tracking-wider flex flex-col gap-1">
@@ -471,7 +473,7 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
                  ) : (
                     <form onSubmit={handleCheckout} className="flex flex-col gap-5">
                        <div className="flex justify-between items-center mb-2">
-                         <h2 className="text-xl font-bold text-white tracking-tight">Completar Agendamiento</h2>
+                         <h2 className="text-xl font-bold text-white tracking-tight">{isRestaurant ? "Detalles del Pedido" : "Completar Agendamiento"}</h2>
                          <button type="button" onClick={() => setShowCheckout(false)} className="w-8 h-8 flex items-center justify-center bg-white/10 rounded-full text-white/70 hover:text-white transition-colors">✕</button>
                        </div>
                        

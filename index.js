@@ -226,14 +226,21 @@ app.get('/api/catalog/:jid', async (req, res) => {
             });
             products = result?.content || [];
         }
-        
+        let profile = null;
+        try {
+            if (typeof globalSock.getBusinessProfile === 'function') {
+                profile = await globalSock.getBusinessProfile(targetJid);
+            }
+        } catch (e) {
+            console.error("Error fetching business profile", e.message);
+        }
+
         // Serialize to strip undefined values to ensure clean JSON output
         const sanitizedProducts = JSON.parse(JSON.stringify(products));
         
         // Cache headers to instruct edge networks (like Vercel) if they fetch this
         res.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
-        res.json({ ok: true, products: sanitizedProducts });
-        
+        res.json({ ok: true, products: sanitizedProducts, profile });
     } catch(err) {
         console.error('Error fetching catalog API Pasarela:', targetJid, err.message);
         res.status(500).json({ error: 'Failed to fetch catalog', details: err.message });
@@ -243,7 +250,7 @@ app.get('/api/catalog/:jid', async (req, res) => {
 app.post('/api/dispatch', async (req, res) => {
     if (!isReady || !globalSock) return res.status(503).json({ error: 'WhatsApp offline' });
     try {
-        const { commerceId, name, phone, datetime, cart = [], total = 0, isWholesale = false, isStoreSale = false, asesorName = '', asesorSection = '' } = req.body;
+        const { commerceId, name, phone, datetime, cart = [], total = 0, isWholesale = false, isStoreSale = false, asesorName = '', asesorSection = '', businessType = 'RETAIL' } = req.body;
         if (!name || !datetime) return res.status(400).json({ error: 'Missing mandatory fields' });
 
         const doc = await db.collection('comercios').doc(commerceId).get();
@@ -323,7 +330,8 @@ app.post('/api/dispatch', async (req, res) => {
             docPdf.moveDown(0.5);
             
             docPdf.font('Courier').fontSize(9);
-            docPdf.text(`Recibo de Caja: ${facCode}`, { align: 'center' });
+            const isRestaurant = businessType === 'RESTAURANTE';
+            docPdf.text(isRestaurant ? `Pedido a Cocina: ${facCode}` : `Recibo de Caja: ${facCode}`, { align: 'center' });
             docPdf.text(`Fecha: ${new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' })}`, { align: 'center' });
             docPdf.text(`Asesor: ${asesorName}`, { align: 'center' });
             docPdf.text(`Cliente: ${name}`, { align: 'center' });
