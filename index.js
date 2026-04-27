@@ -326,7 +326,8 @@ app.post('/api/dispatch', async (req, res) => {
             msg += `Adjunto se envía la factura de cobro.`;
         }
 
-        if (isStoreSale) {
+        // ALWAYS generate PDF
+        {
             // Generate PDF Buffer for 80mm Thermal Printer (approx 226 points width)
             const docPdf = new PDFDocument({ size: [226, 800], margin: 10 });
             let buffers = [];
@@ -421,10 +422,6 @@ app.post('/api/dispatch', async (req, res) => {
                 });
                 res.json({ ok: true, msg: 'Ticket y Factura despachados exitosamente.' });
             });
-
-        } else {
-            await globalSock.sendMessage(dispatchJid, { text: msg });
-            res.json({ ok: true, msg: 'Ticket despachado exitosamente.' });
         }
     } catch (e) {
         console.error(e);
