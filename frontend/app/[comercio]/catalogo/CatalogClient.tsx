@@ -32,7 +32,7 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [formData, setFormData] = useState({ name: '', phone: '', datetime: '', address: '', mesaNum: '' });
-  const [isASAP, setIsASAP] = useState(false);
+  const [isASAP, setIsASAP] = useState(isRestaurant);
 
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
@@ -136,8 +136,8 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
   // Cart operations
   const addToCart = (product: any, price: number) => {
      const refCode = getProductRef(product);
-     const modifier = isRestaurant ? consumptionMode : null;
-     const cartId = isRestaurant ? `${product.id}_${modifier}` : product.id;
+     const modifier = isRestaurant && !isDeliveryMode ? consumptionMode : null;
+     const cartId = modifier ? `${product.id}_${modifier}` : product.id;
 
      setCart(prev => {
         const existing = prev.find(i => i.id === cartId);
@@ -301,8 +301,12 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
                  </div>
              ) : (
                  <div className="flex items-center gap-1 bg-black/40 p-1 rounded-full border border-white/10">
-                    <button onClick={() => isRestaurant ? setConsumptionMode('aqui') : setIsWholesale(false)} className={`px-4 py-1.5 rounded-full text-[11px] uppercase tracking-wider font-bold transition-all ${(!isRestaurant && !isWholesale) || (isRestaurant && consumptionMode === 'aqui') ? 'bg-white text-black shadow-md' : 'text-white/50 hover:text-white'}`}>{isRestaurant ? '🍽️ Aquí' : 'Normal'}</button>
-                    <button onClick={() => isRestaurant ? setConsumptionMode('llevar') : setIsWholesale(true)} className={`px-4 py-1.5 rounded-full text-[11px] uppercase tracking-wider font-bold transition-all ${(isRestaurant && consumptionMode === 'llevar') || (!isRestaurant && isWholesale) ? 'bg-[var(--theme)] text-white shadow-[0_0_10px_var(--theme)]' : 'text-white/50 hover:text-white'}`}>{isRestaurant ? '🛍️ Llevar' : 'Mayorista'}</button>
+                    <button onClick={() => isRestaurant ? (isDeliveryMode ? setDeliveryType('delivery') : setConsumptionMode('aqui')) : setIsWholesale(false)} className={`px-4 py-1.5 rounded-full text-[11px] uppercase tracking-wider font-bold transition-all ${(!isRestaurant && !isWholesale) || (isRestaurant && (isDeliveryMode ? deliveryType === 'delivery' : consumptionMode === 'aqui')) ? 'bg-white text-black shadow-md' : 'text-white/50 hover:text-white'}`}>
+                        {isRestaurant ? (isDeliveryMode ? '🛵 Domicilio' : '🍽️ Aquí') : 'Normal'}
+                    </button>
+                    <button onClick={() => isRestaurant ? (isDeliveryMode ? setDeliveryType('pickup') : setConsumptionMode('llevar')) : setIsWholesale(true)} className={`px-4 py-1.5 rounded-full text-[11px] uppercase tracking-wider font-bold transition-all ${(isRestaurant && (isDeliveryMode ? deliveryType === 'pickup' : consumptionMode === 'llevar')) || (!isRestaurant && isWholesale) ? 'bg-[var(--theme)] text-white shadow-[0_0_10px_var(--theme)]' : 'text-white/50 hover:text-white'}`}>
+                        {isRestaurant ? (isDeliveryMode ? '🛍️ Recoger' : '🛍️ Llevar') : 'Mayorista'}
+                    </button>
                  </div>
              )}
           </div>
@@ -342,7 +346,7 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
                 const inCartAqui = itemsInCart.find(i => i.modifier === 'aqui' || !i.modifier);
                 const inCartLlevar = itemsInCart.find(i => i.modifier === 'llevar');
                 const totalQty = itemsInCart.reduce((sum, i) => sum + Number(i.qty || 0), 0);
-                const activeCartItem = isRestaurant ? (consumptionMode === 'aqui' ? inCartAqui : inCartLlevar) : inCartAqui;
+                const activeCartItem = isRestaurant && !isDeliveryMode ? (consumptionMode === 'aqui' ? inCartAqui : inCartLlevar) : inCartAqui;
                 const isOut = prod.isHidden === true;
 
                 const selectedProductInCart = selectedProduct ? cart.find(i => i.id === selectedProduct.id) : null;
@@ -366,7 +370,7 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
                          <span className={`${isOut ? 'text-white/40' : 'text-[var(--theme)]'} font-black text-sm mt-1 block`}>${price.toLocaleString('es-CO')}</span>
                          {itemsInCart.length > 0 && (
                              <div className="text-[var(--theme)]/70 text-[11px] block mt-0.5 font-bold">
-                                {isRestaurant ? (
+                                {isRestaurant && !isDeliveryMode ? (
                                     <div className="flex gap-2">
                                         {inCartAqui && Number(inCartAqui.qty) > 0 && <span>🍽️ {inCartAqui.qty}</span>}
                                         {inCartLlevar && Number(inCartLlevar.qty) > 0 && <span>🛍️ {inCartLlevar.qty}</span>}
@@ -561,16 +565,7 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
                           </div>
                        )}
 
-                       {isDeliveryMode && (
-                           <div className="flex gap-2 mb-4 bg-black/40 p-1 rounded-xl border border-white/10">
-                              <button type="button" onClick={() => setDeliveryType('delivery')} className={`flex-1 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors ${deliveryType === 'delivery' ? 'bg-[var(--theme)] text-white shadow-[0_0_10px_var(--theme)]' : 'text-white/50 hover:text-white'}`}>
-                                 Envío a Domicilio
-                              </button>
-                              <button type="button" onClick={() => setDeliveryType('pickup')} className={`flex-1 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors ${deliveryType === 'pickup' ? 'bg-white text-black shadow-md' : 'text-white/50 hover:text-white'}`}>
-                                 Recoger Local
-                              </button>
-                           </div>
-                       )}
+
 
                        {vipClient ? (
                           <div className="bg-white/10 p-4 rounded-2xl border border-[var(--theme)]/30 flex items-center justify-between">
@@ -627,12 +622,14 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
                                  <button type="button" onClick={() => setIsASAP(true)} className={`flex-1 py-3 rounded-xl text-sm font-bold border transition-colors ${isASAP ? 'bg-[var(--theme)] border-[var(--theme)] text-white shadow-[0_0_15px_var(--theme)]' : 'bg-black/40 border-white/10 text-white/50 hover:bg-white/5 hover:text-white'}`}>
                                     Lo antes posible
                                  </button>
-                                 <button type="button" onClick={() => setIsASAP(false)} className={`flex-1 py-3 rounded-xl text-sm font-bold border transition-colors ${!isASAP ? 'bg-[var(--theme)] border-[var(--theme)] text-white shadow-[0_0_15px_var(--theme)]' : 'bg-black/40 border-white/10 text-white/50 hover:bg-white/5 hover:text-white'}`}>
-                                    Elegir Fecha
-                                 </button>
+                                 {!isRestaurant && (
+                                     <button type="button" onClick={() => setIsASAP(false)} className={`flex-1 py-3 rounded-xl text-sm font-bold border transition-colors ${!isASAP ? 'bg-[var(--theme)] border-[var(--theme)] text-white shadow-[0_0_15px_var(--theme)]' : 'bg-black/40 border-white/10 text-white/50 hover:bg-white/5 hover:text-white'}`}>
+                                        Elegir Fecha
+                                     </button>
+                                 )}
                               </div>
 
-                              {!isASAP && (
+                              {(!isASAP && !isRestaurant) && (
                                   <input required={!isASAP} type="datetime-local" value={formData.datetime} onChange={e => setFormData({...formData, datetime: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-2xl p-4 text-white focus:border-[var(--theme)] focus:ring-1 focus:ring-[var(--theme)] outline-none transition-all font-medium [color-scheme:dark]" />
                               )}
                            </div>
