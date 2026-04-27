@@ -226,21 +226,13 @@ app.get('/api/catalog/:jid', async (req, res) => {
             });
             products = result?.content || [];
         }
-        let profile = null;
-        try {
-            if (typeof globalSock.getBusinessProfile === 'function') {
-                profile = await globalSock.getBusinessProfile(targetJid);
-            }
-        } catch (e) {
-            console.error("Error fetching business profile", e.message);
-        }
-
+        
         // Serialize to strip undefined values to ensure clean JSON output
         const sanitizedProducts = JSON.parse(JSON.stringify(products));
         
         // Cache headers to instruct edge networks (like Vercel) if they fetch this
         res.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
-        res.json({ ok: true, products: sanitizedProducts, profile });
+        res.json({ ok: true, products: sanitizedProducts });
     } catch(err) {
         console.error('Error fetching catalog API Pasarela:', targetJid, err.message);
         res.status(500).json({ error: 'Failed to fetch catalog', details: err.message });

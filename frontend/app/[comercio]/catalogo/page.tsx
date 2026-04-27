@@ -45,9 +45,6 @@ export default async function CatalogoPage({ params }: { params: { comercio: str
           if (apiData && apiData.products) {
               data.whatsappCatalog = apiData.products;
           }
-          if (apiData && apiData.profile) {
-              data.profile = apiData.profile;
-          }
       } catch (err) {
           console.error("Error fetching from API Pasarela:", err);
           // If this throws during ISR, Vercel will keep the old cached page automatically.
