@@ -565,7 +565,16 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
                           </div>
                        )}
 
-
+                       {isDeliveryMode && (
+                           <div className="flex gap-2 mb-4 bg-black/40 p-1 rounded-xl border border-white/10">
+                              <button type="button" onClick={() => setDeliveryType('delivery')} className={`flex-1 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors ${deliveryType === 'delivery' ? 'bg-[var(--theme)] text-white shadow-[0_0_10px_var(--theme)]' : 'text-white/50 hover:text-white'}`}>
+                                 Envío a Domicilio
+                              </button>
+                              <button type="button" onClick={() => setDeliveryType('pickup')} className={`flex-1 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors ${deliveryType === 'pickup' ? 'bg-white text-black shadow-md' : 'text-white/50 hover:text-white'}`}>
+                                 Recoger Local
+                              </button>
+                           </div>
+                       )}
 
                        {vipClient ? (
                           <div className="bg-white/10 p-4 rounded-2xl border border-[var(--theme)]/30 flex items-center justify-between">
