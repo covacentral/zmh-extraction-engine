@@ -109,9 +109,27 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
      return Array.from(tags);
   }, [whatsappCatalog]);
 
+  // Extract sections (multi-catalog areas)
+  const sections = useMemo(() => {
+     const sects = new Set<string>();
+     whatsappCatalog.forEach((prod: any) => {
+        if (prod.sectionName) sects.add(prod.sectionName);
+     });
+     // If only one section exists and it's default 'Catálogo', don't bother showing filters
+     const arr = Array.from(sects);
+     if (arr.length === 1 && arr[0] === 'Catálogo') return [];
+     return arr;
+  }, [whatsappCatalog]);
+
+  const [selectedSection, setSelectedSection] = useState<string | null>(null);
+
   // Filtered and paginated products
   const filteredProducts = useMemo(() => {
      let filtered = whatsappCatalog;
+     
+     if (selectedSection) {
+         filtered = filtered.filter((prod: any) => prod.sectionName === selectedSection);
+     }
      
      if (selectedCategory) {
          filtered = filtered.filter((prod: any) => 
@@ -129,7 +147,7 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
      }
      
      return filtered;
-  }, [whatsappCatalog, search, selectedCategory]);
+  }, [whatsappCatalog, search, selectedCategory, selectedSection]);
 
   const visibleProducts = filteredProducts.slice(0, visibleCount);
 
@@ -217,12 +235,12 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
       setIsSubmitting(true);
       
       const formattedTime = formatTimeTo12h(formData.datetime);
-      let finalDatetime = asesorData ? 'En tienda' : (isASAP ? 'Lo antes posible' : (formattedTime || formData.datetime));
+      let finalDatetime = (asesorData && deliveryType === 'pickup') ? 'En tienda' : (isASAP ? 'Lo antes posible' : (formattedTime || formData.datetime));
       if (isMesaMode || isMeseroMode) finalDatetime = 'En mesa';
 
       const orderContext = {
          mode: isMesaMode ? 'mesa' : (isMeseroMode ? 'mesero' : 'delivery'),
-         deliveryType: isDeliveryMode ? deliveryType : null,
+         deliveryType: deliveryType,
          sede: sedeId,
          mesa: isMesaMode ? mesaId : (isMeseroMode ? formData.mesaNum : null),
          mesero: meseroId,
@@ -236,7 +254,7 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
               body: JSON.stringify({ 
                  commerceId, 
                  ...formData, 
-                 phone: (asesorData || isMesaMode || isMeseroMode) ? '' : `57${formData.phone}`,
+                 phone: (isMesaMode || isMeseroMode || (!formData.phone)) ? '' : (formData.phone.startsWith('57') ? formData.phone : `57${formData.phone}`),
                  datetime: finalDatetime,
                  cart, 
                  total: cartTotal, 
@@ -300,14 +318,16 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
                     <span className="text-[11px] uppercase tracking-wider font-bold">🌟 VIP Activo</span>
                  </div>
              ) : (
-                 <div className="flex items-center gap-1 bg-black/40 p-1 rounded-full border border-white/10">
-                    <button onClick={() => isRestaurant ? (isDeliveryMode ? setDeliveryType('delivery') : setConsumptionMode('aqui')) : setIsWholesale(false)} className={`px-4 py-1.5 rounded-full text-[11px] uppercase tracking-wider font-bold transition-all ${(!isRestaurant && !isWholesale) || (isRestaurant && (isDeliveryMode ? deliveryType === 'delivery' : consumptionMode === 'aqui')) ? 'bg-white text-black shadow-md' : 'text-white/50 hover:text-white'}`}>
-                        {isRestaurant ? (isDeliveryMode ? '🛵 Domicilio' : '🍽️ Aquí') : 'Normal'}
-                    </button>
-                    <button onClick={() => isRestaurant ? (isDeliveryMode ? setDeliveryType('pickup') : setConsumptionMode('llevar')) : setIsWholesale(true)} className={`px-4 py-1.5 rounded-full text-[11px] uppercase tracking-wider font-bold transition-all ${(isRestaurant && (isDeliveryMode ? deliveryType === 'pickup' : consumptionMode === 'llevar')) || (!isRestaurant && isWholesale) ? 'bg-[var(--theme)] text-white shadow-[0_0_10px_var(--theme)]' : 'text-white/50 hover:text-white'}`}>
-                        {isRestaurant ? (isDeliveryMode ? '🛍️ Recoger' : '🛍️ Llevar') : 'Mayorista'}
-                    </button>
-                 </div>
+                 (!isRestaurant && !asesorData) ? null : (
+                     <div className="flex items-center gap-1 bg-black/40 p-1 rounded-full border border-white/10">
+                        <button onClick={() => isRestaurant ? (isDeliveryMode ? setDeliveryType('delivery') : setConsumptionMode('aqui')) : setIsWholesale(false)} className={`px-4 py-1.5 rounded-full text-[11px] uppercase tracking-wider font-bold transition-all ${(!isRestaurant && !isWholesale) || (isRestaurant && (isDeliveryMode ? deliveryType === 'delivery' : consumptionMode === 'aqui')) ? 'bg-white text-black shadow-md' : 'text-white/50 hover:text-white'}`}>
+                            {isRestaurant ? (isDeliveryMode ? '🛵 Domicilio' : '🍽️ Aquí') : 'Normal'}
+                        </button>
+                        <button onClick={() => isRestaurant ? (isDeliveryMode ? setDeliveryType('pickup') : setConsumptionMode('llevar')) : setIsWholesale(true)} className={`px-4 py-1.5 rounded-full text-[11px] uppercase tracking-wider font-bold transition-all ${(isRestaurant && (isDeliveryMode ? deliveryType === 'pickup' : consumptionMode === 'llevar')) || (!isRestaurant && isWholesale) ? 'bg-[var(--theme)] text-white shadow-[0_0_10px_var(--theme)]' : 'text-white/50 hover:text-white'}`}>
+                            {isRestaurant ? (isDeliveryMode ? '🛍️ Recoger' : '🛍️ Llevar') : 'Mayorista'}
+                        </button>
+                     </div>
+                 )
              )}
           </div>
           {asesorData && (
@@ -331,6 +351,20 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
                 {categories.map((cat, idx) => (
                    <button key={idx} onClick={() => { setSelectedCategory(cat); setVisibleCount(10); }} className={`shrink-0 px-4 py-1.5 rounded-full text-xs font-bold transition-all border ${selectedCategory === cat ? 'bg-[var(--theme)] border-[var(--theme)] text-white shadow-[0_0_10px_var(--theme)]' : 'bg-black/40 border-white/10 text-white/50 hover:text-white'}`}>
                       {cat}
+                   </button>
+                ))}
+             </div>
+          )}
+
+          {/* SECTION FILTERS */}
+          {sections.length > 0 && (
+             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-2">
+                <button onClick={() => { setSelectedSection(null); setVisibleCount(10); }} className={`p-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all border text-center ${!selectedSection ? 'bg-[var(--theme)] text-black border-[var(--theme)] shadow-[0_0_15px_var(--theme)]' : 'bg-black/40 border-white/10 text-white/50 hover:text-white hover:bg-white/5'}`}>
+                   Todo
+                </button>
+                {sections.map((sec, idx) => (
+                   <button key={idx} onClick={() => { setSelectedSection(sec); setVisibleCount(10); }} className={`p-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all border text-center ${selectedSection === sec ? 'bg-[var(--theme)] text-black border-[var(--theme)] shadow-[0_0_15px_var(--theme)]' : 'bg-black/40 border-white/10 text-white/50 hover:text-white hover:bg-white/5'}`}>
+                      {sec}
                    </button>
                 ))}
              </div>
@@ -368,6 +402,9 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
                          <h3 className={`text-white/90 text-[13px] font-bold leading-snug line-clamp-2 ${isOut ? 'line-through text-white/50' : ''}`}>{prod.name}</h3>
                          {refCode && <span className="inline-block mt-1 w-max px-1.5 py-0.5 bg-white/10 text-white/60 text-[10px] font-mono rounded border border-white/5 uppercase tracking-wider">REF: {refCode}</span>}
                          <span className={`${isOut ? 'text-white/40' : 'text-[var(--theme)]'} font-black text-sm mt-1 block`}>${price.toLocaleString('es-CO')}</span>
+                         {(!isRestaurant && !asesorData && !vipClient && getProductPrice(prod, true) < getProductPrice(prod, false)) && (
+                            <span className="text-white/40 text-[10px] font-bold block leading-none mt-0.5">Precio Mayorista: ${getProductPrice(prod, true).toLocaleString('es-CO')}</span>
+                         )}
                          {itemsInCart.length > 0 && (
                              <div className="text-[var(--theme)]/70 text-[11px] block mt-0.5 font-bold">
                                 {isRestaurant && !isDeliveryMode ? (
@@ -565,19 +602,8 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
                           </div>
                        )}
 
-                       {isDeliveryMode && (
-                           <div className="flex gap-2 mb-4 bg-black/40 p-1 rounded-xl border border-white/10">
-                              <button type="button" onClick={() => setDeliveryType('delivery')} className={`flex-1 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors ${deliveryType === 'delivery' ? 'bg-[var(--theme)] text-white shadow-[0_0_10px_var(--theme)]' : 'text-white/50 hover:text-white'}`}>
-                                 Envío a Domicilio
-                              </button>
-                              <button type="button" onClick={() => setDeliveryType('pickup')} className={`flex-1 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors ${deliveryType === 'pickup' ? 'bg-white text-black shadow-md' : 'text-white/50 hover:text-white'}`}>
-                                 Recoger Local
-                              </button>
-                           </div>
-                       )}
-
-                       {vipClient ? (
-                          <div className="bg-white/10 p-4 rounded-2xl border border-[var(--theme)]/30 flex items-center justify-between">
+                       {vipClient && (
+                          <div className="bg-white/10 p-4 rounded-2xl border border-[var(--theme)]/30 flex items-center justify-between mb-4">
                               <div>
                                   <span className="text-[11px] font-bold text-[var(--theme)] uppercase tracking-widest block mb-1">Facturando a VIP</span>
                                   <span className="text-white font-bold">{vipClient.name}</span>
@@ -586,7 +612,48 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
                                   <span className="text-white/50 text-xs block">+57 {vipClient.phone}</span>
                               </div>
                           </div>
-                       ) : (
+                       )}
+
+                       {(isDeliveryMode || vipClient || asesorData) && !isMesaMode && !isMeseroMode && (
+                           <div className="flex gap-2 mb-4 bg-black/40 p-1 rounded-xl border border-white/10">
+                              <button type="button" onClick={() => setDeliveryType('delivery')} className={`flex-1 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors ${deliveryType === 'delivery' ? 'bg-[var(--theme)] text-white shadow-[0_0_10px_var(--theme)]' : 'text-white/50 hover:text-white'}`}>
+                                 Envío a Domicilio
+                              </button>
+                              <button type="button" onClick={() => setDeliveryType('pickup')} className={`flex-1 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors ${deliveryType === 'pickup' ? 'bg-white text-black shadow-md' : 'text-white/50 hover:text-white'}`}>
+                                 {asesorData ? 'Venta en Tienda' : 'Recoger Local'}
+                              </button>
+                           </div>
+                       )}
+
+                       {asesorData && deliveryType === 'delivery' && (
+                           <div className="mb-4 bg-white/5 p-3 rounded-2xl border border-white/10">
+                               <label className="text-[11px] font-bold text-[var(--theme)] uppercase tracking-widest mb-1.5 block ml-1">Autocompletar Cliente Mayorista (Opcional)</label>
+                               <div className="flex gap-2">
+                                   <input id="vipCodeSearch" type="text" className="flex-1 bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-white placeholder-white/20 text-sm focus:border-[var(--theme)] outline-none" placeholder="Ingresa código VIP..." />
+                                   <button type="button" onClick={async () => {
+                                        const code = (document.getElementById('vipCodeSearch') as HTMLInputElement)?.value;
+                                        if (code) {
+                                            const vipData = await getVipClient(commerceId, code);
+                                            if (vipData) {
+                                                setFormData(prev => ({...prev, name: vipData.name || '', phone: vipData.phone || '', address: vipData.address || ''}));
+                                            } else {
+                                                alert("Código no encontrado");
+                                            }
+                                        }
+                                   }} className="bg-[var(--theme)] text-white px-4 py-2 rounded-xl text-sm font-bold shadow-md active:scale-95 transition-transform">Buscar</button>
+                               </div>
+                           </div>
+                       )}
+
+                       {vipClient && deliveryType === 'delivery' && !formData.address && (() => {
+                           // Auto-fill address for VIP once
+                           if (vipClient.address) {
+                               setTimeout(() => setFormData(prev => ({...prev, address: vipClient.address})), 0);
+                           }
+                           return null;
+                       })()}
+
+                       {!vipClient && (
                           <>
                              {isMeseroMode && (
                                 <div className="mb-4">
@@ -596,11 +663,11 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
                              )}
 
                              <div>
-                                <label className="text-[11px] font-bold text-white/50 uppercase tracking-widest mb-1.5 block ml-1">{(isMesaMode || isMeseroMode) ? 'Nombre del Cliente (Opcional)' : (asesorData ? 'Nombre del Cliente' : 'Tu Nombre')}</label>
+                                <label className="text-[11px] font-bold text-white/50 uppercase tracking-widest mb-1.5 block ml-1">{(isMesaMode || isMeseroMode) ? 'Nombre del Cliente (Opcional)' : (asesorData ? 'Nombre o ID del Cliente' : 'Tu Nombre')}</label>
                                 <input required={!isMesaMode && !isMeseroMode} type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-2xl p-4 text-white placeholder-white/20 focus:border-[var(--theme)] focus:ring-1 focus:ring-[var(--theme)] outline-none transition-all font-medium" placeholder="¿Cómo te llamas?" />
                              </div>
                              
-                             {(!asesorData && !isMesaMode && !isMeseroMode) && (
+                             {(!isMesaMode && !isMeseroMode && ((asesorData && deliveryType === 'delivery') || (!asesorData && !vipClient))) && (
                                  <div className="mt-4">
                                     <label className="text-[11px] font-bold text-white/50 uppercase tracking-widest mb-1.5 block ml-1">Tu WhatsApp</label>
                                     <div className="flex bg-black/40 border border-white/10 rounded-2xl overflow-hidden focus-within:border-[var(--theme)] focus-within:ring-1 focus-within:ring-[var(--theme)] transition-all">
@@ -612,7 +679,7 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
                                  </div>
                              )}
 
-                             {(isDeliveryMode && deliveryType === 'delivery') && (
+                             {(deliveryType === 'delivery' && !isMesaMode && !isMeseroMode) && (
                                  <div className="mt-4">
                                     <label className="text-[11px] font-bold text-white/50 uppercase tracking-widest mb-1.5 block ml-1">Dirección de Entrega</label>
                                     <input required type="text" value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-2xl p-4 text-white placeholder-white/20 focus:border-[var(--theme)] focus:ring-1 focus:ring-[var(--theme)] outline-none transition-all font-medium" placeholder="Barrio, Calle, Número, etc." />
@@ -699,6 +766,9 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
                              <div className="flex items-start justify-between mt-3">
                                  <div>
                                      <span className={`${selectedProduct.isHidden ? 'text-white/40' : 'text-[var(--theme)]'} font-black text-2xl block`}>${getProductPrice(selectedProduct, isWholesale).toLocaleString('es-CO')}</span>
+                                     {(!isRestaurant && !asesorData && !vipClient && getProductPrice(selectedProduct, true) < getProductPrice(selectedProduct, false)) && (
+                                        <span className="text-white/40 text-[11px] font-bold block leading-none mt-1">Precio Mayorista: ${getProductPrice(selectedProduct, true).toLocaleString('es-CO')}</span>
+                                     )}
                                      {selectedProductInCart && Number(selectedProductInCart.qty) > 1 && (
                                          <span className="text-[var(--theme)]/70 text-sm block font-bold mt-1">Subtotal: ${(getProductPrice(selectedProduct, isWholesale) * Number(selectedProductInCart.qty)).toLocaleString('es-CO')}</span>
                                      )}

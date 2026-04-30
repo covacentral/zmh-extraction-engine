@@ -32,26 +32,44 @@ export default async function CatalogoPage({ params }: { params: { comercio: str
   const data = doc.data() || {};
   const RENDER_API = process.env.NEXT_PUBLIC_RENDER_API || 'https://zmh-extraction-engine.onrender.com';
 
-  // API Pasarela: Fetch catalog directly from WhatsApp (Node.js cache) instead of Firestore
-  const sourceJid = data.catalogJid || data.avatarJid;
-  if (sourceJid) {
-      const targetJid = sourceJid.includes('@') ? sourceJid : `${sourceJid}@s.whatsapp.net`;
+  // API Pasarela: Fetch multi-catalog directly from WhatsApp (Node.js cache) instead of Firestore
+  const catalogsConfig = data.catalogs || [];
+  const legacyJid = data.catalogJid || data.avatarJid;
+  
+  if (catalogsConfig.length === 0 && legacyJid) {
+      catalogsConfig.push({ name: 'Catálogo', jid: legacyJid });
+  }
+
+  let mergedCatalog: any[] = [];
+
+  if (catalogsConfig.length > 0) {
       try {
-          const res = await fetch(`${RENDER_API}/api/catalog/${targetJid}`, { 
-              next: { revalidate: 300 } // Vercel Edge Cache (5 minutes)
+          const fetchPromises = catalogsConfig.map(async (cat: any) => {
+              if (!cat.jid) return [];
+              const targetJid = cat.jid.includes('@') ? cat.jid : `${cat.jid}@s.whatsapp.net`;
+              const res = await fetch(`${RENDER_API}/api/catalog/${targetJid}`, { 
+                  next: { revalidate: 300 } // Vercel Edge Cache (5 minutes)
+              });
+              if (!res.ok) {
+                  console.warn(`API Pasarela Error for ${targetJid}: ${res.status}`);
+                  return [];
+              }
+              const apiData = await res.json();
+              if (apiData && apiData.products) {
+                  // Inject sectionName
+                  return apiData.products.map((p: any) => ({ ...p, sectionName: cat.name || 'Catálogo' }));
+              }
+              return [];
           });
-          if (!res.ok) throw new Error(`API Pasarela Error: ${res.status}`);
-          const apiData = await res.json();
-          if (apiData && apiData.products) {
-              data.whatsappCatalog = apiData.products;
-          }
+
+          const results = await Promise.all(fetchPromises);
+          mergedCatalog = results.flat();
       } catch (err) {
-          console.error("Error fetching from API Pasarela:", err);
-          // If this throws during ISR, Vercel will keep the old cached page automatically.
-          // If it's the first build, it will fallback to an empty catalog.
-          data.whatsappCatalog = data.whatsappCatalog || [];
+          console.error("Error fetching multi-catalog from API Pasarela:", err);
       }
   }
+
+  data.whatsappCatalog = mergedCatalog;
 
   const themeHex = data.themeHex || '#25D366';
 

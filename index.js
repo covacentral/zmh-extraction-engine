@@ -346,7 +346,7 @@ app.post('/api/dispatch', async (req, res) => {
             docPdf.font('Courier').fontSize(9);
             const isRestaurant = businessType === 'RESTAURANTE';
             
-            if (isRestaurant && orderContext) {
+            if (isRestaurant && orderContext && (orderContext.mode === 'mesa' || orderContext.mode === 'mesero')) {
                 if (orderContext.mode === 'mesa') {
                    docPdf.text(`Comanda de Mesa: ${facCode}`, { align: 'center' });
                    docPdf.text(`Fecha: ${new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' })}`, { align: 'center' });
@@ -359,19 +359,38 @@ app.post('/api/dispatch', async (req, res) => {
                    docPdf.text(`Sede: ${orderContext.sede || 'N/A'}`, { align: 'center' });
                    docPdf.text(`Mesa: ${orderContext.mesa}`, { align: 'center' });
                    docPdf.text(`Mesero: ${orderContext.mesero || asesorName}`, { align: 'center' });
-                } else {
-                   docPdf.text(`Pedido Domicilio: ${facCode}`, { align: 'center' });
-                   docPdf.text(`Fecha: ${new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' })}`, { align: 'center' });
-                   docPdf.text(`Tipo: ${orderContext.deliveryType === 'delivery' ? 'DOMICILIO' : 'RECOGER'}`, { align: 'center' });
-                   docPdf.text(`Cliente: ${name}`, { align: 'center' });
-                   docPdf.text(`Tel: ${phone.replace(/\D/g,'')}`, { align: 'center' });
                 }
             } else {
-                docPdf.text(isRestaurant ? `Pedido a Cocina: ${facCode}` : `Recibo de Caja: ${facCode}`, { align: 'center' });
+                // Retail, VIP, Asesor, or Restaurant Delivery
+                const isDelivery = orderContext?.deliveryType === 'delivery';
+                const isPickup = orderContext?.deliveryType === 'pickup';
+                const isAsesor = !!asesorName;
+                const isVip = isWholesale && !isAsesor; // Approximation of VIP for PDF display
+                
+                docPdf.text(isDelivery ? `Guía de Despacho: ${facCode}` : `Recibo de Caja: ${facCode}`, { align: 'center' });
                 docPdf.text(`Fecha: ${new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' })}`, { align: 'center' });
-                docPdf.text(`Asesor: ${asesorName}`, { align: 'center' });
-                docPdf.text(`Cliente: ${name}`, { align: 'center' });
-                docPdf.text(`Tipo: ${isWholesale ? 'MAYORISTA' : 'MINORISTA'}`, { align: 'center' });
+                
+                if (isAsesor) {
+                    docPdf.text(`Asesor: ${asesorName}`, { align: 'center' });
+                }
+                
+                if (isDelivery) {
+                    docPdf.text(`Tipo: DOMICILIO / ENCARGO`, { align: 'center' });
+                } else if (isPickup) {
+                    docPdf.text(`Tipo: RECOGER / MOSTRADOR`, { align: 'center' });
+                } else {
+                    docPdf.text(`Modalidad: ${isWholesale ? 'MAYORISTA' : 'MINORISTA'}`, { align: 'center' });
+                }
+
+                if (name) docPdf.text(`Cliente: ${name}${isVip ? ' (VIP)' : ''}`, { align: 'center' });
+                
+                if (phone) {
+                    docPdf.text(`Tel: ${phone.replace(/\D/g,'')}`, { align: 'center' });
+                }
+                
+                if (isDelivery && orderContext?.address) {
+                    docPdf.text(`Dir: ${orderContext.address}`, { align: 'center' });
+                }
             }
             docPdf.moveDown(0.5);
             
@@ -420,12 +439,120 @@ app.post('/api/dispatch', async (req, res) => {
                     fileName: `${facCode}.pdf`, 
                     caption: msg 
                 });
+
+                // Premium Metrics: Guardado Silencioso
+                const commerceData = doc.data();
+                if (commerceData.premiumMetrics === true) {
+                    try {
+                        await db.collection('comercios').doc(commerceId).collection('pedidos').add({
+                            facCode,
+                            name: name || '',
+                            phone: phone || '',
+                            datetime,
+                            cart,
+                            total,
+                            isWholesale,
+                            isStoreSale,
+                            businessType,
+                            asesorName,
+                            asesorSection,
+                            orderContext: orderContext || {},
+                            createdAt: new Date().toISOString()
+                        });
+                    } catch (err) {
+                        console.error('Error saving premium order:', err);
+                    }
+                }
+
                 res.json({ ok: true, msg: 'Ticket y Factura despachados exitosamente.' });
             });
         }
     } catch (e) {
         console.error(e);
         res.status(500).json({ error: e.message });
+    }
+});
+
+// CRON JOB: Generador de Reportes Diarios (CSV vía WhatsApp)
+app.get('/api/report/daily', async (req, res) => {
+    try {
+        if (!isReady || !globalSock) return res.status(503).json({ error: 'WhatsApp offline' });
+        
+        // Secure endpoint
+        const cronKey = req.query.key;
+        if (cronKey !== (process.env.CRON_KEY || 'default_secret')) {
+             return res.status(401).json({ error: 'Unauthorized' });
+        }
+
+        const todayStart = new Date();
+        todayStart.setHours(0,0,0,0);
+        const todayEnd = new Date();
+        todayEnd.setHours(23,59,59,999);
+
+        // Fetch all premium comercios
+        const comerciosSnap = await db.collection('comercios').where('premiumMetrics', '==', true).get();
+        let reportsSent = 0;
+
+        for (const comercioDoc of comerciosSnap.docs) {
+            const commerceId = comercioDoc.id;
+            const data = comercioDoc.data();
+            if (!data.dispatchJid) continue;
+
+            // Fetch today's orders
+            const pedidosSnap = await db.collection('comercios').doc(commerceId).collection('pedidos')
+                .where('createdAt', '>=', todayStart.toISOString())
+                .where('createdAt', '<=', todayEnd.toISOString())
+                .get();
+
+            if (pedidosSnap.empty) continue; // Skip if no sales today
+
+            // Build CSV
+            let csv = '\uFEFF'; // BOM for Excel UTF-8 compatibility
+            csv += 'Factura,Fecha,Asesor,Area/Seccion,Modo,Tipo_Entrega,Cliente,Telefono,Direccion,Ref_Producto,Producto,Cantidad,Precio_Unitario,Subtotal\n';
+            
+            let dailyTotal = 0;
+
+            pedidosSnap.docs.forEach(pDoc => {
+                const p = pDoc.data();
+                const dateObj = new Date(p.createdAt);
+                const dateStr = dateObj.toLocaleTimeString('es-CO', { timeZone: 'America/Bogota' });
+                
+                const asesor = p.asesorName || 'Web / Cliente';
+                const area = p.asesorSection || 'N/A';
+                const modo = p.isWholesale ? 'Mayorista' : 'Minorista';
+                const tipoEntrega = p.orderContext?.mode === 'delivery' ? (p.orderContext?.deliveryType || 'N/A') : (p.orderContext?.mode || 'tienda');
+                
+                const cliName = (p.name || '').replace(/,/g, ' ');
+                const cliPhone = (p.phone || '').replace(/\D/g, '');
+                const cliAddress = (p.orderContext?.address || '').replace(/,/g, ' ');
+
+                p.cart.forEach(item => {
+                    const ref = item.refCode || '';
+                    const prodName = (item.name || '').replace(/,/g, ' ');
+                    const sub = (item.qty * item.price);
+                    
+                    csv += `"${p.facCode}","${dateStr}","${asesor}","${area}","${modo}","${tipoEntrega}","${cliName}","${cliPhone}","${cliAddress}","${ref}","${prodName}","${item.qty}","${item.price}","${sub}"\n`;
+                });
+                dailyTotal += p.total;
+            });
+
+            const csvBuffer = Buffer.from(csv, 'utf8');
+            const fileName = `Reporte_${commerceId}_${todayStart.toISOString().split('T')[0]}.csv`;
+            const caption = `📊 *Reporte Diario Automático*\n\nComercio: ${data.businessName || commerceId}\nTotal Facturado Hoy: *$${dailyTotal.toLocaleString('es-CO')}*\nPedidos procesados: ${pedidosSnap.size}\n\n_Puedes abrir este archivo directamente en Excel o Google Sheets._`;
+
+            await globalSock.sendMessage(data.dispatchJid, { 
+                document: csvBuffer, 
+                mimetype: 'text/csv', 
+                fileName: fileName, 
+                caption: caption 
+            });
+            reportsSent++;
+        }
+
+        res.json({ ok: true, msg: `Daily reports sent to ${reportsSent} premium comercios.` });
+    } catch(err) {
+        console.error('Error generating daily reports:', err);
+        res.status(500).json({ error: err.message });
     }
 });
 
