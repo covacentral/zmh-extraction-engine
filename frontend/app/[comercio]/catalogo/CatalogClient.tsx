@@ -6,11 +6,26 @@ import { getVipClient, getAsesor } from '../../actions/getUserData';
 
 export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }: any) {
   const isRestaurant = data?.businessType === 'restaurante';
-  let { businessName, whatsappCatalog = [] } = data;
+  let { businessName, whatsappCatalog = [], compiledCatalog = [] } = data;
 
   const searchParams = useSearchParams();
   const [vipClient, setVipClient] = useState<any>(null);
   const [asesorData, setAsesorData] = useState<any>(null);
+
+  const unifiedCatalog = useMemo(() => {
+     if (compiledCatalog && compiledCatalog.length > 0) {
+         return compiledCatalog.map((p: any) => ({
+             id: p.id,
+             name: p.name,
+             price: p.normalPrice * 1000,
+             priceAmount1000: p.normalPrice * 1000,
+             description: `${p.description || ''}\nReferencia: ${p.reference || ''}\nMarca: ${p.brand || ''}\nMayorista: $${p.wholesalePrice || p.normalPrice}`,
+             imageUrls: p.imageUrl,
+             sectionName: p.area || 'Catálogo'
+         }));
+     }
+     return whatsappCatalog;
+  }, [whatsappCatalog, compiledCatalog]);
 
   const [isWholesale, setIsWholesale] = useState(false);
   const [consumptionMode, setConsumptionMode] = useState<'aqui'|'llevar'>('aqui');
@@ -106,7 +121,7 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
   // Extract categories (hashtags)
   const categories = useMemo(() => {
      const tags = new Set<string>();
-     whatsappCatalog.forEach((prod: any) => {
+     unifiedCatalog.forEach((prod: any) => {
         const desc = prod.description || '';
         const matches = desc.match(/#[a-zA-Z0-9_áéíóúñÁÉÍÓÚÑ]+/g);
         if (matches) {
@@ -114,25 +129,25 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
         }
      });
      return Array.from(tags);
-  }, [whatsappCatalog]);
+  }, [unifiedCatalog]);
 
   // Extract sections (multi-catalog areas)
   const sections = useMemo(() => {
      const sects = new Set<string>();
-     whatsappCatalog.forEach((prod: any) => {
+     unifiedCatalog.forEach((prod: any) => {
         if (prod.sectionName) sects.add(prod.sectionName);
      });
      // If only one section exists and it's default 'Catálogo', don't bother showing filters
      const arr = Array.from(sects);
      if (arr.length === 1 && arr[0] === 'Catálogo') return [];
      return arr;
-  }, [whatsappCatalog]);
+  }, [unifiedCatalog]);
 
   const [selectedSection, setSelectedSection] = useState<string | null>(null);
 
   // Filtered and paginated products
   const filteredProducts = useMemo(() => {
-     let filtered = whatsappCatalog;
+     let filtered = unifiedCatalog;
      
      if (selectedSection) {
          filtered = filtered.filter((prod: any) => prod.sectionName === selectedSection);
@@ -193,7 +208,7 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
      setCart(prev => {
         let changed = false;
         const newCart = prev.map(item => {
-            const catalogItem = whatsappCatalog.find((p: any) => p.id === (item.baseId || item.id));
+            const catalogItem = unifiedCatalog.find((p: any) => p.id === (item.baseId || item.id));
             if (catalogItem) {
                 const newPrice = getProductPrice(catalogItem, isWholesale);
                 if (newPrice !== item.price) {
@@ -205,7 +220,7 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
         });
         return changed ? newCart : prev;
      });
-  }, [isWholesale, whatsappCatalog]);
+  }, [isWholesale, unifiedCatalog]);
 
   // Load cart from localStorage on mount
   useEffect(() => {

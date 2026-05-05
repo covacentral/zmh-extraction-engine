@@ -1,0 +1,42 @@
+import { notFound } from 'next/navigation';
+import { db } from '../../../../lib/firebaseAdmin';
+import InventoryClient from './InventoryClient';
+
+export const revalidate = 0; // Dynamic route
+
+export default async function InventoryPage({ params }: { params: { comercio: string, token: string } }) {
+  const { comercio, token } = params;
+
+  if (!comercio || !token) return notFound();
+
+  // Validate Token against Commerce Document
+  const doc = await db!.collection('comercios').doc(comercio).get();
+  if (!doc.exists) return notFound();
+
+  const data = doc.data() || {};
+  
+  // Check Master Token
+  let scope = null;
+  if (data.inventoryToken === token) {
+      scope = 'MASTER';
+  } else {
+      // Check Area Tokens
+      for (const [key, val] of Object.entries(data)) {
+          if (key.startsWith('inventoryToken_') && val === token) {
+              scope = key.replace('inventoryToken_', '');
+              break;
+          }
+      }
+  }
+
+  if (!scope) return notFound();
+
+  const themeHex = data.themeHex || '#25D366';
+  const businessName = data.businessName || 'PIMS Inventario';
+
+  return (
+    <main className="min-h-screen bg-[#0a0a0a] text-white">
+      <InventoryClient commerceId={comercio} businessName={businessName} themeHex={themeHex} scope={scope} authToken={token} />
+    </main>
+  );
+}
