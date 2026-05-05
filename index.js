@@ -610,7 +610,87 @@ app.get('/api/debug-catalog', async (req, res) => {
         res.status(500).json({ error: e.message });
     }
 });
+// Endpoint temporal para migrar pedidos antiguos a estadisticas
+app.get('/api/migrate-stats', async (req, res) => {
+    try {
+        const cronKey = req.query.key;
+        if (cronKey !== (process.env.CRON_KEY || 'default_secret')) {
+             return res.status(401).json({ error: 'Unauthorized' });
+        }
 
+        const comerciosSnap = await db.collection('comercios').get();
+        let migratedCount = 0;
+
+        for (const comercioDoc of comerciosSnap.docs) {
+            const commerceId = comercioDoc.id;
+            const pedidosSnap = await db.collection('comercios').doc(commerceId).collection('pedidos').get();
+            
+            if (pedidosSnap.empty) continue;
+
+            const dailyStats = {};
+
+            pedidosSnap.docs.forEach(pDoc => {
+                const p = pDoc.data();
+                if (!p.createdAt) return;
+
+                const dateObj = new Date(p.createdAt);
+                const dateStr = dateObj.toLocaleString('en-CA', { timeZone: 'America/Bogota' }).split(',')[0];
+                
+                if (!dailyStats[dateStr]) {
+                    dailyStats[dateStr] = {
+                        totalSales: 0,
+                        totalOrders: 0,
+                        salesByAsesor: {},
+                        ordersByAsesor: {},
+                        salesByArea: {},
+                        salesByBrand: {},
+                        soldProducts: {}
+                    };
+                }
+
+                const stats = dailyStats[dateStr];
+                const total = p.total || 0;
+
+                stats.totalSales += total;
+                stats.totalOrders += 1;
+
+                const safeAsesor = p.asesorName ? p.asesorName.replace(/[\.\/\[\]\*]/g, '').substring(0, 50) : 'Web';
+                stats.salesByAsesor[safeAsesor] = (stats.salesByAsesor[safeAsesor] || 0) + total;
+                stats.ordersByAsesor[safeAsesor] = (stats.ordersByAsesor[safeAsesor] || 0) + 1;
+
+                const safeArea = p.asesorSection ? p.asesorSection.replace(/[\.\/\[\]\*]/g, '').substring(0, 50) : 'CatalogoWeb';
+                stats.salesByArea[safeArea] = (stats.salesByArea[safeArea] || 0) + total;
+
+                if (Array.isArray(p.cart)) {
+                    p.cart.forEach(item => {
+                        const qty = item.qty || 1;
+                        const price = item.price || 0;
+                        if (item.brand) {
+                            const safeBrand = item.brand.replace(/[\.\/\[\]\*]/g, '').substring(0, 50);
+                            stats.salesByBrand[safeBrand] = (stats.salesByBrand[safeBrand] || 0) + (qty * price);
+                        }
+                        const safeKey = (item.name || 'Desconocido').replace(/[\.\/\[\]\*]/g, '').substring(0, 50);
+                        if (!stats.soldProducts[safeKey]) stats.soldProducts[safeKey] = { qty: 0, revenue: 0 };
+                        stats.soldProducts[safeKey].qty += qty;
+                        stats.soldProducts[safeKey].revenue += (qty * price);
+                    });
+                }
+            });
+
+            // Write all aggregated stats to Firestore
+            for (const [dateStr, stats] of Object.entries(dailyStats)) {
+                stats.updatedAt = new Date().toISOString();
+                await db.collection('comercios').doc(commerceId).collection('estadisticas').doc(dateStr).set(stats, { merge: true });
+                migratedCount++;
+            }
+        }
+
+        res.json({ ok: true, msg: `Migrated stats for ${migratedCount} daily records across all comercios.` });
+    } catch(err) {
+        console.error('Migration error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
 app.listen(port, () => console.log(`API port ${port}`));
 
 app.get('/api/test-db', async (req, res) => {
