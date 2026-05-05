@@ -77,6 +77,13 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
       return null;
   };
 
+  const getProductBrand = (product: any) => {
+      const desc = product.description || '';
+      const match = desc.match(/(?:marca|\*marca\*):\s*([a-zA-Z0-9_\-\s]+)(?=\n|$)/i);
+      if (match && match[1]) return match[1].trim();
+      return null;
+  };
+
   // Fallback for image URLs based on standard Baileys Product structure
   const getImageUrl = (prod: any) => {
     if (!prod.imageUrls) return '';
@@ -154,13 +161,14 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
   // Cart operations
   const addToCart = (product: any, price: number) => {
      const refCode = getProductRef(product);
+     const brand = getProductBrand(product);
      const modifier = isRestaurant && !isDeliveryMode ? consumptionMode : null;
      const cartId = modifier ? `${product.id}_${modifier}` : product.id;
 
      setCart(prev => {
         const existing = prev.find(i => i.id === cartId);
         if (existing) return prev.map(i => i.id === cartId ? { ...i, qty: Number(i.qty || 0) + 1 } : i);
-        return [...prev, { id: cartId, baseId: product.id, name: product.name, refCode, price, qty: 1, modifier }];
+        return [...prev, { id: cartId, baseId: product.id, name: product.name, refCode, brand, price, qty: 1, modifier }];
      });
   };
 

@@ -440,10 +440,43 @@ app.post('/api/dispatch', async (req, res) => {
                     caption: msg 
                 });
 
-                // Premium Metrics: Guardado Silencioso
+                // Premium Metrics: Guardado Silencioso y Agregaciones (Rollups)
                 const commerceData = doc.data();
                 if (commerceData.premiumMetrics === true) {
                     try {
+                        const todayDate = new Date().toLocaleString('en-CA', { timeZone: 'America/Bogota' }).split(',')[0];
+                        const statsRef = db.collection('comercios').doc(commerceId).collection('estadisticas').doc(todayDate);
+                        
+                        const FieldValue = admin.firestore.FieldValue;
+                        
+                        let updateData = {
+                            totalSales: FieldValue.increment(total),
+                            totalOrders: FieldValue.increment(1),
+                            updatedAt: new Date().toISOString()
+                        };
+
+                        // By Asesor
+                        const safeAsesor = asesorName ? asesorName.replace(/[\.\/\[\]\*]/g, '').substring(0, 50) : 'Web';
+                        updateData[`salesByAsesor.${safeAsesor}`] = FieldValue.increment(total);
+                        updateData[`ordersByAsesor.${safeAsesor}`] = FieldValue.increment(1);
+
+                        // By Area
+                        const safeArea = asesorSection ? asesorSection.replace(/[\.\/\[\]\*]/g, '').substring(0, 50) : 'CatalogoWeb';
+                        updateData[`salesByArea.${safeArea}`] = FieldValue.increment(total);
+
+                        // By Brand and Product
+                        cart.forEach(item => {
+                            if (item.brand) {
+                                const safeBrand = item.brand.replace(/[\.\/\[\]\*]/g, '').substring(0, 50);
+                                updateData[`salesByBrand.${safeBrand}`] = FieldValue.increment(item.qty * item.price);
+                            }
+                            const safeKey = (item.name || 'Desconocido').replace(/[\.\/\[\]\*]/g, '').substring(0, 50);
+                            updateData[`soldProducts.${safeKey}.qty`] = FieldValue.increment(item.qty);
+                            updateData[`soldProducts.${safeKey}.revenue`] = FieldValue.increment(item.qty * item.price);
+                        });
+
+                        await statsRef.set(updateData, { merge: true });
+
                         await db.collection('comercios').doc(commerceId).collection('pedidos').add({
                             facCode,
                             name: name || '',
@@ -460,7 +493,7 @@ app.post('/api/dispatch', async (req, res) => {
                             createdAt: new Date().toISOString()
                         });
                     } catch (err) {
-                        console.error('Error saving premium order:', err);
+                        console.error('Error saving premium metrics and rollups:', err);
                     }
                 }
 
@@ -508,9 +541,20 @@ app.get('/api/report/daily', async (req, res) => {
 
             // Build CSV
             let csv = '\uFEFF'; // BOM for Excel UTF-8 compatibility
-            csv += 'Factura,Fecha,Asesor,Area/Seccion,Modo,Tipo_Entrega,Cliente,Telefono,Direccion,Ref_Producto,Producto,Cantidad,Precio_Unitario,Subtotal\n';
+            csv += 'Factura,Fecha,Asesor,Area/Seccion,Modo,Tipo_Entrega,Cliente,Telefono,Direccion,Ref_Producto,Marca,Producto,Cantidad,Precio_Unitario,Subtotal\n';
             
             let dailyTotal = 0;
+
+            // Helper to escape CSV strings
+            const escapeCSV = (str) => {
+                if (str == null) return '';
+                const s = String(str);
+                // If it contains quotes, commas, or newlines, enclose in quotes and double internal quotes
+                if (s.includes('"') || s.includes(',') || s.includes('\n')) {
+                    return `"${s.replace(/"/g, '""')}"`;
+                }
+                return s;
+            };
 
             pedidosSnap.docs.forEach(pDoc => {
                 const p = pDoc.data();
@@ -522,16 +566,17 @@ app.get('/api/report/daily', async (req, res) => {
                 const modo = p.isWholesale ? 'Mayorista' : 'Minorista';
                 const tipoEntrega = p.orderContext?.mode === 'delivery' ? (p.orderContext?.deliveryType || 'N/A') : (p.orderContext?.mode || 'tienda');
                 
-                const cliName = (p.name || '').replace(/,/g, ' ');
+                const cliName = p.name || '';
                 const cliPhone = (p.phone || '').replace(/\D/g, '');
-                const cliAddress = (p.orderContext?.address || '').replace(/,/g, ' ');
+                const cliAddress = p.orderContext?.address || '';
 
                 p.cart.forEach(item => {
                     const ref = item.refCode || '';
-                    const prodName = (item.name || '').replace(/,/g, ' ');
+                    const brand = item.brand || 'N/A';
+                    const prodName = item.name || '';
                     const sub = (item.qty * item.price);
                     
-                    csv += `"${p.facCode}","${dateStr}","${asesor}","${area}","${modo}","${tipoEntrega}","${cliName}","${cliPhone}","${cliAddress}","${ref}","${prodName}","${item.qty}","${item.price}","${sub}"\n`;
+                    csv += `${escapeCSV(p.facCode)},${escapeCSV(dateStr)},${escapeCSV(asesor)},${escapeCSV(area)},${escapeCSV(modo)},${escapeCSV(tipoEntrega)},${escapeCSV(cliName)},${escapeCSV(cliPhone)},${escapeCSV(cliAddress)},${escapeCSV(ref)},${escapeCSV(brand)},${escapeCSV(prodName)},${escapeCSV(item.qty)},${escapeCSV(item.price)},${escapeCSV(sub)}\n`;
                 });
                 dailyTotal += p.total;
             });
