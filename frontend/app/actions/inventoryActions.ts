@@ -1,6 +1,6 @@
 'use server';
 
-import { db, storage } from '../lib/firebaseAdmin';
+import { db, storage } from '../../lib/firebaseAdmin';
 import crypto from 'crypto';
 
 /**
