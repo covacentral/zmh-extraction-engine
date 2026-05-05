@@ -1,6 +1,22 @@
 import { notFound } from 'next/navigation';
-import { db } from '../../../firebase-admin';
+import admin from 'firebase-admin';
 import DashboardClient from './DashboardClient';
+
+// Initialize Firebase once
+if (!admin.apps.length) {
+  try {
+    if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+      const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+      admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount)
+      });
+    }
+  } catch (e) {
+    console.error("Firebase Auth Error");
+  }
+}
+
+const db = admin.firestore();
 
 export const revalidate = 60; // ISR cache: Revalidate every 60 seconds max. Protects against spam refresh.
 
