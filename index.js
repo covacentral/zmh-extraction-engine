@@ -455,13 +455,20 @@ app.post('/api/dispatch', async (req, res) => {
                             updatedAt: new Date().toISOString()
                         };
 
-                        // By Asesor
-                        const safeAsesor = asesorName ? asesorName.replace(/[\.\/\[\]\*]/g, '').substring(0, 50) : 'Web';
+                        // Entidad y Modalidad
+                        const modo = isWholesale ? 'Mayorista' : 'Minorista';
+                        const safeAsesor = asesorName ? asesorName.replace(/[\.\/\[\]\*]/g, '').substring(0, 50) : `Web ${modo}`;
+                        
+                        // By Asesor / Entidad
                         updateData[`salesByAsesor.${safeAsesor}`] = FieldValue.increment(total);
                         updateData[`ordersByAsesor.${safeAsesor}`] = FieldValue.increment(1);
 
+                        // By Modo
+                        updateData[`salesByModo.${modo}`] = FieldValue.increment(total);
+                        updateData[`ordersByModo.${modo}`] = FieldValue.increment(1);
+
                         // By Area
-                        const safeArea = asesorSection ? asesorSection.replace(/[\.\/\[\]\*]/g, '').substring(0, 50) : 'CatalogoWeb';
+                        const safeArea = asesorSection ? asesorSection.replace(/[\.\/\[\]\*]/g, '').substring(0, 50) : `Web ${modo}`;
                         updateData[`salesByArea.${safeArea}`] = FieldValue.increment(total);
 
                         // By Brand and Product
@@ -471,8 +478,17 @@ app.post('/api/dispatch', async (req, res) => {
                                 updateData[`salesByBrand.${safeBrand}`] = FieldValue.increment(item.qty * item.price);
                             }
                             const safeKey = (item.name || 'Desconocido').replace(/[\.\/\[\]\*]/g, '').substring(0, 50);
+                            
+                            // Totales Generales
                             updateData[`soldProducts.${safeKey}.qty`] = FieldValue.increment(item.qty);
                             updateData[`soldProducts.${safeKey}.revenue`] = FieldValue.increment(item.qty * item.price);
+                            
+                            // Dimensiones OLAP
+                            updateData[`soldProducts.${safeKey}.byAsesor.${safeAsesor}.qty`] = FieldValue.increment(item.qty);
+                            updateData[`soldProducts.${safeKey}.byAsesor.${safeAsesor}.revenue`] = FieldValue.increment(item.qty * item.price);
+                            
+                            updateData[`soldProducts.${safeKey}.byModo.${modo}.qty`] = FieldValue.increment(item.qty);
+                            updateData[`soldProducts.${safeKey}.byModo.${modo}.revenue`] = FieldValue.increment(item.qty * item.price);
                         });
 
                         await statsRef.set(updateData, { merge: true });
@@ -654,11 +670,18 @@ app.get('/api/migrate-stats', async (req, res) => {
                 stats.totalSales += total;
                 stats.totalOrders += 1;
 
-                const safeAsesor = p.asesorName ? p.asesorName.replace(/[\.\/\[\]\*]/g, '').substring(0, 50) : 'Web';
+                const modo = p.isWholesale ? 'Mayorista' : 'Minorista';
+                const safeAsesor = p.asesorName ? p.asesorName.replace(/[\.\/\[\]\*]/g, '').substring(0, 50) : `Web ${modo}`;
+                
                 stats.salesByAsesor[safeAsesor] = (stats.salesByAsesor[safeAsesor] || 0) + total;
                 stats.ordersByAsesor[safeAsesor] = (stats.ordersByAsesor[safeAsesor] || 0) + 1;
 
-                const safeArea = p.asesorSection ? p.asesorSection.replace(/[\.\/\[\]\*]/g, '').substring(0, 50) : 'CatalogoWeb';
+                if (!stats.salesByModo) stats.salesByModo = {};
+                if (!stats.ordersByModo) stats.ordersByModo = {};
+                stats.salesByModo[modo] = (stats.salesByModo[modo] || 0) + total;
+                stats.ordersByModo[modo] = (stats.ordersByModo[modo] || 0) + 1;
+
+                const safeArea = p.asesorSection ? p.asesorSection.replace(/[\.\/\[\]\*]/g, '').substring(0, 50) : `Web ${modo}`;
                 stats.salesByArea[safeArea] = (stats.salesByArea[safeArea] || 0) + total;
 
                 if (Array.isArray(p.cart)) {
@@ -670,9 +693,21 @@ app.get('/api/migrate-stats', async (req, res) => {
                             stats.salesByBrand[safeBrand] = (stats.salesByBrand[safeBrand] || 0) + (qty * price);
                         }
                         const safeKey = (item.name || 'Desconocido').replace(/[\.\/\[\]\*]/g, '').substring(0, 50);
-                        if (!stats.soldProducts[safeKey]) stats.soldProducts[safeKey] = { qty: 0, revenue: 0 };
+                        
+                        if (!stats.soldProducts[safeKey]) {
+                            stats.soldProducts[safeKey] = { qty: 0, revenue: 0, byAsesor: {}, byModo: {} };
+                        }
+                        
                         stats.soldProducts[safeKey].qty += qty;
                         stats.soldProducts[safeKey].revenue += (qty * price);
+                        
+                        stats.soldProducts[safeKey].byAsesor[safeAsesor] = stats.soldProducts[safeKey].byAsesor[safeAsesor] || { qty: 0, revenue: 0 };
+                        stats.soldProducts[safeKey].byAsesor[safeAsesor].qty += qty;
+                        stats.soldProducts[safeKey].byAsesor[safeAsesor].revenue += (qty * price);
+                        
+                        stats.soldProducts[safeKey].byModo[modo] = stats.soldProducts[safeKey].byModo[modo] || { qty: 0, revenue: 0 };
+                        stats.soldProducts[safeKey].byModo[modo].qty += qty;
+                        stats.soldProducts[safeKey].byModo[modo].revenue += (qty * price);
                     });
                 }
             });
@@ -685,10 +720,85 @@ app.get('/api/migrate-stats', async (req, res) => {
             }
         }
 
-        res.json({ ok: true, msg: `Migrated stats for ${migratedCount} daily records across all comercios.` });
+        res.json({ ok: true, msg: `Migrated OLAP stats for ${migratedCount} daily records.` });
     } catch(err) {
         console.error('Migration error:', err);
         res.status(500).json({ error: err.message });
+    }
+});
+
+// Endpoint temporal para sembrar datos falsos
+app.get('/api/seed-stats', async (req, res) => {
+    try {
+        const cronKey = req.query.key;
+        if (cronKey !== (process.env.CRON_KEY || 'default_secret')) return res.status(401).json({ error: 'Unauthorized' });
+        
+        const commerceId = req.query.id || 'cc-bodega-mayorista';
+        const asesores = ['Web Minorista', 'Web Mayorista', 'Juan', 'Maria', 'Carlos'];
+        const modos = ['Minorista', 'Mayorista'];
+        const brands = ['Samsung', 'Sony', 'LG', 'JBL'];
+        const products = ['Smartphone', 'TV 4K', 'Parlante Bluetooth', 'Audifonos'];
+
+        let stats = {
+            totalSales: 0, totalOrders: 0,
+            salesByAsesor: {}, ordersByAsesor: {},
+            salesByArea: {}, salesByBrand: {}, soldProducts: {},
+            updatedAt: new Date().toISOString()
+        };
+
+        for (let i = 0; i < 50; i++) {
+            const asesor = asesores[Math.floor(Math.random() * asesores.length)];
+            const isWholesale = asesor === 'Web Mayorista' || Math.random() > 0.5;
+            const modo = isWholesale ? 'Mayorista' : 'Minorista';
+            const area = asesor.includes('Web') ? `Web ${modo}` : 'Electronica';
+            
+            const totalItems = Math.floor(Math.random() * 5) + 1;
+            let orderTotal = 0;
+
+            for (let j = 0; j < totalItems; j++) {
+                const pName = products[Math.floor(Math.random() * products.length)];
+                const brand = brands[Math.floor(Math.random() * brands.length)];
+                const qty = Math.floor(Math.random() * 3) + 1;
+                const price = Math.floor(Math.random() * 500) * 1000 + 50000;
+                
+                orderTotal += qty * price;
+
+                stats.salesByBrand[brand] = (stats.salesByBrand[brand] || 0) + (qty * price);
+
+                if (!stats.soldProducts[pName]) stats.soldProducts[pName] = { qty: 0, revenue: 0, byAsesor: {}, byModo: {} };
+                
+                stats.soldProducts[pName].qty += qty;
+                stats.soldProducts[pName].revenue += (qty * price);
+                
+                stats.soldProducts[pName].byAsesor[asesor] = stats.soldProducts[pName].byAsesor[asesor] || { qty: 0, revenue: 0 };
+                stats.soldProducts[pName].byAsesor[asesor].qty += qty;
+                stats.soldProducts[pName].byAsesor[asesor].revenue += (qty * price);
+
+                stats.soldProducts[pName].byModo[modo] = stats.soldProducts[pName].byModo[modo] || { qty: 0, revenue: 0 };
+                stats.soldProducts[pName].byModo[modo].qty += qty;
+                stats.soldProducts[pName].byModo[modo].revenue += (qty * price);
+            }
+
+            stats.totalOrders += 1;
+            stats.totalSales += orderTotal;
+            stats.salesByAsesor[asesor] = (stats.salesByAsesor[asesor] || 0) + orderTotal;
+            stats.ordersByAsesor[asesor] = (stats.ordersByAsesor[asesor] || 0) + 1;
+            
+            if (!stats.salesByModo) stats.salesByModo = {};
+            if (!stats.ordersByModo) stats.ordersByModo = {};
+            stats.salesByModo[modo] = (stats.salesByModo[modo] || 0) + orderTotal;
+            stats.ordersByModo[modo] = (stats.ordersByModo[modo] || 0) + 1;
+
+            stats.salesByArea[area] = (stats.salesByArea[area] || 0) + orderTotal;
+        }
+
+        const todayDate = new Date().toLocaleString('en-CA', { timeZone: 'America/Bogota' }).split(',')[0];
+        await db.collection('comercios').doc(commerceId).collection('estadisticas').doc(todayDate).set(stats, { merge: true });
+
+        res.json({ ok: true, msg: '50 fake orders generated and rolled up.', totalSales: stats.totalSales });
+    } catch(e) {
+        console.error(e);
+        res.status(500).json({ error: e.message });
     }
 });
 app.listen(port, () => console.log(`API port ${port}`));
