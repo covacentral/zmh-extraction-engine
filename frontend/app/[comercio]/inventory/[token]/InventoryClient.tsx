@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { saveDraft, getDrafts, deleteDraft } from '../../../../utils/idb';
 import { processImageToWebP } from '../../../../utils/imageProcessor';
-import { uploadProductImage, saveProduct, getInventory } from '../../../../actions/inventoryActions';
+import { uploadProductImage, saveProduct, getInventory } from '../../../actions/inventoryActions';
 import { Upload, Camera, Trash2, Save, CloudUpload, Plus, Loader2 } from 'lucide-react';
 
 export default function InventoryClient({ commerceId, businessName, themeHex, scope, authToken }: { commerceId: string, businessName: string, themeHex: string, scope: string, authToken: string }) {
