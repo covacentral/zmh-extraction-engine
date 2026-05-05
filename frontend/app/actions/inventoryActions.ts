@@ -24,8 +24,8 @@ export async function uploadProductImage(commerceId: string, base64Data: string)
             },
         });
         
-        await file.makePublic();
-        return `https://storage.googleapis.com/${bucket.name}/${fileName}`;
+        // Return standard Firebase Storage URL (relies on Security Rules, no ACLs needed)
+        return `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(fileName)}?alt=media`;
     } catch (e: any) {
         console.error("Upload error:", e);
         throw new Error("Error uploading image: " + e.message);
@@ -87,8 +87,11 @@ export async function saveProduct(commerceId: string, token: string, product: an
     }
 
     // 2. ZERO-READ CACHING: Read all products and bundle them into compiledCatalog
-    // This happens asynchronously so we don't block the client upload queue as much
-    updateMaterializedCache(commerceId).catch(err => console.error("Cache compilation failed:", err));
+    try {
+        await updateMaterializedCache(commerceId);
+    } catch (err) {
+        console.error("Cache compilation failed:", err);
+    }
 
     return { ok: true, id: docRef.id };
 }
