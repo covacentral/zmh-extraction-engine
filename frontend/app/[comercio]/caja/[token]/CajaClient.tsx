@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { collection, query, where, onSnapshot, doc, updateDoc } from 'firebase/firestore';
 import { dbClient } from '../../../../lib/firebaseClient';
-import { Printer, Search, CheckCircle2, Clock, Check, Receipt } from 'lucide-react';
+import { Printer, Search, CheckCircle2, Clock, Check, Receipt, AlertTriangle } from 'lucide-react';
 
 export default function CajaClient({ commerceId, businessName, themeHex, scope }: any) {
   const [tickets, setTickets] = useState<any[]>([]);
