@@ -13,8 +13,9 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
   const [asesorData, setAsesorData] = useState<any>(null);
 
   const unifiedCatalog = useMemo(() => {
+     let mappedCompiled: any[] = [];
      if (compiledCatalog && compiledCatalog.length > 0) {
-         return compiledCatalog.map((p: any) => ({
+         mappedCompiled = compiledCatalog.map((p: any) => ({
              id: p.id,
              name: p.name,
              price: p.normalPrice * 1000,
@@ -24,7 +25,7 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
              sectionName: p.area || 'Catálogo'
          }));
      }
-     return whatsappCatalog;
+     return [...whatsappCatalog, ...mappedCompiled];
   }, [whatsappCatalog, compiledCatalog]);
 
   const [isWholesale, setIsWholesale] = useState(false);
