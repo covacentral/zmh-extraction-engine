@@ -165,7 +165,7 @@ export default function InventoryClient({ commerceId, businessName, themeHex, sc
             normalPrice: Number(form.normalPrice),
             wholesalePrice: Number(form.wholesalePrice),
             variations,
-            status: 'active',
+            status: 'draft',
             createdAt: new Date().toISOString()
         };
 
