@@ -111,6 +111,51 @@ export default function InventoryClient({ commerceId, businessName, themeHex, sc
 
     const formatCurrency = (val: number) => `$${(val || 0).toLocaleString('es-CO')}`;
 
+    const syncDraft = async (draft: any, totalItems: number, updateProgress: boolean) => {
+        try {
+            const syncingDraft = { ...draft, status: 'syncing' };
+            await saveDraft(syncingDraft);
+            setDrafts(prev => prev.map(d => d.localId === draft.localId ? syncingDraft : d));
+
+            // 1. Upload Image (Solo si no es una URL pública ya, aunque en borradores siempre es base64 local)
+            const publicUrl = draft.imageWebp.startsWith('http') 
+                ? draft.imageWebp 
+                : await uploadProductImage(commerceId, draft.imageWebp);
+            
+            // 2. Save Product with idempotency (using localId as Firestore ID)
+            const productPayload = {
+                id: draft.localId, // <- Idempotency key!
+                name: draft.name, brand: draft.brand, reference: draft.reference,
+                description: draft.description, provider: draft.provider,
+                costPrice: draft.costPrice, normalPrice: draft.normalPrice, wholesalePrice: draft.wholesalePrice,
+                area: draft.area, variations: draft.variations,
+                imageUrl: publicUrl, status: 'active'
+            };
+            
+            await saveProduct(commerceId, authToken, productPayload);
+            
+            // 3. Mark as Synced
+            const syncedDraft = { ...syncingDraft, imageWebp: publicUrl, status: 'synced' };
+            await saveDraft(syncedDraft);
+            setDrafts(prev => prev.map(d => d.localId === draft.localId ? syncedDraft : d));
+        } catch (e) {
+            console.error("Sync error for " + draft.name, e);
+            const errorDraft = { ...draft, status: 'error' };
+            await saveDraft(errorDraft);
+            setDrafts(prev => prev.map(d => d.localId === draft.localId ? errorDraft : d));
+        }
+    };
+
+    const syncSingleDraft = async (localId: string) => {
+        const draft = drafts.find(d => d.localId === localId);
+        if (!draft || syncing) return;
+        setSyncing(true);
+        setSyncProgress({ current: 0, total: 1 });
+        await syncDraft(draft, 1, false);
+        setSyncing(false);
+        scheduleCleanup();
+    };
+
     const syncToDatabase = async () => {
         const pending = drafts.filter(d => d.status === 'draft' || d.status === 'error');
         if (pending.length === 0) return;
@@ -118,56 +163,25 @@ export default function InventoryClient({ commerceId, businessName, themeHex, sc
         setSyncing(true);
         setSyncProgress({ current: 0, total: pending.length });
 
-        // Chunking the uploads to 5 parallel at a time to prevent blocking
         const chunkSize = 5;
         let completed = 0;
 
         for (let i = 0; i < pending.length; i += chunkSize) {
             const chunk = pending.slice(i, i + chunkSize);
-            
             const promises = chunk.map(async (draft) => {
-                try {
-                    // Update UI to syncing
-                    const syncingDraft = { ...draft, status: 'syncing' };
-                    await saveDraft(syncingDraft);
-                    setDrafts(prev => prev.map(d => d.localId === draft.localId ? syncingDraft : d));
-
-                    // 1. Upload Image
-                    const publicUrl = await uploadProductImage(commerceId, draft.imageWebp);
-                    
-                    // 2. Save Product
-                    const productPayload = {
-                        name: draft.name, brand: draft.brand, reference: draft.reference,
-                        description: draft.description, provider: draft.provider,
-                        costPrice: draft.costPrice, normalPrice: draft.normalPrice, wholesalePrice: draft.wholesalePrice,
-                        area: draft.area, variations: draft.variations,
-                        imageUrl: publicUrl, status: 'active'
-                    };
-                    
-                    await saveProduct(commerceId, authToken, productPayload);
-                    
-                    // 3. Mark as Synced
-                    const syncedDraft = { ...syncingDraft, status: 'synced' };
-                    await saveDraft(syncedDraft);
-                    setDrafts(prev => prev.map(d => d.localId === draft.localId ? syncedDraft : d));
-                } catch (e) {
-                    console.error("Sync error for " + draft.name, e);
-                    const errorDraft = { ...draft, status: 'error' };
-                    await saveDraft(errorDraft);
-                    setDrafts(prev => prev.map(d => d.localId === draft.localId ? errorDraft : d));
-                } finally {
-                    completed++;
-                    setSyncProgress({ current: completed, total: pending.length });
-                }
+                await syncDraft(draft, pending.length, true);
+                completed++;
+                setSyncProgress({ current: completed, total: pending.length });
             });
-
             await Promise.all(promises);
         }
 
         setSyncing(false);
-        // Automatically clear synced items after 3 seconds
+        scheduleCleanup();
+    };
+
+    const scheduleCleanup = () => {
         setTimeout(async () => {
-            const syncedItems = drafts.filter(d => d.status === 'synced'); // need fresh state ideally, but we fetch all again
             const currentDrafts = await getDrafts();
             for (const d of currentDrafts) {
                 if (d.status === 'synced') {
@@ -339,9 +353,16 @@ export default function InventoryClient({ commerceId, businessName, themeHex, sc
                                             </div>
                                         </div>
                                         {(draft.status === 'draft' || draft.status === 'error') && (
-                                            <button onClick={() => removeDraft(draft.localId)} disabled={syncing} className="p-2 text-white/30 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors">
-                                                <Trash2 className="w-5 h-5" />
-                                            </button>
+                                            <div className="flex gap-1">
+                                                {draft.status === 'error' && (
+                                                    <button onClick={() => syncSingleDraft(draft.localId)} disabled={syncing} className="p-2 text-white/50 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-colors" title="Reintentar individualmente">
+                                                        <CloudUpload className="w-5 h-5" />
+                                                    </button>
+                                                )}
+                                                <button onClick={() => removeDraft(draft.localId)} disabled={syncing} className="p-2 text-white/30 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors" title="Eliminar borrador">
+                                                    <Trash2 className="w-5 h-5" />
+                                                </button>
+                                            </div>
                                         )}
                                     </div>
                                 ))}
