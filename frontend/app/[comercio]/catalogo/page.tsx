@@ -69,6 +69,8 @@ export default async function CatalogoPage({ params }: { params: { comercio: str
       }
   }
 
+  const sysDoc = await db.collection('comercios').doc(comercio).collection('_system').doc('catalog').get();
+  data.compiledCatalog = sysDoc.exists ? sysDoc.data()?.compiledCatalog || [] : [];
   data.whatsappCatalog = mergedCatalog;
 
   const themeHex = data.themeHex || '#25D366';

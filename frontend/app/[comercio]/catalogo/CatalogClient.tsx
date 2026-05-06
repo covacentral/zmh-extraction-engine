@@ -46,6 +46,7 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
   const [cart, setCart] = useState<any[]>([]);
   const [isMounted, setIsMounted] = useState(false);
   const [showCheckout, setShowCheckout] = useState(false);
+  const [selectedVariations, setSelectedVariations] = useState<{[key: string]: number}>({});
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -401,13 +402,17 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
              {visibleProducts.map((prod: any) => {
                 const price = getProductPrice(prod, isWholesale);
                 const refCode = getProductRef(prod);
-                const imageUrl = getImageUrl(prod);
+                const vIdx = selectedVariations[prod.id] || 0;
+                const selectedVar = prod.variations?.[vIdx];
+                const imageUrl = selectedVar?.imageWebp || getImageUrl(prod);
+                const cartId = prod.variations ? `${prod.id}_${vIdx}` : prod.id;
+                const stock = selectedVar ? selectedVar.stock : 999;
+                const isOut = prod.isHidden === true || stock === 0;
                 const itemsInCart = cart.filter(i => (i.baseId || i.id) === prod.id);
-                const inCartAqui = itemsInCart.find(i => i.modifier === 'aqui' || !i.modifier);
-                const inCartLlevar = itemsInCart.find(i => i.modifier === 'llevar');
+                const inCartAqui = itemsInCart.find(i => i.id === cartId && (i.modifier === 'aqui' || !i.modifier));
+                const inCartLlevar = itemsInCart.find(i => i.id === cartId && i.modifier === 'llevar');
                 const totalQty = itemsInCart.reduce((sum, i) => sum + Number(i.qty || 0), 0);
                 const activeCartItem = isRestaurant && !isDeliveryMode ? (consumptionMode === 'aqui' ? inCartAqui : inCartLlevar) : inCartAqui;
-                const isOut = prod.isHidden === true;
 
                 const selectedProductInCart = selectedProduct ? cart.find(i => i.id === selectedProduct.id) : null;
 
@@ -445,6 +450,21 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
                                 )}
                              </div>
                          )}
+                      
+                         {prod.variations && prod.variations.length > 1 && (
+                             <div className="flex flex-wrap gap-1 mt-2">
+                                 {prod.variations.map((v: any, idx: number) => (
+                                     <button 
+                                         key={idx} 
+                                         onClick={(e) => { e.stopPropagation(); setSelectedVariations(prev => ({...prev, [prod.id]: idx})); }}
+                                         className={`text-[10px] px-2 py-1 rounded-full border transition-colors ${vIdx === idx ? 'bg-[var(--theme)] text-black border-[var(--theme)]' : 'bg-white/5 text-white/50 border-white/10 hover:text-white'}`}
+                                     >
+                                         {v.name}
+                                     </button>
+                                 ))}
+                             </div>
+                         )}
+
                       </div>
 
                       {/* Add Button */}
@@ -455,12 +475,29 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
                             </div>
                          ) : isMounted && activeCartItem ? (
                             <div className="flex items-center bg-white/5 rounded-full overflow-hidden border border-[var(--theme)]/30">
-                               <button onClick={() => setQty(activeCartItem.id, (Number(activeCartItem.qty) || 0) - 1)} className="w-8 h-8 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-colors">-</button>
-                               <input type="text" inputMode="numeric" pattern="[0-9]*" value={activeCartItem.qty} onChange={(e) => setQty(activeCartItem.id, e.target.value)} onBlur={() => { if (!activeCartItem.qty || Number(activeCartItem.qty) < 1) setQty(activeCartItem.id, 1); }} className="w-10 text-center bg-transparent border-x border-white/5 font-bold text-sm outline-none text-[var(--theme)] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
-                               <button onClick={() => setQty(activeCartItem.id, (Number(activeCartItem.qty) || 0) + 1)} className="w-8 h-8 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-colors">+</button>
+                               <button onClick={() => setQty(cartId, (Number(activeCartItem.qty) || 0) - 1)} className="w-8 h-8 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-colors">-</button>
+                               <input type="text" inputMode="numeric" pattern="[0-9]*" value={activeCartItem.qty} onChange={(e) => setQty(cartId, e.target.value)} onBlur={() => { if (!activeCartItem.qty || Number(activeCartItem.qty) < 1) setQty(cartId, 1); }} className="w-10 text-center bg-transparent border-x border-white/5 font-bold text-sm outline-none text-[var(--theme)] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+                               <button onClick={() => setQty(cartId, (Number(activeCartItem.qty) || 0) + 1)} className="w-8 h-8 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-colors">+</button>
                             </div>
                          ) : (
-                            <button onClick={() => addToCart(prod, price)} className="w-10 h-10 rounded-full flex items-center justify-center bg-white/10 text-white hover:bg-white/20 border border-white/10 transition-colors">
+                            <button onClick={(e) => {
+                                e.stopPropagation();
+                                setCart(prev => {
+                                    const existing = prev.find(i => i.id === cartId && (!isRestaurant || i.modifier === (consumptionMode === 'aqui' ? 'aqui' : 'llevar')));
+                                    if (existing) {
+                                        return prev.map(i => i === existing ? { ...i, qty: Number(i.qty) + 1 } : i);
+                                    }
+                                    return [...prev, { 
+                                        ...prod, 
+                                        id: cartId, 
+                                        baseId: prod.id, 
+                                        variationName: selectedVar?.name, 
+                                        price, 
+                                        qty: 1, 
+                                        modifier: isRestaurant && !isDeliveryMode ? consumptionMode : undefined 
+                                    }];
+                                });
+                            }} className="w-10 h-10 rounded-full flex items-center justify-center bg-white/10 text-white hover:bg-white/20 border border-white/10 transition-colors">
                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                             </button>
                          )}

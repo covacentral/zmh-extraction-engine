@@ -1,68 +1,61 @@
 'use server';
 
-import { db, storage } from '../../lib/firebaseAdmin';
-import crypto from 'crypto';
+import { db, storage } from '../../../lib/firebaseAdmin';
 
 /**
- * Uploads a base64 WebP image to Firebase Storage and returns the public URL.
+ * Uploads a base64/webp image to Firebase Storage and returns the public URL
  */
-export async function uploadProductImage(commerceId: string, base64Data: string): Promise<string> {
-    if (!storage) throw new Error("Storage is not initialized");
+export async function uploadProductImage(commerceId: string, base64Data: string) {
+    if (!storage) throw new Error("Storage not initialized");
+
+    const bucketName = 'zmh-extraction-engine.firebasestorage.app';
+    const bucket = storage.bucket(bucketName);
     
-    try {
-        const bucket = storage.bucket('zmh-extraction-engine.firebasestorage.app');
-        // Remove the data URI prefix (data:image/webp;base64,)
-        const base64Str = base64Data.replace(/^data:image\/[a-z]+;base64,/, "");
-        const buffer = Buffer.from(base64Str, 'base64');
-        
-        const fileName = `inventory/${commerceId}/${crypto.randomUUID()}.webp`;
-        const file = bucket.file(fileName);
-        
-        await file.save(buffer, {
-            metadata: {
-                contentType: 'image/webp',
-            },
-        });
-        
-        // Return standard Firebase Storage URL (relies on Security Rules, no ACLs needed)
-        return `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(fileName)}?alt=media`;
-    } catch (e: any) {
-        console.error("Upload error:", e);
-        throw new Error("Error uploading image: " + e.message);
-    }
+    // Extract base64 payload
+    const base64Payload = base64Data.split(';base64,').pop();
+    if (!base64Payload) throw new Error("Invalid base64 data");
+
+    const buffer = Buffer.from(base64Payload, 'base64');
+    const fileName = `inventory/${commerceId}/${Date.now()}-${Math.random().toString(36).substring(7)}.webp`;
+    
+    const file = bucket.file(fileName);
+    
+    await file.save(buffer, {
+        metadata: {
+            contentType: 'image/webp',
+            cacheControl: 'public, max-age=31536000'
+        }
+    });
+
+    return `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodeURIComponent(fileName)}?alt=media`;
 }
 
 /**
- * Verifies if the token is valid for the given commerce.
- * Returns the "area" scope of the token, or "MASTER" if it's the master token.
- * Throws an error if invalid.
+ * Validates the token against the MASTER token or Area tokens.
+ * Returns 'MASTER' or the area name.
  */
-async function verifyToken(commerceId: string, token: string): Promise<string> {
-    const doc = await db!.collection('comercios').doc(commerceId).get();
+async function verifyToken(commerceId: string, token: string) {
+    if (!db) throw new Error("DB not initialized");
+    const doc = await db.collection('comercios').doc(commerceId).get();
     if (!doc.exists) throw new Error("Commerce not found");
+
     const data = doc.data();
-    
-    // Master Token
-    if (data?.inventoryToken === token) return 'MASTER';
-    
-    // Check if it's an area token (e.g. inventoryToken_Cova == token)
-    let matchedArea = null;
-    if (data) {
-        for (const [key, val] of Object.entries(data)) {
-            if (key.startsWith('inventoryToken_') && val === token) {
-                matchedArea = key.replace('inventoryToken_', '');
-                break;
-            }
-        }
+    if (data && data.inventoryToken === token) {
+        return 'MASTER';
     }
-    
-    if (matchedArea) return matchedArea;
+
+    // Check in subcollection 'areas'
+    const areasSnap = await db.collection('comercios').doc(commerceId).collection('areas').where('token', '==', token).get();
+    if (!areasSnap.empty) {
+        return areasSnap.docs[0].id; // The document ID is the area name
+    }
+
     throw new Error("Invalid Token");
 }
 
 /**
  * Saves a single product to the 'catalogo' subcollection and immediately
- * updates the Materialized Cache (Zero-Read Architecture).
+ * updates the Materialized Cache.
  */
 export async function saveProduct(commerceId: string, token: string, product: any) {
     if (!db) throw new Error("DB not initialized");
@@ -76,7 +69,23 @@ export async function saveProduct(commerceId: string, token: string, product: an
     
     product.updatedAt = new Date().toISOString();
     
-    // 1. Write the individual document to the subcollection (for OLTP / deep management)
+    // Write Provider for autocompletion
+    if (product.provider) {
+        const pId = product.provider.trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
+        if (pId) {
+            await db.collection('comercios').doc(commerceId).collection('providers').doc(pId).set({ name: product.provider.trim() }, { merge: true });
+        }
+    }
+    
+    // Write Area for autocompletion (if master adds a new area)
+    if (product.area && scope === 'MASTER') {
+        const aId = product.area.trim();
+        if (aId) {
+            await db.collection('comercios').doc(commerceId).collection('areas').doc(aId).set({ name: aId }, { merge: true });
+        }
+    }
+
+    // Write the individual document to the subcollection
     let docRef;
     if (product.id) {
         docRef = db.collection('comercios').doc(commerceId).collection('catalogo').doc(product.id);
@@ -86,7 +95,7 @@ export async function saveProduct(commerceId: string, token: string, product: an
         product.id = docRef.id;
     }
 
-    // 2. ZERO-READ CACHING: Read all products and bundle them into compiledCatalog
+    // ZERO-READ CACHING: Update Materialized Cache
     try {
         await updateMaterializedCache(commerceId);
     } catch (err) {
@@ -98,17 +107,17 @@ export async function saveProduct(commerceId: string, token: string, product: an
 
 /**
  * Background task to recompile the public catalog JSON.
- * Maintains O(1) reads for the public storefront.
+ * Writes to _system/catalog.
  */
-async function updateMaterializedCache(commerceId: string) {
+export async function updateMaterializedCache(commerceId: string) {
     if (!db) return;
     const snap = await db.collection('comercios').doc(commerceId).collection('catalogo').get();
         
     const compiled = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     
-    // Write the flat array into the master commerce document
-    await db.collection('comercios').doc(commerceId).set({
-        compiledCatalog: compiled
+    await db.collection('comercios').doc(commerceId).collection('_system').doc('catalog').set({
+        compiledCatalog: compiled,
+        updatedAt: new Date().toISOString()
     }, { merge: true });
 }
 
@@ -127,4 +136,15 @@ export async function getInventory(commerceId: string, token: string) {
     
     const snap = await query.get();
     return snap.docs.map((d: any) => ({ id: d.id, ...d.data() }));
+}
+
+/**
+ * Delete a product
+ */
+export async function deleteProduct(commerceId: string, token: string, productId: string) {
+    if (!db) return;
+    await verifyToken(commerceId, token);
+    await db.collection('comercios').doc(commerceId).collection('catalogo').doc(productId).delete();
+    await updateMaterializedCache(commerceId);
+    return { ok: true };
 }

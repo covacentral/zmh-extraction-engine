@@ -20,12 +20,10 @@ export default async function InventoryPage({ params }: { params: { comercio: st
   if (data.inventoryToken === token) {
       scope = 'MASTER';
   } else {
-      // Check Area Tokens
-      for (const [key, val] of Object.entries(data)) {
-          if (key.startsWith('inventoryToken_') && val === token) {
-              scope = key.replace('inventoryToken_', '');
-              break;
-          }
+      // Check in 'areas' subcollection
+      const areasSnap = await db!.collection('comercios').doc(comercio).collection('areas').where('token', '==', token).get();
+      if (!areasSnap.empty) {
+          scope = areasSnap.docs[0].id;
       }
   }
 
@@ -33,11 +31,30 @@ export default async function InventoryPage({ params }: { params: { comercio: st
 
   const themeHex = data.themeHex || '#25D366';
   const businessName = data.businessName || 'PIMS Inventario';
-  const compiledCatalog = data.compiledCatalog || [];
+  
+  // Get Materialized Cache from the new location
+  const sysDoc = await db!.collection('comercios').doc(comercio).collection('_system').doc('catalog').get();
+  const compiledCatalog = sysDoc.exists ? sysDoc.data()?.compiledCatalog || [] : [];
+  
+  // Get all registered areas and providers for datalists
+  const areasListSnap = await db!.collection('comercios').doc(comercio).collection('areas').get();
+  const providersSnap = await db!.collection('comercios').doc(comercio).collection('providers').get();
+  
+  const areasList = areasListSnap.docs.map(d => d.id);
+  const providersList = providersSnap.docs.map(d => d.data().name);
 
   return (
     <main className="min-h-screen bg-[#0a0a0a] text-white">
-      <InventoryClient commerceId={comercio} businessName={businessName} themeHex={themeHex} scope={scope} authToken={token} catalogCache={compiledCatalog} />
+      <InventoryClient 
+        commerceId={comercio} 
+        businessName={businessName} 
+        themeHex={themeHex} 
+        scope={scope} 
+        authToken={token} 
+        catalogCache={compiledCatalog}
+        areasList={areasList}
+        providersList={providersList}
+      />
     </main>
   );
 }
