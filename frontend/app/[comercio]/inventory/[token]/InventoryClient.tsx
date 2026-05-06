@@ -19,7 +19,7 @@ export default function InventoryClient({ commerceId, businessName, themeHex, sc
     });
     
     // Default Variation = Parent
-    const [variations, setVariations] = useState<{name: string, stock: number, imageWebp: string|null}>([{ name: 'Estándar', stock: 0, imageWebp: null }]);
+    const [variations, setVariations] = useState<{name: string, stock: number, imageWebp: string|null}[]>([{ name: 'Estándar', stock: 0, imageWebp: null }]);
     
     const [editingLocalId, setEditingLocalId] = useState<string | null>(null);
     const variationFileInputRefs = useRef<{[key: number]: HTMLInputElement | null}>({});
