@@ -54,13 +54,89 @@ export default function CajaClient({ commerceId, businessName, themeHex, scope }
     return () => unsubscribe();
   }, [commerceId, isInitializing]);
   
+  const printTicket = (ticket: any) => {
+    const printWindow = window.open('', '_blank', 'width=320,height=600');
+    if (!printWindow) {
+      alert('El navegador bloqueó la ventana de impresión. Permite las ventanas emergentes para esta página.');
+      return;
+    }
+
+    const itemsHtml = (ticket.cart || []).map((item: any) => `
+      <tr>
+        <td style="padding:4px 0;vertical-align:top;font-weight:bold;white-space:nowrap;">${item.qty}x</td>
+        <td style="padding:4px 6px;vertical-align:top;">
+          ${item.name || ''}
+          ${item.variationName ? `<br><span style="font-size:10px;color:#666;">${item.variationName}</span>` : ''}
+          ${item.reference ? `<br><span style="font-size:10px;color:#999;">REF: ${item.reference}</span>` : ''}
+        </td>
+        <td style="padding:4px 0;vertical-align:top;text-align:right;font-weight:bold;white-space:nowrap;">$${((item.price||0)*(item.qty||1)).toLocaleString('es-CO')}</td>
+      </tr>
+    `).join('');
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <title>Ticket #${ticket.facCode}</title>
+        <style>
+          @page { margin: 0; size: 80mm auto; }
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body { 
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 12px;
+            width: 72mm;
+            padding: 6mm;
+            color: #000;
+            background: #fff;
+          }
+          .center { text-align: center; }
+          .divider { border-top: 1px dashed #000; margin: 6px 0; }
+          .bold { font-weight: bold; }
+          .small { font-size: 10px; color: #555; }
+          table { width: 100%; border-collapse: collapse; }
+          .total-row { border-top: 1px solid #000; margin-top: 4px; padding-top: 4px; display: flex; justify-content: space-between; font-weight: bold; font-size: 14px; }
+          .footer { margin-top: 12px; text-align: center; font-size: 10px; color: #777; }
+        </style>
+      </head>
+      <body>
+        <div class="center">
+          <div class="bold" style="font-size:15px;text-transform:uppercase;">${businessName}</div>
+          <div class="small">Ticket #${ticket.facCode}</div>
+          <div class="small">${new Date(ticket.createdAt).toLocaleString('es-CO')}</div>
+        </div>
+        <div class="divider"></div>
+        <div class="bold">Cliente: ${ticket.name || 'N/A'}</div>
+        <div>Tel: ${ticket.phone || 'N/A'}</div>
+        ${ticket.asesorName ? `<div class="small">Asesor: ${ticket.asesorName}</div>` : ''}
+        <div class="divider"></div>
+        <table>
+          <tbody>${itemsHtml}</tbody>
+        </table>
+        <div class="divider"></div>
+        <div class="total-row">
+          <span>TOTAL</span>
+          <span>$${(ticket.total||0).toLocaleString('es-CO')}</span>
+        </div>
+        <div class="footer">¡Gracias por su compra!</div>
+      </body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => {
+      printWindow.print();
+      printWindow.close();
+    }, 300);
+  };
+
   const handleAutoPrint = (ticket: any) => {
      setActiveTicket(ticket);
      if (audioRef.current) {
          audioRef.current.play().catch(e => console.log('Audio autoplay blocked', e));
      }
      setTimeout(() => {
-        window.print();
+        printTicket(ticket);
      }, 800);
   };
   
@@ -162,7 +238,7 @@ export default function CajaClient({ commerceId, businessName, themeHex, scope }
               <div className="w-full max-w-[400px] flex flex-col items-center relative">
                   {/* Actions Bar */}
                   <div className="w-full flex justify-between gap-4 mb-6">
-                      <button onClick={() => window.print()} className="flex-1 bg-white/10 hover:bg-white/20 text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-2 transition-all">
+                      <button onClick={() => printTicket(activeTicket)} className="flex-1 bg-white/10 hover:bg-white/20 text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-2 transition-all">
                           <Printer className="w-5 h-5" /> Imprimir
                       </button>
                       <button onClick={() => markAsPrinted(activeTicket.id)} className={`flex-1 font-bold py-4 rounded-2xl flex items-center justify-center gap-2 transition-all ${activeTicket.printed ? 'bg-green-500/20 text-green-400 border border-green-500/20' : 'bg-[var(--theme)] text-black hover:scale-105 shadow-[0_0_20px_var(--theme)]'}`}>
