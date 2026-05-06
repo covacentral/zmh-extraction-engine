@@ -567,18 +567,16 @@ export default function InventoryClient({ commerceId, businessName, themeHex, sc
                                                     <span className="text-[10px] text-white/30">{draft.variations?.length || 1} Variante(s)</span>
                                                 </div>
                                             </div>
-                                            {(draft.status === 'draft' || draft.status === 'error') && (
-                                                <div className="flex gap-1">
-                                                    {draft.status === 'error' && (
-                                                        <button onClick={() => syncSingleDraft(draft.localId)} disabled={syncing} className="p-2 text-white/50 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-colors" title="Reintentar individualmente">
-                                                            <CloudUpload className="w-5 h-5" />
-                                                        </button>
-                                                    )}
-                                                    <button onClick={() => removeDraft(draft.localId)} disabled={syncing} className="p-2 text-white/30 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors" title="Eliminar borrador">
-                                                        <Trash2 className="w-5 h-5" />
+                                            <div className="flex gap-1">
+                                                {draft.status === 'error' && (
+                                                    <button onClick={() => syncSingleDraft(draft.localId)} disabled={syncing} className="p-2 text-white/50 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-colors" title="Reintentar individualmente">
+                                                        <CloudUpload className="w-5 h-5" />
                                                     </button>
-                                                </div>
-                                            )}
+                                                )}
+                                                <button onClick={() => removeDraft(draft.localId)} disabled={syncing} className="p-2 text-white/30 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors" title="Eliminar borrador">
+                                                    <Trash2 className="w-5 h-5" />
+                                                </button>
+                                            </div>
                                         </div>
                                     )})}
                                 </div>
