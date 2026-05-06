@@ -637,7 +637,8 @@ export default function InventoryClient({ commerceId, businessName, themeHex, sc
                                         const isActive = p.status === 'active' || !p.status;
 
                                         return (
-                                            <tr key={p.id} className={`border-b border-white/5 hover:bg-white/5 transition-colors ${!isActive ? 'opacity-50' : ''}`}>
+                                            <React.Fragment key={p.id}>
+                                                <tr className={`border-b border-white/5 hover:bg-white/5 transition-colors ${!isActive ? 'opacity-50' : ''}`}>
                                                 <td className="p-3">
                                                     <div className="flex items-center gap-3">
                                                         {p.variations && p.variations.length > 1 && (
