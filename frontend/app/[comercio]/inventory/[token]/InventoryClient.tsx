@@ -3,19 +3,31 @@
 import { useState, useEffect, useRef } from 'react';
 import { saveDraft, getDrafts, deleteDraft } from '../../../../utils/idb';
 import { processImageToWebP } from '../../../../utils/imageProcessor';
-import { uploadProductImage, saveProduct } from '../../../actions/inventoryActions';
-import { Upload, Camera, Trash2, Save, CloudUpload, Plus, Loader2, List, FileSpreadsheet, Edit3 } from 'lucide-react';
+import { uploadProductImage, saveProduct, toggleProductStatus, addArea, deleteArea, addProvider, deleteProvider } from '../../../actions/inventoryActions';
+import { Upload, Camera, Trash2, Save, CloudUpload, Plus, Loader2, List, FileSpreadsheet, Edit3, Settings, EyeOff, Eye } from 'lucide-react';
 
-export default function InventoryClient({ commerceId, businessName, themeHex, scope, authToken, catalogCache = [], areasList = [], providersList = [] }: { commerceId: string, businessName: string, themeHex: string, scope: string, authToken: string, catalogCache?: any[], areasList?: string[], providersList?: string[] }) {
-    const [activeTab, setActiveTab] = useState<'ingreso' | 'inventario'>('ingreso');
+export default function InventoryClient({ commerceId, businessName, themeHex, scope, authToken, catalogCache = [], areasList = [], providersList = [] }: { commerceId: string, businessName: string, themeHex: string, scope: string, authToken: string, catalogCache?: any[], areasList?: any[], providersList?: string[] }) {
+    const isMaster = scope === 'MASTER';
+    const [activeTab, setActiveTab] = useState<'ingreso' | 'inventario' | 'ajustes'>(isMaster ? 'ingreso' : 'inventario');
     const [drafts, setDrafts] = useState<any[]>([]);
     const [syncing, setSyncing] = useState(false);
     const [syncProgress, setSyncProgress] = useState({ current: 0, total: 0 });
     
+    // Config State (Mutable via UI)
+    const [localAreas, setLocalAreas] = useState<any[]>(areasList || []);
+    const [localProviders, setLocalProviders] = useState<string[]>(providersList || []);
+    
+    const [newAreaName, setNewAreaName] = useState('');
+    const [newAreaToken, setNewAreaToken] = useState('');
+    const [newProviderName, setNewProviderName] = useState('');
+    
+    // Status Toggling State
+    const [togglingMap, setTogglingMap] = useState<{[key:string]: boolean}>({});
+
     // Form State
     const [form, setForm] = useState({
         name: '', brand: '', reference: '', description: '', provider: '',
-        costPrice: '', normalPrice: '', wholesalePrice: '', area: scope === 'MASTER' ? '' : scope
+        costPrice: '', normalPrice: '', wholesalePrice: '', area: isMaster ? '' : scope
     });
     
     // Default Variation = Parent
@@ -28,8 +40,10 @@ export default function InventoryClient({ commerceId, businessName, themeHex, sc
     const [searchQuery, setSearchQuery] = useState('');
 
     useEffect(() => {
-        loadDrafts();
-    }, []);
+        if (isMaster) {
+            loadDrafts();
+        }
+    }, [isMaster]);
 
     const loadDrafts = async () => {
         try {
@@ -46,6 +60,60 @@ export default function InventoryClient({ commerceId, businessName, themeHex, sc
         } catch (e) {
             console.error("Error loading drafts", e);
         }
+    };
+
+    const handleToggleStatus = async (prod: any) => {
+        if (togglingMap[prod.id]) return;
+        setTogglingMap(prev => ({ ...prev, [prod.id]: true }));
+        const newStatus = prod.status === 'active' ? 'inactive' : 'active';
+        try {
+            await toggleProductStatus(commerceId, authToken, prod.id, newStatus);
+            // Update local cache visually
+            const index = catalogCache.findIndex(p => p.id === prod.id);
+            if (index !== -1) {
+                catalogCache[index].status = newStatus;
+            }
+        } catch (e) {
+            alert("Error cambiando estado");
+        }
+        setTogglingMap(prev => ({ ...prev, [prod.id]: false }));
+    };
+
+    const handleAddArea = async (e: any) => {
+        e.preventDefault();
+        if (!newAreaName || !newAreaToken) return;
+        try {
+            await addArea(commerceId, authToken, newAreaName, newAreaToken);
+            setLocalAreas([...localAreas, { name: newAreaName.trim(), token: newAreaToken }]);
+            setNewAreaName(''); setNewAreaToken('');
+        } catch (err) { alert("Error añadiendo área"); }
+    };
+
+    const handleDeleteArea = async (id: string) => {
+        if (!confirm("¿Eliminar esta área?")) return;
+        try {
+            await deleteArea(commerceId, authToken, id);
+            setLocalAreas(localAreas.filter(a => a.name !== id));
+        } catch (err) { alert("Error eliminando área"); }
+    };
+
+    const handleAddProvider = async (e: any) => {
+        e.preventDefault();
+        if (!newProviderName) return;
+        try {
+            await addProvider(commerceId, authToken, newProviderName);
+            setLocalProviders([...localProviders, newProviderName.trim()]);
+            setNewProviderName('');
+        } catch (err) { alert("Error añadiendo proveedor"); }
+    };
+
+    const handleDeleteProvider = async (name: string) => {
+        if (!confirm("¿Eliminar proveedor?")) return;
+        const id = name.toLowerCase().replace(/[^a-z0-9]/g, '_');
+        try {
+            await deleteProvider(commerceId, authToken, id);
+            setLocalProviders(localProviders.filter(p => p !== name));
+        } catch (err) { alert("Error eliminando proveedor"); }
     };
 
     const handleVariationImageCapture = async (e: any, index: number) => {
@@ -77,13 +145,16 @@ export default function InventoryClient({ commerceId, businessName, themeHex, sc
     const saveToDrafts = async (e: React.FormEvent) => {
         e.preventDefault();
         
-        // Ensure at least the main/parent variation has an image
         if (!variations[0].imageWebp) {
             alert("Debes tomar o subir una foto para el producto padre (Primera Variación).");
             return;
         }
-        if (scope === 'MASTER' && !form.area) {
+        if (isMaster && !form.area) {
             alert("Como administrador central, debes seleccionar el Área de destino.");
+            return;
+        }
+        if (!form.provider) {
+            alert("Debes seleccionar un Proveedor.");
             return;
         }
 
@@ -93,8 +164,8 @@ export default function InventoryClient({ commerceId, businessName, themeHex, sc
             costPrice: Number(form.costPrice),
             normalPrice: Number(form.normalPrice),
             wholesalePrice: Number(form.wholesalePrice),
-            variations, // variations array contains images now
-            status: 'draft',
+            variations,
+            status: 'active',
             createdAt: new Date().toISOString()
         };
 
@@ -103,7 +174,7 @@ export default function InventoryClient({ commerceId, businessName, themeHex, sc
 
         setForm({
             name: '', brand: '', reference: '', description: '', provider: '',
-            costPrice: '', normalPrice: '', wholesalePrice: '', area: scope === 'MASTER' ? '' : scope
+            costPrice: '', normalPrice: '', wholesalePrice: '', area: isMaster ? '' : scope
         });
         setVariations([{ name: 'Estándar', stock: 0, imageWebp: null }]);
         setEditingLocalId(null);
@@ -119,7 +190,6 @@ export default function InventoryClient({ commerceId, businessName, themeHex, sc
             wholesalePrice: prod.wholesalePrice || '', area: prod.area || ''
         });
         
-        // Migrate legacy single images to first variation if needed
         let loadedVars = prod.variations || [];
         if (loadedVars.length === 0) {
             loadedVars = [{ name: 'Estándar', stock: 0, imageWebp: prod.imageUrl || null }];
@@ -147,7 +217,6 @@ export default function InventoryClient({ commerceId, businessName, themeHex, sc
             await saveDraft(syncingDraft);
             setDrafts(prev => prev.map(d => d.localId === draft.localId ? syncingDraft : d));
 
-            // Upload variation images
             const uploadedVars = await Promise.all(draft.variations.map(async (v: any) => {
                 let publicUrl = v.imageWebp;
                 if (publicUrl && !publicUrl.startsWith('http')) {
@@ -156,7 +225,6 @@ export default function InventoryClient({ commerceId, businessName, themeHex, sc
                 return { ...v, imageWebp: publicUrl };
             }));
             
-            // The main image is the first variation's image
             const mainImageUrl = uploadedVars[0]?.imageWebp || null;
 
             const productPayload = {
@@ -165,7 +233,7 @@ export default function InventoryClient({ commerceId, businessName, themeHex, sc
                 description: draft.description, provider: draft.provider,
                 costPrice: draft.costPrice, normalPrice: draft.normalPrice, wholesalePrice: draft.wholesalePrice,
                 area: draft.area, variations: uploadedVars,
-                imageUrl: mainImageUrl, status: 'active'
+                imageUrl: mainImageUrl, status: draft.status || 'active'
             };
             
             await saveProduct(commerceId, authToken, productPayload);
@@ -174,7 +242,7 @@ export default function InventoryClient({ commerceId, businessName, themeHex, sc
             await saveDraft(syncedDraft);
             setDrafts(prev => prev.map(d => d.localId === draft.localId ? syncedDraft : d));
         } catch (e) {
-            console.error("Sync error for " + draft.name, e);
+            console.error("Sync error", e);
             const errorDraft = { ...draft, status: 'error' };
             await saveDraft(errorDraft);
             setDrafts(prev => prev.map(d => d.localId === draft.localId ? errorDraft : d));
@@ -199,7 +267,6 @@ export default function InventoryClient({ commerceId, businessName, themeHex, sc
         setSyncProgress({ current: 0, total: pending.length });
 
         let completed = 0;
-        // Limit concurrency to 3
         const concurrencyLimit = 3;
         for (let i = 0; i < pending.length; i += concurrencyLimit) {
             const chunk = pending.slice(i, i + concurrencyLimit);
@@ -227,7 +294,7 @@ export default function InventoryClient({ commerceId, businessName, themeHex, sc
     };
 
     const filteredCatalog = catalogCache.filter(p => {
-        if (scope !== 'MASTER' && p.area !== scope) return false;
+        if (!isMaster && p.area !== scope) return false;
         if (searchQuery) {
             const q = searchQuery.toLowerCase();
             return (p.name || '').toLowerCase().includes(q) || (p.reference || '').toLowerCase().includes(q);
@@ -245,17 +312,9 @@ export default function InventoryClient({ commerceId, businessName, themeHex, sc
             const tCosto = existencia * costo;
             
             const row = [
-                `"${p.name || ''}"`,
-                existencia,
-                costo,
-                tCosto,
-                `"${p.provider || ''}"`,
-                `"${p.brand || ''}"`,
-                `"${p.reference || ''}"`,
-                p.wholesalePrice || 0,
-                p.normalPrice || 0,
-                `"${p.area || ''}"`,
-                `"${p.status || ''}"`
+                `"${p.name || ''}"`, existencia, costo, tCosto,
+                `"${p.provider || ''}"`, `"${p.brand || ''}"`, `"${p.reference || ''}"`,
+                p.wholesalePrice || 0, p.normalPrice || 0, `"${p.area || ''}"`, `"${p.status || 'active'}"`
             ];
             csvContent += row.join(",") + "\n";
         });
@@ -271,35 +330,78 @@ export default function InventoryClient({ commerceId, businessName, themeHex, sc
 
     return (
         <div className="max-w-6xl mx-auto p-4 sm:p-6 pb-24">
-            <datalist id="areasList">
-                {areasList.map((a, i) => <option key={i} value={a} />)}
-            </datalist>
-            <datalist id="providersList">
-                {providersList.map((p, i) => <option key={i} value={p} />)}
-            </datalist>
-
             <div className="mb-6 flex flex-col sm:flex-row justify-between sm:items-end gap-4">
                 <div>
                     <h1 className="text-2xl font-bold text-white mb-1">Inventariado PIMS</h1>
-                    <p className="text-white/50 text-sm">{businessName} • Acceso: {scope === 'MASTER' ? 'Central de Entradas' : `Área ${scope}`}</p>
+                    <p className="text-white/50 text-sm">{businessName} • Acceso: {isMaster ? 'Central de Entradas' : `Área ${scope}`}</p>
                 </div>
                 <div className="flex bg-black/50 p-1 rounded-xl border border-white/10">
-                    <button 
-                        onClick={() => setActiveTab('ingreso')}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all ${activeTab === 'ingreso' ? 'bg-white/10 text-white' : 'text-white/50 hover:text-white'}`}
-                    >
-                        <Plus className="w-4 h-4" /> Ingreso
-                    </button>
+                    {isMaster && (
+                        <button 
+                            onClick={() => setActiveTab('ingreso')}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all ${activeTab === 'ingreso' ? 'bg-white/10 text-white' : 'text-white/50 hover:text-white'}`}
+                        >
+                            <Plus className="w-4 h-4" /> Ingreso
+                        </button>
+                    )}
                     <button 
                         onClick={() => setActiveTab('inventario')}
                         className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all ${activeTab === 'inventario' ? 'bg-white/10 text-white' : 'text-white/50 hover:text-white'}`}
                     >
                         <List className="w-4 h-4" /> Activos ({filteredCatalog.length})
                     </button>
+                    {isMaster && (
+                        <button 
+                            onClick={() => setActiveTab('ajustes')}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all ${activeTab === 'ajustes' ? 'bg-white/10 text-white' : 'text-white/50 hover:text-white'}`}
+                        >
+                            <Settings className="w-4 h-4" /> Ajustes
+                        </button>
+                    )}
                 </div>
             </div>
 
-            {activeTab === 'ingreso' ? (
+            {activeTab === 'ajustes' && isMaster ? (
+                <div className="grid md:grid-cols-2 gap-6">
+                    {/* PANEL DE ÁREAS */}
+                    <div className="bg-[#111] border border-white/10 rounded-2xl p-5">
+                        <h2 className="text-lg font-bold text-white mb-4">Áreas y Accesos</h2>
+                        <form onSubmit={handleAddArea} className="flex gap-2 mb-4">
+                            <input required type="text" placeholder="Nombre Área" value={newAreaName} onChange={e=>setNewAreaName(e.target.value)} className="flex-1 bg-black border border-white/10 rounded-lg p-2 text-white text-sm" />
+                            <input required type="text" placeholder="Contraseña" value={newAreaToken} onChange={e=>setNewAreaToken(e.target.value)} className="flex-1 bg-black border border-white/10 rounded-lg p-2 text-white text-sm" />
+                            <button type="submit" className="bg-white/10 text-white px-3 py-2 rounded-lg hover:bg-white/20"><Plus className="w-4 h-4" /></button>
+                        </form>
+                        <div className="flex flex-col gap-2">
+                            {localAreas.map(a => (
+                                <div key={a.name} className="flex justify-between items-center bg-black/50 p-3 rounded-lg border border-white/5">
+                                    <div>
+                                        <div className="text-sm text-white font-bold">{a.name}</div>
+                                        <div className="text-xs text-white/40 font-mono">{a.token || 'Sin token'}</div>
+                                    </div>
+                                    <button onClick={() => handleDeleteArea(a.name)} className="text-red-500/50 hover:text-red-500 hover:bg-red-500/10 p-2 rounded-lg transition-colors"><Trash2 className="w-4 h-4"/></button>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* PANEL DE PROVEEDORES */}
+                    <div className="bg-[#111] border border-white/10 rounded-2xl p-5">
+                        <h2 className="text-lg font-bold text-white mb-4">Proveedores Oficiales</h2>
+                        <form onSubmit={handleAddProvider} className="flex gap-2 mb-4">
+                            <input required type="text" placeholder="Nombre Proveedor" value={newProviderName} onChange={e=>setNewProviderName(e.target.value)} className="flex-1 bg-black border border-white/10 rounded-lg p-2 text-white text-sm" />
+                            <button type="submit" className="bg-white/10 text-white px-3 py-2 rounded-lg hover:bg-white/20"><Plus className="w-4 h-4" /></button>
+                        </form>
+                        <div className="flex flex-col gap-2">
+                            {localProviders.map(p => (
+                                <div key={p} className="flex justify-between items-center bg-black/50 p-3 rounded-lg border border-white/5">
+                                    <div className="text-sm text-white font-bold">{p}</div>
+                                    <button onClick={() => handleDeleteProvider(p)} className="text-red-500/50 hover:text-red-500 hover:bg-red-500/10 p-2 rounded-lg transition-colors"><Trash2 className="w-4 h-4"/></button>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            ) : activeTab === 'ingreso' && isMaster ? (
                 <div className="grid lg:grid-cols-3 gap-6">
                     {/* FORM PANEL */}
                     <div className="lg:col-span-1 bg-[#111] border border-white/10 rounded-2xl p-5 h-fit">
@@ -310,51 +412,55 @@ export default function InventoryClient({ commerceId, businessName, themeHex, sc
 
                         <form onSubmit={saveToDrafts} className="flex flex-col gap-4">
                             
-                            {scope === 'MASTER' && (
-                                <div>
-                                    <label className="text-xs text-white/50 mb-1 block">Área de Destino</label>
-                                    <input required list="areasList" type="text" placeholder="Ej. Cova, Cacharros..." value={form.area} onChange={e => setForm({...form, area: e.target.value})} className="w-full bg-black border border-white/10 rounded-lg p-3 text-white text-sm focus:border-white/30 focus:outline-none" />
-                                </div>
-                            )}
+                            <div>
+                                <label className="text-xs text-white/50 mb-1 block">Área de Destino</label>
+                                <select required value={form.area} onChange={e => setForm({...form, area: e.target.value})} className="w-full bg-black border border-white/10 rounded-lg p-3 text-white text-sm focus:border-white/30 outline-none">
+                                    <option value="" disabled>Selecciona Área</option>
+                                    {localAreas.map(a => <option key={a.name} value={a.name}>{a.name}</option>)}
+                                </select>
+                            </div>
 
                             <div className="grid grid-cols-2 gap-3">
                                 <div className="col-span-2">
                                     <label className="text-xs text-white/50 mb-1 block">Nombre del Producto</label>
-                                    <input required type="text" value={form.name} onChange={e => setForm({...form, name: e.target.value})} className="w-full bg-black border border-white/10 rounded-lg p-3 text-white text-sm focus:border-white/30 focus:outline-none" />
+                                    <input required type="text" value={form.name} onChange={e => setForm({...form, name: e.target.value})} className="w-full bg-black border border-white/10 rounded-lg p-3 text-white text-sm outline-none" />
                                 </div>
                                 <div>
                                     <label className="text-xs text-white/50 mb-1 block">Marca</label>
-                                    <input required type="text" value={form.brand} onChange={e => setForm({...form, brand: e.target.value})} className="w-full bg-black border border-white/10 rounded-lg p-3 text-white text-sm focus:border-white/30 focus:outline-none" />
+                                    <input required type="text" value={form.brand} onChange={e => setForm({...form, brand: e.target.value})} className="w-full bg-black border border-white/10 rounded-lg p-3 text-white text-sm outline-none" />
                                 </div>
                                 <div>
                                     <label className="text-xs text-white/50 mb-1 block">Referencia (Única Padre)</label>
-                                    <input required type="text" value={form.reference} onChange={e => setForm({...form, reference: e.target.value})} className="w-full bg-black border border-white/10 rounded-lg p-3 text-white text-sm focus:border-white/30 focus:outline-none" />
+                                    <input required type="text" value={form.reference} onChange={e => setForm({...form, reference: e.target.value})} className="w-full bg-black border border-white/10 rounded-lg p-3 text-white text-sm outline-none" />
                                 </div>
                             </div>
 
                             <div className="grid grid-cols-3 gap-3">
                                 <div>
                                     <label className="text-xs text-white/50 mb-1 block">Costo ($)</label>
-                                    <input required type="number" value={form.costPrice} onChange={e => setForm({...form, costPrice: e.target.value})} className="w-full bg-black border border-white/10 rounded-lg p-3 text-white text-sm focus:border-white/30 focus:outline-none" />
+                                    <input required type="number" value={form.costPrice} onChange={e => setForm({...form, costPrice: e.target.value})} className="w-full bg-black border border-white/10 rounded-lg p-3 text-white text-sm outline-none" />
                                 </div>
                                 <div>
                                     <label className="text-xs text-white/50 mb-1 block">Mayorista ($)</label>
-                                    <input required type="number" value={form.wholesalePrice} onChange={e => setForm({...form, wholesalePrice: e.target.value})} className="w-full bg-black border border-white/10 rounded-lg p-3 text-white text-sm focus:border-white/30 focus:outline-none" />
+                                    <input required type="number" value={form.wholesalePrice} onChange={e => setForm({...form, wholesalePrice: e.target.value})} className="w-full bg-black border border-white/10 rounded-lg p-3 text-white text-sm outline-none" />
                                 </div>
                                 <div>
                                     <label className="text-xs text-white/50 mb-1 block">Detal ($)</label>
-                                    <input required type="number" value={form.normalPrice} onChange={e => setForm({...form, normalPrice: e.target.value})} className="w-full bg-black border border-white/10 rounded-lg p-3 text-white text-sm focus:border-white/30 focus:outline-none" />
+                                    <input required type="number" value={form.normalPrice} onChange={e => setForm({...form, normalPrice: e.target.value})} className="w-full bg-black border border-white/10 rounded-lg p-3 text-white text-sm outline-none" />
                                 </div>
                             </div>
 
                             <div>
                                 <label className="text-xs text-white/50 mb-1 block">Proveedor</label>
-                                <input required list="providersList" type="text" value={form.provider} onChange={e => setForm({...form, provider: e.target.value})} className="w-full bg-black border border-white/10 rounded-lg p-3 text-white text-sm focus:border-white/30 focus:outline-none" />
+                                <select required value={form.provider} onChange={e => setForm({...form, provider: e.target.value})} className="w-full bg-black border border-white/10 rounded-lg p-3 text-white text-sm outline-none">
+                                    <option value="" disabled>Selecciona Proveedor</option>
+                                    {localProviders.map(p => <option key={p} value={p}>{p}</option>)}
+                                </select>
                             </div>
 
                             <div>
                                 <label className="text-xs text-white/50 mb-1 block">Descripción</label>
-                                <textarea required rows={3} value={form.description} onChange={e => setForm({...form, description: e.target.value})} className="w-full bg-black border border-white/10 rounded-lg p-3 text-white text-sm focus:border-white/30 focus:outline-none resize-none"></textarea>
+                                <textarea required rows={3} value={form.description} onChange={e => setForm({...form, description: e.target.value})} className="w-full bg-black border border-white/10 rounded-lg p-3 text-white text-sm outline-none resize-none"></textarea>
                             </div>
 
                             {/* Variaciones e Imágenes */}
@@ -367,7 +473,6 @@ export default function InventoryClient({ commerceId, businessName, themeHex, sc
                                 <div className="flex flex-col gap-3">
                                     {variations.map((v, idx) => (
                                         <div key={idx} className="flex gap-2 items-center bg-white/5 p-2 rounded-xl">
-                                            {/* Photo Upload for Variation */}
                                             <div 
                                                 className={`w-14 h-14 shrink-0 rounded-lg overflow-hidden relative flex flex-col items-center justify-center cursor-pointer transition-colors border ${v.imageWebp ? 'border-white/20' : 'border-dashed border-white/30 bg-black/50 hover:border-white/60'}`}
                                                 onClick={() => {
@@ -388,8 +493,8 @@ export default function InventoryClient({ commerceId, businessName, themeHex, sc
                                             </div>
                                             
                                             <div className="flex-1 flex flex-col gap-1">
-                                                <input type="text" placeholder={idx === 0 ? "Ej. Modelo Estándar" : "Ej. Rojo"} value={v.name} onChange={e => updateVariation(idx, 'name', e.target.value)} className="w-full bg-black border border-white/10 rounded p-1.5 text-white text-xs focus:outline-none" required />
-                                                <input type="number" placeholder="Cantidad" value={v.stock === 0 ? '' : v.stock} onChange={e => updateVariation(idx, 'stock', Number(e.target.value))} className="w-full bg-black border border-white/10 rounded p-1.5 text-white text-xs focus:outline-none" required />
+                                                <input type="text" placeholder={idx === 0 ? "Ej. Modelo Estándar" : "Ej. Rojo"} value={v.name} onChange={e => updateVariation(idx, 'name', e.target.value)} className="w-full bg-black border border-white/10 rounded p-1.5 text-white text-xs outline-none" required />
+                                                <input type="number" placeholder="Cantidad" value={v.stock === 0 ? '' : v.stock} onChange={e => updateVariation(idx, 'stock', Number(e.target.value))} className="w-full bg-black border border-white/10 rounded p-1.5 text-white text-xs outline-none" required />
                                             </div>
 
                                             {idx > 0 && (
@@ -406,7 +511,7 @@ export default function InventoryClient({ commerceId, businessName, themeHex, sc
                                 <Save className="w-4 h-4" /> {editingLocalId ? 'Actualizar Producto en Borradores' : 'Guardar en Borradores'}
                             </button>
                             {editingLocalId && (
-                                <button type="button" onClick={() => {setEditingLocalId(null); setForm({name:'',brand:'',reference:'',description:'',provider:'',costPrice:'',normalPrice:'',wholesalePrice:'',area:scope==='MASTER'?'':scope}); setVariations([{ name: 'Estándar', stock: 0, imageWebp: null }]);}} className="text-xs text-white/40 hover:text-white mt-1">
+                                <button type="button" onClick={() => {setEditingLocalId(null); setForm({name:'',brand:'',reference:'',description:'',provider:'',costPrice:'',normalPrice:'',wholesalePrice:'',area:isMaster?'':scope}); setVariations([{ name: 'Estándar', stock: 0, imageWebp: null }]);}} className="text-xs text-white/40 hover:text-white mt-1">
                                     Cancelar edición
                                 </button>
                             )}
@@ -481,7 +586,7 @@ export default function InventoryClient({ commerceId, businessName, themeHex, sc
                         </div>
                     </div>
                 </div>
-            ) : (
+            ) : activeTab === 'inventario' ? (
                 /* INVENTORY PANEL */
                 <div className="bg-[#111] border border-white/10 rounded-2xl p-5">
                     <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-6">
@@ -491,7 +596,7 @@ export default function InventoryClient({ commerceId, businessName, themeHex, sc
                                 placeholder="Buscar por nombre o referencia..." 
                                 value={searchQuery}
                                 onChange={e => setSearchQuery(e.target.value)}
-                                className="w-full max-w-md bg-black border border-white/10 rounded-xl p-3 text-white text-sm focus:border-white/30 focus:outline-none"
+                                className="w-full max-w-md bg-black border border-white/10 rounded-xl p-3 text-white text-sm focus:border-white/30 outline-none"
                             />
                         </div>
                         <button 
@@ -511,30 +616,30 @@ export default function InventoryClient({ commerceId, businessName, themeHex, sc
                                     <th className="p-3 font-medium text-right">Existencia</th>
                                     <th className="p-3 font-medium text-right">Costo / Detal</th>
                                     <th className="p-3 font-medium text-center">Estado</th>
-                                    <th className="p-3 font-medium text-center">Acciones</th>
+                                    {isMaster && <th className="p-3 font-medium text-center">Edición</th>}
                                 </tr>
                             </thead>
                             <tbody>
                                 {filteredCatalog.length === 0 ? (
                                     <tr>
-                                        <td colSpan={6} className="p-8 text-center text-white/30 text-sm">
+                                        <td colSpan={isMaster ? 6 : 5} className="p-8 text-center text-white/30 text-sm">
                                             No hay productos que coincidan con la búsqueda.
                                         </td>
                                     </tr>
                                 ) : (
                                     filteredCatalog.map(p => {
                                         const stock = p.variations ? p.variations.reduce((a:number, v:any) => a + (v.stock||0), 0) : 0;
-                                        // Highlight low stock
                                         const isLowStock = stock <= 3 && stock > 0;
                                         const isOutOfStock = stock === 0;
+                                        const isActive = p.status === 'active' || !p.status;
 
                                         return (
-                                            <tr key={p.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                                            <tr key={p.id} className={`border-b border-white/5 hover:bg-white/5 transition-colors ${!isActive ? 'opacity-50' : ''}`}>
                                                 <td className="p-3">
                                                     <div className="flex items-center gap-3">
-                                                        {p.imageUrl && <img src={p.imageUrl} alt="" className="w-10 h-10 rounded bg-white/5 object-cover" />}
+                                                        {p.imageUrl && <img src={p.imageUrl} alt="" className={`w-10 h-10 rounded bg-white/5 object-cover ${!isActive ? 'grayscale' : ''}`} />}
                                                         <div>
-                                                            <div className="font-bold text-sm text-white/90">{p.name}</div>
+                                                            <div className={`font-bold text-sm ${!isActive ? 'text-white/50 line-through' : 'text-white/90'}`}>{p.name}</div>
                                                             <div className="text-[10px] text-white/40">{p.area} • {p.variations?.length || 1} V.</div>
                                                         </div>
                                                     </div>
@@ -553,15 +658,22 @@ export default function InventoryClient({ commerceId, businessName, themeHex, sc
                                                     <div className="text-sm font-bold text-[var(--theme)]" style={{ color: themeHex }}>{formatCurrency(p.normalPrice)}</div>
                                                 </td>
                                                 <td className="p-3 text-center">
-                                                    <span className={`text-[10px] px-2 py-0.5 rounded ${p.status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-zinc-800 text-zinc-400'}`}>
-                                                        {p.status === 'active' ? 'Activo' : 'Inactivo'}
-                                                    </span>
-                                                </td>
-                                                <td className="p-3 text-center">
-                                                    <button onClick={() => editProduct(p)} className="p-2 text-white/40 hover:text-white hover:bg-white/10 rounded transition-colors" title="Editar">
-                                                        <Edit3 className="w-4 h-4" />
+                                                    <button 
+                                                        onClick={() => handleToggleStatus(p)}
+                                                        disabled={togglingMap[p.id]}
+                                                        className={`flex items-center justify-center gap-1 mx-auto text-[10px] px-2 py-1 rounded transition-colors ${togglingMap[p.id] ? 'opacity-50 cursor-not-allowed' : 'hover:opacity-80'} ${isActive ? 'bg-green-500/20 text-green-400 border border-green-500/20' : 'bg-red-500/20 text-red-400 border border-red-500/20'}`}
+                                                    >
+                                                        {togglingMap[p.id] ? <Loader2 className="w-3 h-3 animate-spin" /> : isActive ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
+                                                        {isActive ? 'Público' : 'Oculto'}
                                                     </button>
                                                 </td>
+                                                {isMaster && (
+                                                    <td className="p-3 text-center">
+                                                        <button onClick={() => editProduct(p)} className="p-2 text-white/40 hover:text-white hover:bg-white/10 rounded transition-colors" title="Editar">
+                                                            <Edit3 className="w-4 h-4" />
+                                                        </button>
+                                                    </td>
+                                                )}
                                             </tr>
                                         );
                                     })
@@ -570,7 +682,7 @@ export default function InventoryClient({ commerceId, businessName, themeHex, sc
                         </table>
                     </div>
                 </div>
-            )}
+            ) : null}
         </div>
     );
 }

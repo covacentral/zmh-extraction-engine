@@ -69,21 +69,7 @@ export async function saveProduct(commerceId: string, token: string, product: an
     
     product.updatedAt = new Date().toISOString();
     
-    // Write Provider for autocompletion
-    if (product.provider) {
-        const pId = product.provider.trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
-        if (pId) {
-            await db.collection('comercios').doc(commerceId).collection('providers').doc(pId).set({ name: product.provider.trim() }, { merge: true });
-        }
-    }
-    
-    // Write Area for autocompletion (if master adds a new area)
-    if (product.area && scope === 'MASTER') {
-        const aId = product.area.trim();
-        if (aId) {
-            await db.collection('comercios').doc(commerceId).collection('areas').doc(aId).set({ name: aId }, { merge: true });
-        }
-    }
+    // Auto-learning removed. Areas and Providers are strictly managed by MASTER in settings.
 
     // Write the individual document to the subcollection
     let docRef;
@@ -146,5 +132,66 @@ export async function deleteProduct(commerceId: string, token: string, productId
     await verifyToken(commerceId, token);
     await db.collection('comercios').doc(commerceId).collection('catalogo').doc(productId).delete();
     await updateMaterializedCache(commerceId);
+    return { ok: true };
+}
+
+/**
+ * Toggles a product's status and updates the cache
+ */
+export async function toggleProductStatus(commerceId: string, token: string, productId: string, newStatus: string) {
+    if (!db) return;
+    await verifyToken(commerceId, token); // Verify any valid token (areas can do this)
+    await db.collection('comercios').doc(commerceId).collection('catalogo').doc(productId).update({ status: newStatus });
+    await updateMaterializedCache(commerceId);
+    return { ok: true };
+}
+
+/**
+ * Add a new Area
+ */
+export async function addArea(commerceId: string, token: string, areaName: string, areaToken: string) {
+    if (!db) return;
+    const scope = await verifyToken(commerceId, token);
+    if (scope !== 'MASTER') throw new Error("Unauthorized");
+    
+    const id = areaName.trim();
+    await db.collection('comercios').doc(commerceId).collection('areas').doc(id).set({ name: id, token: areaToken }, { merge: true });
+    return { ok: true };
+}
+
+/**
+ * Delete an Area
+ */
+export async function deleteArea(commerceId: string, token: string, areaId: string) {
+    if (!db) return;
+    const scope = await verifyToken(commerceId, token);
+    if (scope !== 'MASTER') throw new Error("Unauthorized");
+    
+    await db.collection('comercios').doc(commerceId).collection('areas').doc(areaId).delete();
+    return { ok: true };
+}
+
+/**
+ * Add a Provider
+ */
+export async function addProvider(commerceId: string, token: string, providerName: string) {
+    if (!db) return;
+    const scope = await verifyToken(commerceId, token);
+    if (scope !== 'MASTER') throw new Error("Unauthorized");
+    
+    const id = providerName.trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
+    await db.collection('comercios').doc(commerceId).collection('providers').doc(id).set({ name: providerName.trim() }, { merge: true });
+    return { ok: true };
+}
+
+/**
+ * Delete a Provider
+ */
+export async function deleteProvider(commerceId: string, token: string, providerId: string) {
+    if (!db) return;
+    const scope = await verifyToken(commerceId, token);
+    if (scope !== 'MASTER') throw new Error("Unauthorized");
+    
+    await db.collection('comercios').doc(commerceId).collection('providers').doc(providerId).delete();
     return { ok: true };
 }

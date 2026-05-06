@@ -40,7 +40,10 @@ export default async function InventoryPage({ params }: { params: { comercio: st
   const areasListSnap = await db!.collection('comercios').doc(comercio).collection('areas').get();
   const providersSnap = await db!.collection('comercios').doc(comercio).collection('providers').get();
   
-  const areasList = areasListSnap.docs.map(d => d.id);
+  const areasList = areasListSnap.docs.map(d => ({
+      name: d.id,
+      token: scope === 'MASTER' ? (d.data().token || '') : ''
+  }));
   const providersList = providersSnap.docs.map(d => d.data().name);
 
   return (
