@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, Fragment } from 'react';
 import { saveDraft, getDrafts, deleteDraft } from '../../../../utils/idb';
 import { processImageToWebP } from '../../../../utils/imageProcessor';
 import { uploadProductImage, saveProduct, toggleProductStatus, addArea, deleteArea, addProvider, deleteProvider } from '../../../actions/inventoryActions';
@@ -38,6 +38,11 @@ export default function InventoryClient({ commerceId, businessName, themeHex, sc
 
     // Inventory State
     const [searchQuery, setSearchQuery] = useState('');
+    const [expandedRows, setExpandedRows] = useState<{[key:string]: boolean}>({});
+
+    const toggleRow = (id: string) => {
+        setExpandedRows(prev => ({...prev, [id]: !prev[id]}));
+    };
 
     useEffect(() => {
         if (isMaster) {
@@ -233,7 +238,7 @@ export default function InventoryClient({ commerceId, businessName, themeHex, sc
                 description: draft.description, provider: draft.provider,
                 costPrice: draft.costPrice, normalPrice: draft.normalPrice, wholesalePrice: draft.wholesalePrice,
                 area: draft.area, variations: uploadedVars,
-                imageUrl: mainImageUrl, status: draft.status || 'active'
+                imageUrl: mainImageUrl, status: 'active'
             };
             
             await saveProduct(commerceId, authToken, productPayload);
@@ -635,6 +640,11 @@ export default function InventoryClient({ commerceId, businessName, themeHex, sc
                                             <tr key={p.id} className={`border-b border-white/5 hover:bg-white/5 transition-colors ${!isActive ? 'opacity-50' : ''}`}>
                                                 <td className="p-3">
                                                     <div className="flex items-center gap-3">
+                                                        {p.variations && p.variations.length > 1 && (
+                                                            <button onClick={() => toggleRow(p.id)} className="w-6 h-6 flex items-center justify-center bg-white/10 text-white/50 hover:text-white rounded hover:bg-white/20 transition-colors shrink-0">
+                                                                {expandedRows[p.id] ? '-' : '+'}
+                                                            </button>
+                                                        )}
                                                         {p.imageUrl && <img src={p.imageUrl} alt="" className={`w-10 h-10 rounded bg-white/5 object-cover ${!isActive ? 'grayscale' : ''}`} />}
                                                         <div>
                                                             <div className={`font-bold text-sm ${!isActive ? 'text-white/50 line-through' : 'text-white/90'}`}>{p.name}</div>
@@ -673,6 +683,33 @@ export default function InventoryClient({ commerceId, businessName, themeHex, sc
                                                     </td>
                                                 )}
                                             </tr>
+                                            {expandedRows[p.id] && p.variations && p.variations.length > 1 && (
+                                                <tr key={`var_${p.id}`} className="bg-black/30 border-b border-white/5">
+                                                    <td colSpan={isMaster ? 6 : 5} className="p-4 pl-12">
+                                                        <div className="flex flex-col gap-2">
+                                                            <h4 className="text-[10px] uppercase tracking-widest font-bold text-[var(--theme)] mb-1">Desglose de Variaciones</h4>
+                                                            {p.variations.map((v: any, vIdx: number) => (
+                                                                <div key={vIdx} className="flex items-center justify-between bg-white/5 p-2 rounded-lg border border-white/5">
+                                                                    <div className="flex items-center gap-3">
+                                                                        {v.imageWebp ? (
+                                                                            <img src={v.imageWebp} alt={v.name} className={`w-8 h-8 rounded object-cover ${v.stock === 0 ? 'grayscale' : ''}`} />
+                                                                        ) : (
+                                                                            <div className="w-8 h-8 rounded bg-white/10 flex items-center justify-center text-white/20 text-xs">IMG</div>
+                                                                        )}
+                                                                        <span className={`text-xs font-bold ${v.stock === 0 ? 'text-red-400 line-through' : 'text-white'}`}>{v.name}</span>
+                                                                    </div>
+                                                                    <div className="text-right flex items-center gap-4">
+                                                                        <span className={`text-xs font-bold px-2 py-1 rounded ${v.stock === 0 ? 'bg-red-500/20 text-red-400' : 'bg-white/10 text-white/90'}`}>
+                                                                            Stock: {v.stock}
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            )}
+                                        </React.Fragment>
                                         );
                                     })
                                 )}

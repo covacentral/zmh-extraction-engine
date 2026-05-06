@@ -807,20 +807,47 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
                  <div className="flex-1 overflow-y-auto scrollbar-hide">
                      {/* Image Area */}
                      <div className="relative w-full bg-black flex items-center justify-center min-h-[40vh]">
-                        {getHighResImageUrl(selectedProduct) ? (
-                            <img src={getHighResImageUrl(selectedProduct)} alt={selectedProduct.name} className={`w-full h-auto object-contain max-h-[55vh] ${selectedProduct.isHidden ? 'grayscale opacity-75' : ''}`} />
-                        ) : (
-                            <div className="w-full h-[40vh] flex items-center justify-center text-white/20">
-                                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
-                            </div>
-                        )}
+                        {(() => {
+                            const vIdx = selectedVariations[selectedProduct.id] || 0;
+                            const selectedVar = selectedProduct.variations?.[vIdx];
+                            const imageUrl = selectedVar?.imageWebp || getHighResImageUrl(selectedProduct);
+                            if (imageUrl) {
+                                return <img src={imageUrl} alt={selectedProduct.name} className={`w-full h-auto object-contain max-h-[55vh] ${selectedProduct.isHidden || selectedVar?.stock === 0 ? 'grayscale opacity-75' : ''}`} />;
+                            }
+                            return (
+                                <div className="w-full h-[40vh] flex items-center justify-center text-white/20">
+                                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+                                </div>
+                            );
+                        })()}
                         
-                        {selectedProduct.isHidden && (
+                        {(selectedProduct.isHidden || selectedProduct.variations?.[selectedVariations[selectedProduct.id] || 0]?.stock === 0) && (
                             <div className="absolute inset-0 bg-black/60 flex items-center justify-center pointer-events-none">
                                 <span className="text-white text-3xl font-black tracking-widest uppercase bg-red-600/90 px-6 py-2 rounded-xl border-4 border-red-500 shadow-2xl rotate-[-15deg]">Agotado</span>
                             </div>
                         )}
                      </div>
+                     
+                     {selectedProduct.variations && selectedProduct.variations.length > 1 && (
+                         <div className="bg-zinc-950 px-5 pt-4 pb-2">
+                             <label className="text-[10px] font-bold text-[var(--theme)] uppercase tracking-widest mb-2 block">Variaciones Disponibles</label>
+                             <div className="flex flex-wrap gap-2">
+                                 {selectedProduct.variations.map((v: any, idx: number) => {
+                                     const vIdx = selectedVariations[selectedProduct.id] || 0;
+                                     const isSelected = vIdx === idx;
+                                     return (
+                                         <button 
+                                             key={idx} 
+                                             onClick={(e) => { e.stopPropagation(); setSelectedVariations(prev => ({...prev, [selectedProduct.id]: idx})); }}
+                                             className={`text-xs px-4 py-2 rounded-xl border transition-colors ${isSelected ? 'bg-[var(--theme)] text-black border-[var(--theme)] font-bold shadow-[0_0_10px_var(--theme)]' : 'bg-white/5 text-white/70 border-white/10 hover:text-white'}`}
+                                         >
+                                             {v.name}
+                                         </button>
+                                     );
+                                 })}
+                             </div>
+                         </div>
+                     )}
 
                      {/* Info Area */}
                      <div className="p-5 flex flex-col gap-4">
@@ -854,14 +881,15 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
                  {/* Sticky Footer Actions */}
                  <div className="p-5 bg-zinc-950 border-t border-white/10 shrink-0 z-10 shadow-[0_-10px_30px_rgba(0,0,0,0.8)] pb-8 sm:pb-5">
                      {(() => {
-                         const inCart = cart.find(i => i.id === selectedProduct.id);
-                         const isOut = selectedProduct.isHidden === true;
+                         const vIdx = selectedVariations[selectedProduct.id] || 0;
+                         const selectedVar = selectedProduct.variations?.[vIdx];
+                         const cartId = selectedProduct.variations ? `${selectedProduct.id}_${vIdx}` : selectedProduct.id;
+                         const inCart = cart.find(i => i.id === cartId);
+                         const isOut = selectedProduct.isHidden === true || (selectedVar && selectedVar.stock === 0);
                          const price = getProductPrice(selectedProduct, isWholesale);
 
                          if (isOut) {
-                             const selectedProductInCart = selectedProduct ? cart.find(i => i.id === selectedProduct.id) : null;
-
-  return (
+                             return (
                                  <div className="w-full bg-black/40 text-red-500/50 p-4 rounded-2xl border border-red-500/20 flex justify-center items-center gap-2 font-bold">
                                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line></svg>
                                      Producto Agotado
@@ -870,21 +898,20 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
                          }
 
                          if (isMounted && inCart) {
-                             const selectedProductInCart = selectedProduct ? cart.find(i => i.id === selectedProduct.id) : null;
-
-  return (
+                             return (
                                  <div className="flex items-center justify-between bg-white/5 rounded-2xl overflow-hidden border border-[var(--theme)]/30 p-1">
-                                     <button onClick={() => setQty(selectedProduct.id, (Number(inCart.qty) || 0) - 1)} className="w-14 h-12 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-colors rounded-xl text-xl font-medium">-</button>
-                                     <input type="text" inputMode="numeric" pattern="[0-9]*" value={inCart.qty} onChange={(e) => setQty(selectedProduct.id, e.target.value)} onBlur={() => { if (!inCart.qty || Number(inCart.qty) < 1) setQty(selectedProduct.id, 1); }} className="w-16 text-center bg-transparent font-black text-xl outline-none text-[var(--theme)] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
-                                     <button onClick={() => setQty(selectedProduct.id, (Number(inCart.qty) || 0) + 1)} className="w-14 h-12 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-colors rounded-xl text-xl font-medium">+</button>
+                                     <button onClick={() => setQty(cartId, (Number(inCart.qty) || 0) - 1)} className="w-14 h-12 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-colors rounded-xl text-xl font-medium">-</button>
+                                     <input type="text" inputMode="numeric" pattern="[0-9]*" value={inCart.qty} onChange={(e) => setQty(cartId, e.target.value)} onBlur={() => { if (!inCart.qty || Number(inCart.qty) < 1) setQty(cartId, 1); }} className="w-16 text-center bg-transparent font-black text-xl outline-none text-[var(--theme)] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+                                     <button onClick={() => setQty(cartId, (Number(inCart.qty) || 0) + 1)} className="w-14 h-12 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-colors rounded-xl text-xl font-medium">+</button>
                                  </div>
                              );
                          }
 
-                         const selectedProductInCart = selectedProduct ? cart.find(i => i.id === selectedProduct.id) : null;
-
-  return (
-                             <button onClick={() => addToCart(selectedProduct, price)} className="w-full bg-white/10 text-white hover:bg-white/20 p-4 rounded-2xl border border-white/10 transition-colors flex justify-center items-center gap-2 font-bold shadow-lg">
+                         return (
+                             <button onClick={() => {
+                                 const itemToAdd = { ...selectedProduct, id: cartId, baseId: selectedProduct.id, variationName: selectedVar?.name, qty: 1 };
+                                 addToCart(itemToAdd, price);
+                             }} className="w-full bg-white/10 text-white hover:bg-white/20 p-4 rounded-2xl border border-white/10 transition-colors flex justify-center items-center gap-2 font-bold shadow-lg">
                                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                                  Agregar al Pedido
                              </button>
