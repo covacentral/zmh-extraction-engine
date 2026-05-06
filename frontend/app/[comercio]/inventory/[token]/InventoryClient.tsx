@@ -27,7 +27,16 @@ export default function InventoryClient({ commerceId, businessName, themeHex, sc
     const loadDrafts = async () => {
         try {
             const list = await getDrafts();
-            setDrafts(list.reverse()); // Newest first
+            // Si la app se cerró durante una subida, revertir los que se quedaron en "syncing" a "error"
+            const fixedList = await Promise.all(list.map(async d => {
+                if (d.status === 'syncing') {
+                    const fixed = { ...d, status: 'error' };
+                    await saveDraft(fixed);
+                    return fixed;
+                }
+                return d;
+            }));
+            setDrafts(fixedList.reverse()); // Newest first
         } catch (e) {
             console.error("Error loading drafts", e);
         }
