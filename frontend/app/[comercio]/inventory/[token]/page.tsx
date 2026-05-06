@@ -33,10 +33,11 @@ export default async function InventoryPage({ params }: { params: { comercio: st
 
   const themeHex = data.themeHex || '#25D366';
   const businessName = data.businessName || 'PIMS Inventario';
+  const compiledCatalog = data.compiledCatalog || [];
 
   return (
     <main className="min-h-screen bg-[#0a0a0a] text-white">
-      <InventoryClient commerceId={comercio} businessName={businessName} themeHex={themeHex} scope={scope} authToken={token} />
+      <InventoryClient commerceId={comercio} businessName={businessName} themeHex={themeHex} scope={scope} authToken={token} catalogCache={compiledCatalog} />
     </main>
   );
 }

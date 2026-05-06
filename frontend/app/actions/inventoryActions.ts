@@ -102,8 +102,7 @@ export async function saveProduct(commerceId: string, token: string, product: an
  */
 async function updateMaterializedCache(commerceId: string) {
     if (!db) return;
-    const snap = await db.collection('comercios').doc(commerceId).collection('catalogo')
-        .where('status', '==', 'active').get();
+    const snap = await db.collection('comercios').doc(commerceId).collection('catalogo').get();
         
     const compiled = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     

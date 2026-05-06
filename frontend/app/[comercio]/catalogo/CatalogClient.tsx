@@ -15,7 +15,9 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
   const unifiedCatalog = useMemo(() => {
      let mappedCompiled: any[] = [];
      if (compiledCatalog && compiledCatalog.length > 0) {
-         mappedCompiled = compiledCatalog.map((p: any) => ({
+         mappedCompiled = compiledCatalog
+             .filter((p: any) => p.status === 'active')
+             .map((p: any) => ({
              id: p.id,
              name: p.name,
              price: p.normalPrice * 1000,
