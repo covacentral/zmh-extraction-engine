@@ -10,7 +10,7 @@ export async function uploadProductImage(commerceId: string, base64Data: string)
     if (!storage) throw new Error("Storage is not initialized");
     
     try {
-        const bucket = storage.bucket();
+        const bucket = storage.bucket('zmh-extraction-engine.firebasestorage.app');
         // Remove the data URI prefix (data:image/webp;base64,)
         const base64Str = base64Data.replace(/^data:image\/[a-z]+;base64,/, "");
         const buffer = Buffer.from(base64Str, 'base64');
