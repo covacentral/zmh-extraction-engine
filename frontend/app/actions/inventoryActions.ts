@@ -1,6 +1,6 @@
 'use server';
 
-import { db, storage } from '../../../lib/firebaseAdmin';
+import { db, storage } from '../../lib/firebaseAdmin';
 
 /**
  * Uploads a base64/webp image to Firebase Storage and returns the public URL
