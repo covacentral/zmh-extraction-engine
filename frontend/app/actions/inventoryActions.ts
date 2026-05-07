@@ -81,26 +81,70 @@ export async function saveProduct(commerceId: string, token: string, product: an
         product.id = docRef.id;
     }
 
-    // ZERO-READ CACHING: Update Materialized Cache
+    // CQRS Write-Through Cache: Incremental upsert (1 read + 1 write, not 5000 reads)
     try {
-        await updateMaterializedCache(commerceId);
+        await upsertProductInCache(commerceId, { ...product, id: product.id || docRef.id });
     } catch (err) {
-        console.error("Cache compilation failed:", err);
+        console.error("Cache upsert failed:", err);
     }
 
     return { ok: true, id: docRef.id };
 }
 
 /**
- * Background task to recompile the public catalog JSON.
- * Writes to _system/catalog.
+ * CQRS Write-Through Cache: Incremental upsert.
+ * Reads the compiled cache (1 read), updates only the changed product in the array, writes back (1 write).
+ * Falls back to full recompile if the cache document doesn't exist yet (first-time bootstrap).
+ */
+async function upsertProductInCache(commerceId: string, product: any) {
+    if (!db) return;
+    const cacheRef = db.collection('comercios').doc(commerceId).collection('_system').doc('catalog');
+    const cacheDoc = await cacheRef.get();
+
+    let compiled: any[];
+
+    if (!cacheDoc.exists) {
+        // Fallback: Bootstrap full recompile (happens only once per commerce lifecycle)
+        console.warn(`[CQRS] Cache miss for ${commerceId}. Triggering full bootstrap recompile.`);
+        const snap = await db.collection('comercios').doc(commerceId).collection('catalogo').get();
+        compiled = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    } else {
+        compiled = cacheDoc.data()?.compiledCatalog || [];
+        const existingIndex = compiled.findIndex((p: any) => p.id === product.id);
+        if (existingIndex >= 0) {
+            // Update in place (upsert)
+            compiled[existingIndex] = product;
+        } else {
+            // New product: append
+            compiled.push(product);
+        }
+    }
+
+    await cacheRef.set({ compiledCatalog: compiled, updatedAt: new Date().toISOString() }, { merge: true });
+}
+
+/**
+ * CQRS Write-Through Cache: Incremental delete.
+ * Removes only the deleted product from the compiled cache (1 read + 1 write).
+ */
+async function deleteProductFromCache(commerceId: string, productId: string) {
+    if (!db) return;
+    const cacheRef = db.collection('comercios').doc(commerceId).collection('_system').doc('catalog');
+    const cacheDoc = await cacheRef.get();
+    if (!cacheDoc.exists) return;
+
+    const compiled = (cacheDoc.data()?.compiledCatalog || []).filter((p: any) => p.id !== productId);
+    await cacheRef.set({ compiledCatalog: compiled, updatedAt: new Date().toISOString() }, { merge: true });
+}
+
+/**
+ * @deprecated Use upsertProductInCache for surgical updates instead.
+ * Kept as a manual admin tool for full cache rebuilds.
  */
 export async function updateMaterializedCache(commerceId: string) {
     if (!db) return;
     const snap = await db.collection('comercios').doc(commerceId).collection('catalogo').get();
-        
     const compiled = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    
     await db.collection('comercios').doc(commerceId).collection('_system').doc('catalog').set({
         compiledCatalog: compiled,
         updatedAt: new Date().toISOString()
@@ -131,7 +175,8 @@ export async function deleteProduct(commerceId: string, token: string, productId
     if (!db) return;
     await verifyToken(commerceId, token);
     await db.collection('comercios').doc(commerceId).collection('catalogo').doc(productId).delete();
-    await updateMaterializedCache(commerceId);
+    // CQRS: Remove only this product from the cache (1 read + 1 write)
+    await deleteProductFromCache(commerceId, productId);
     return { ok: true };
 }
 
@@ -140,9 +185,19 @@ export async function deleteProduct(commerceId: string, token: string, productId
  */
 export async function toggleProductStatus(commerceId: string, token: string, productId: string, newStatus: string) {
     if (!db) return;
-    await verifyToken(commerceId, token); // Verify any valid token (areas can do this)
+    await verifyToken(commerceId, token);
     await db.collection('comercios').doc(commerceId).collection('catalogo').doc(productId).update({ status: newStatus });
-    await updateMaterializedCache(commerceId);
+    // CQRS: Upsert only the status field in the cached product (1 read + 1 write)
+    const cacheRef = db.collection('comercios').doc(commerceId).collection('_system').doc('catalog');
+    const cacheDoc = await cacheRef.get();
+    if (cacheDoc.exists) {
+        const compiled = cacheDoc.data()?.compiledCatalog || [];
+        const idx = compiled.findIndex((p: any) => p.id === productId);
+        if (idx >= 0) {
+            compiled[idx].status = newStatus;
+            await cacheRef.set({ compiledCatalog: compiled, updatedAt: new Date().toISOString() }, { merge: true });
+        }
+    }
     return { ok: true };
 }
 
