@@ -1,22 +1,6 @@
 'use server';
 
-import admin from 'firebase-admin';
-
-// Initialize Firebase once
-if (!admin.apps.length) {
-  try {
-    if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-      const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-      admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount)
-      });
-    }
-  } catch (e) {
-    console.error("Firebase Auth Error in Server Action");
-  }
-}
-
-const db = admin.firestore?.();
+import { db } from '../../lib/firebaseAdmin';
 
 export async function getVipClient(comercio: string, vipId: string) {
     if (!db || !comercio || !vipId) return null;

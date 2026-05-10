@@ -1,23 +1,7 @@
 import { notFound } from 'next/navigation';
 import CatalogClient from './CatalogClient';
-import admin from 'firebase-admin';
+import { db } from '../../../lib/firebaseAdmin';
 import { Suspense } from 'react';
-
-// Initialize Firebase once
-if (!admin.apps.length) {
-  try {
-    if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-      const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-      admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount)
-      });
-    }
-  } catch (e) {
-    console.error("Firebase Auth Error");
-  }
-}
-
-const db = admin.firestore();
 
 export const revalidate = 300; // 5 minutes
 

@@ -1,22 +1,6 @@
 import { notFound } from 'next/navigation';
 import ClientPage from './ClientPage';
-import admin from 'firebase-admin';
-
-// Initialize Firebase once
-if (!admin.apps.length) {
-  try {
-    if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-      const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-      admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount)
-      });
-    } else {
-      console.warn("WARNING: FIREBASE_SERVICE_ACCOUNT venv is missing on Vercel Backend")
-    }
-  } catch (e) {
-    console.error("Firebase Auth Error: Missing or invalid FIREBASE_SERVICE_ACCOUNT");
-  }
-}
+import { db } from '../../lib/firebaseAdmin';
 
 const RENDER_API = 'https://zmh-extraction-engine.onrender.com';
 
@@ -25,10 +9,7 @@ export const revalidate = 30;
 
 export default async function ComercioServerPage({ params }: { params: { comercio: string } }) {
   try {
-    const db = admin.firestore?.();
-    if (!db) {
-      return <div>DB Missing</div>;
-    }
+    if (!db) return <div>DB Missing</div>;
 
     const doc = await db.collection('comercios').doc(params.comercio).get();
     
