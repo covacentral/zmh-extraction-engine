@@ -8,6 +8,7 @@ export default async function AnalyticsPage({ params }: { params: { comercio: st
   const { comercio, token } = params;
 
   if (!comercio || !token) return notFound();
+  if (!db) return notFound();
 
   // Validate Token against Commerce Document
   const doc = await db.collection('comercios').doc(comercio).get();
