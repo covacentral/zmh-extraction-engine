@@ -2,7 +2,8 @@
   "name": "zmh-ext",
   "version": "1.0",
   "scripts": {
-    "start": "node index.js"
+    "start": "node server.js",
+    "start:legacy": "node index.js"
   },
   "dependencies": {
     "express": "^4.19.2",
