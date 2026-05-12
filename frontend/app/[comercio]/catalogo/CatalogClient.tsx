@@ -1,10 +1,11 @@
 'use client';
 import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { getVipClient, getAsesor } from '../../actions/getUserData';
 
 export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }: any) {
+  const router = useRouter();
   const isRestaurant = data?.businessType === 'restaurante';
   let { businessName, whatsappCatalog = [], compiledCatalog = [] } = data;
 
@@ -42,6 +43,7 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
   const isDeliveryMode = isRestaurant && !isMesaMode && !isMeseroMode;
   const [search, setSearch] = useState('');
   const [visibleCount, setVisibleCount] = useState(10);
+  const [isStoreMode, setIsStoreMode] = useState(searchParams.get('modo') === 'tienda');
   
   const [cart, setCart] = useState<any[]>([]);
   const [isMounted, setIsMounted] = useState(false);
@@ -58,6 +60,12 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
   useEffect(() => {
      const vipId = searchParams.get('vip');
      const asesorId = searchParams.get('asesor');
+     const showCheckoutParam = searchParams.get('checkout');
+
+     if (showCheckoutParam === 'true') {
+         setShowCheckout(true);
+         // Optionally remove the query param so refreshing doesn't keep it open
+     }
 
      if (vipId) {
          getVipClient(commerceId, vipId).then(client => {
@@ -369,6 +377,24 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
              </div>
           )}
 
+          {/* DUAL MODE TOGGLE */}
+          {!isRestaurant && (
+             <div className="flex bg-white/5 p-1 rounded-full border border-white/10 mt-2 mx-auto w-max max-w-full">
+                <button 
+                  onClick={() => setIsStoreMode(false)} 
+                  className={`flex items-center gap-2 px-6 py-2 rounded-full text-xs font-bold transition-all ${!isStoreMode ? 'bg-[var(--theme)] text-black shadow-[0_0_15px_var(--theme)]' : 'text-white/50 hover:text-white'}`}
+                >
+                   ⚡ Rápido
+                </button>
+                <button 
+                  onClick={() => setIsStoreMode(true)} 
+                  className={`flex items-center gap-2 px-6 py-2 rounded-full text-xs font-bold transition-all ${isStoreMode ? 'bg-[var(--theme)] text-black shadow-[0_0_15px_var(--theme)]' : 'text-white/50 hover:text-white'}`}
+                >
+                   🛍️ Tienda
+                </button>
+             </div>
+          )}
+
           {/* CATEGORY FILTERS */}
           {categories.length > 0 && (
              <div className="flex overflow-x-auto gap-2 mt-2 pb-2 scrollbar-hide -mx-4 px-4">
@@ -397,8 +423,8 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
              </div>
           )}
 
-          {/* LIST VIEW */}
-          <div className="flex flex-col gap-3 mt-2">
+          {/* LIST / GRID VIEW */}
+          <div className={isStoreMode ? "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 mt-4" : "flex flex-col gap-3 mt-2"}>
              {visibleProducts.map((prod: any) => {
                 const price = getProductPrice(prod, isWholesale);
                 const refCode = getProductRef(prod);
@@ -415,6 +441,74 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
                 const activeCartItem = isRestaurant && !isDeliveryMode ? (consumptionMode === 'aqui' ? inCartAqui : inCartLlevar) : inCartAqui;
 
                 const selectedProductInCart = selectedProduct ? cart.find(i => i.id === selectedProduct.id) : null;
+
+                if (isStoreMode) {
+                    return (
+                       <div key={prod.id} onClick={() => router.push(`/${commerceId}/producto/${prod.id}`)} className={`bg-white/5 hover:bg-white/10 rounded-[2rem] overflow-hidden flex flex-col border border-white/5 transition-all duration-300 cursor-pointer shadow-lg hover:shadow-[0_10px_30px_rgba(0,0,0,0.5)] hover:-translate-y-1 ${isOut ? 'opacity-70' : ''}`}>
+                          <div className={`w-full aspect-square bg-zinc-900/50 relative border-b border-white/5 overflow-hidden ${isOut ? 'grayscale opacity-75' : ''}`}>
+                             {imageUrl ? <img src={imageUrl} alt={prod.name} className="w-full h-full object-cover transition-transform duration-700 hover:scale-110" /> : <div className="w-full h-full flex items-center justify-center text-white/20"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg></div>}
+                             {isOut && (
+                                <div className="absolute inset-0 bg-black/60 flex items-center justify-center backdrop-blur-sm">
+                                   <span className="text-white text-[12px] font-black tracking-widest uppercase bg-red-600/90 px-3 py-1.5 rounded-lg border-2 border-red-500 shadow-2xl rotate-[-15deg]">Agotado</span>
+                                </div>
+                             )}
+                             {/* Floating Cart Add inside Image for cleaner look */}
+                             {!isOut && (
+                                <div className="absolute bottom-3 right-3 z-10" onClick={(e) => e.stopPropagation()}>
+                                   {isMounted && activeCartItem ? (
+                                      <div className="flex items-center bg-black/80 backdrop-blur-md rounded-full overflow-hidden border border-[var(--theme)]/50 h-10 shadow-xl">
+                                         <button onClick={() => setQty(cartId, (Number(activeCartItem.qty) || 0) - 1)} className="w-10 h-full flex items-center justify-center text-white/90 hover:text-white hover:bg-[var(--theme)]/20 transition-colors font-bold text-lg">-</button>
+                                         <input type="text" inputMode="numeric" pattern="[0-9]*" value={activeCartItem.qty} onChange={(e) => setQty(cartId, e.target.value)} onBlur={() => { if (!activeCartItem.qty || Number(activeCartItem.qty) < 1) setQty(cartId, 1); }} className="w-8 h-full text-center bg-transparent border-x border-white/10 font-black text-sm outline-none text-[var(--theme)] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+                                         <button onClick={() => setQty(cartId, (Number(activeCartItem.qty) || 0) + 1)} className="w-10 h-full flex items-center justify-center text-white/90 hover:text-white hover:bg-[var(--theme)]/20 transition-colors font-bold text-lg">+</button>
+                                      </div>
+                                   ) : (
+                                      <button onClick={(e) => {
+                                          e.stopPropagation();
+                                          setCart(prev => {
+                                              const existing = prev.find(i => i.id === cartId && (!isRestaurant || i.modifier === (consumptionMode === 'aqui' ? 'aqui' : 'llevar')));
+                                              if (existing) {
+                                                  return prev.map(i => i === existing ? { ...i, qty: Number(i.qty) + 1 } : i);
+                                              }
+                                              return [...prev, { 
+                                                  ...prod, 
+                                                  id: cartId, 
+                                                  baseId: prod.id, 
+                                                  variationName: selectedVar?.name, 
+                                                  price, 
+                                                  qty: 1, 
+                                                  modifier: isRestaurant && !isDeliveryMode ? consumptionMode : undefined 
+                                              }];
+                                          });
+                                      }} className="w-10 h-10 rounded-full flex items-center justify-center bg-[var(--theme)] text-black hover:scale-110 shadow-[0_5px_15px_rgba(0,0,0,0.5)] transition-transform">
+                                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                                      </button>
+                                   )}
+                                </div>
+                             )}
+                          </div>
+                          <div className="p-4 flex flex-col flex-1 relative bg-gradient-to-t from-black/40 to-transparent">
+                             <h3 className={`text-white text-sm font-bold leading-snug line-clamp-2 ${isOut ? 'line-through text-white/50' : ''}`}>{prod.name}</h3>
+                             {refCode && <span className="inline-block mt-1 w-max text-white/40 text-[10px] font-mono uppercase tracking-wider">REF: {refCode}</span>}
+                             
+                             <div className="mt-auto pt-3">
+                                <span className={`${isOut ? 'text-white/40' : 'text-[var(--theme)]'} font-black text-xl block drop-shadow-md`}>${price.toLocaleString('es-CO')}</span>
+                                {(!isRestaurant && !asesorData && !vipClient && getProductPrice(prod, true) < getProductPrice(prod, false)) && (
+                                   <span className="text-white/40 text-[10px] font-bold block leading-none mt-1">Mayorista: ${getProductPrice(prod, true).toLocaleString('es-CO')}</span>
+                                )}
+                             </div>
+                             
+                             {prod.variations && prod.variations.length > 1 && (
+                                 <div className="flex flex-wrap gap-1 mt-3">
+                                     {prod.variations.slice(0, 3).map((v: any, idx: number) => (
+                                         <div key={idx} className={`w-3 h-3 rounded-full border transition-all ${vIdx === idx ? 'bg-[var(--theme)] border-[var(--theme)] scale-125' : 'bg-white/20 border-transparent'}`} title={v.name} />
+                                     ))}
+                                     {prod.variations.length > 3 && <span className="text-[10px] text-white/50 ml-1">+{prod.variations.length - 3}</span>}
+                                 </div>
+                             )}
+                          </div>
+                       </div>
+                    );
+                }
 
   return (
                    <div key={prod.id} onClick={() => setSelectedProduct(prod)} className={`bg-white/5 hover:bg-white/10 rounded-3xl p-2.5 flex gap-4 items-center border border-white/5 transition-colors cursor-pointer ${isOut ? 'opacity-70' : ''}`}>
