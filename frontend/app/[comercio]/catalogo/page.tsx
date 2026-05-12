@@ -9,6 +9,7 @@ export default async function CatalogoPage({ params }: { params: { comercio: str
   const { comercio } = params;
   
   if (!comercio) return notFound();
+  if (!db) return notFound();
 
   const doc = await db.collection('comercios').doc(comercio).get();
   if (!doc.exists) return notFound();
