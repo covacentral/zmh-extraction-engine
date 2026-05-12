@@ -451,47 +451,5 @@ app.get('/api/test-db', async (req, res) => {
     } catch (e) { res.status(500).json({ status: 'error', message: e.toString() }); }
 });
 
-app.get('/api/seed-products', async (req, res) => {
-    try {
-        if (!db) return res.status(500).json({ error: 'DB not available' });
-        if (req.query.key !== (process.env.CRON_KEY || 'default_secret')) return res.status(401).json({ error: 'Unauthorized' });
-
-        const commerceId = 'cc-bodega-mayorista';
-        const products = [];
-        const batch = db.batch();
-        
-        for (let i = 1; i <= 50; i++) {
-            const product = {
-                id: `prod-fake-${i}`,
-                name: `Producto Ficticio ${i}`,
-                description: `Esta es una descripción ficticia para el producto de prueba número ${i}. Ideal para hacer tests de la interfaz de ZMH y carrito.`,
-                normalPrice: Math.floor(Math.random() * 90) + 10,
-                wholesalePrice: Math.floor(Math.random() * 80) + 8,
-                status: 'active',
-                reference: `REF-00${i}`,
-                brand: ['Generico', 'ZMH', 'SuperTest'][Math.floor(Math.random() * 3)],
-                area: ['Electrónica', 'Hogar', 'Moda', 'Ferretería'][Math.floor(Math.random() * 4)],
-                imageUrl: `https://picsum.photos/seed/fake${i}/400/400`,
-                variations: [
-                    { name: 'S', stock: 10, priceMod: 0, imageWebp: `https://picsum.photos/seed/fake${i}S/400/400` },
-                    { name: 'M', stock: 5, priceMod: 0, imageWebp: `https://picsum.photos/seed/fake${i}M/400/400` }
-                ]
-            };
-            products.push(product);
-            const docRef = db.collection('comercios').doc(commerceId).collection('catalogo').doc(product.id);
-            batch.set(docRef, product);
-        }
-
-        const sysRef = db.collection('comercios').doc(commerceId).collection('_system').doc('catalog');
-        batch.set(sysRef, { compiledCatalog: products, updatedAt: new Date().toISOString() }, { merge: true });
-
-        await batch.commit();
-        res.json({ ok: true, msg: '50 productos inyectados a cc-bodega-mayorista.' });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: err.message });
-    }
-});
-
 // ── Start server ──────────────────────────────────────────────────────────────
 app.listen(port, () => console.log(`[Server] API listening on port ${port}`));
