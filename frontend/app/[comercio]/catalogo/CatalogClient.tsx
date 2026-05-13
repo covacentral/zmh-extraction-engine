@@ -7,7 +7,7 @@ import { getVipClient, getAsesor } from '../../actions/getUserData';
 import StoreHeader from '../../../components/StoreHeader';
 import StoreSection from '../../../components/StoreSection';
 import StoreSectionWrapper from '../../../components/StoreSectionWrapper';
-import StoreCategories from '../../../components/StoreCategories';
+import StoreDualFilter from '../../../components/StoreDualFilter';
 import StoreSectionFilter from '../../../components/StoreSectionFilter';
 
 export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }: any) {
@@ -31,7 +31,10 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
              priceAmount1000: p.normalPrice * 1000,
              description: `${p.description || ''}\nReferencia: ${p.reference || ''}\nMarca: ${p.brand || ''}\nMayorista: $${p.wholesalePrice || p.normalPrice}`,
              imageUrls: p.imageUrl,
-             sectionName: p.area || 'Catálogo'
+             sectionName: p.area || 'Catálogo',
+             category: p.category || '',
+             categoryIcon: p.categoryIcon || '',
+             brand: p.brand || ''
          }));
      }
      return [...whatsappCatalog, ...mappedCompiled];
@@ -75,7 +78,7 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
   const [formData, setFormData] = useState({ name: '', phone: '', datetime: '', address: '', mesaNum: '' });
   const [isASAP, setIsASAP] = useState(isRestaurant);
 
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+
 
   useEffect(() => {
      const vipId = searchParams.get('vip');
@@ -150,18 +153,45 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
     return '';
   };
 
-  // Extract categories (hashtags)
-  const categories = useMemo(() => {
-     const tags = new Set<string>();
+  // Extract categories (from object or legacy hashtags)
+  const categoriesList = useMemo(() => {
+     const catsMap = new Map<string, string>();
      unifiedCatalog.forEach((prod: any) => {
-        const desc = prod.description || '';
-        const matches = desc.match(/#[a-zA-Z0-9_áéíóúñÁÉÍÓÚÑ]+/g);
-        if (matches) {
-           matches.forEach((m: string) => tags.add(m));
-        }
+         // New schema
+         if (prod.category) {
+             catsMap.set(prod.category, prod.categoryIcon || '');
+         } else {
+             // Legacy fallback
+             const desc = prod.description || '';
+             const matches = desc.match(/#[a-zA-Z0-9_áéíóúñÁÉÍÓÚÑ]+/g);
+             if (matches) {
+                 matches.forEach((m: string) => {
+                     const cleanCat = m.replace('#', '');
+                     if (!catsMap.has(cleanCat)) catsMap.set(cleanCat, '');
+                 });
+             }
+         }
      });
-     return Array.from(tags);
+     return Array.from(catsMap.entries()).map(([name, icon]) => ({ name, icon }));
   }, [unifiedCatalog]);
+
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [selectedBrand, setSelectedBrand] = useState<string | null>(null);
+
+  // Extract brands for the selected category
+  const brandsList = useMemo(() => {
+      if (!selectedCategory) return [];
+      const brands = new Set<string>();
+      unifiedCatalog.forEach((prod: any) => {
+          const isMatch = prod.category === selectedCategory || 
+                         (prod.description && prod.description.includes(`#${selectedCategory}`));
+          if (isMatch) {
+              const brand = prod.brand || getProductBrand(prod);
+              if (brand) brands.add(brand);
+          }
+      });
+      return Array.from(brands);
+  }, [unifiedCatalog, selectedCategory]);
 
   // Extract sections (multi-catalog areas)
   const sections = useMemo(() => {
@@ -186,9 +216,18 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
      }
      
      if (selectedCategory) {
-         filtered = filtered.filter((prod: any) => 
-            (prod.description || '').toLowerCase().includes(selectedCategory.toLowerCase())
-         );
+         filtered = filtered.filter((prod: any) => {
+             const isNewSchema = prod.category === selectedCategory;
+             const isLegacy = (prod.description || '').toLowerCase().includes(`#${selectedCategory.toLowerCase()}`) || (prod.description || '').toLowerCase().includes(selectedCategory.toLowerCase());
+             return isNewSchema || isLegacy;
+         });
+     }
+     
+     if (selectedBrand) {
+         filtered = filtered.filter((prod: any) => {
+             const brand = prod.brand || getProductBrand(prod);
+             return brand === selectedBrand;
+         });
      }
      
      if (search) {
@@ -430,16 +469,19 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
              />
           </div>
 
-          {/* CATEGORY FILTERS */}
-          <StoreCategories 
-             categories={categories} 
+          {/* DUAL FILTERS (CATEGORIES & BRANDS) */}
+          <StoreDualFilter 
+             categories={categoriesList} 
              selectedCategory={selectedCategory} 
-             onSelectCategory={(cat: any) => { setSelectedCategory(cat); setVisibleCount(10); }} 
+             onSelectCategory={(cat: any) => { setSelectedCategory(cat); setSelectedBrand(null); setVisibleCount(10); }} 
+             brands={brandsList}
+             selectedBrand={selectedBrand}
+             onSelectBrand={(brand: any) => { setSelectedBrand(brand); setVisibleCount(10); }}
           />
 
           {/* LIST / GRID VIEW */}
           <StoreSectionWrapper 
-              categories={categories}
+              categories={categoriesList}
               filteredProducts={filteredProducts}
               isStoreMode={isStoreMode}
               themeHex={themeHex}

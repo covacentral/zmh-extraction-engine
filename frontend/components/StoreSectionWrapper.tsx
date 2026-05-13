@@ -14,17 +14,18 @@ export default function StoreSectionWrapper({ categories, filteredProducts, rend
         }
 
         // Initialize empty arrays to maintain order
-        categories.forEach((cat: string) => {
-            grouped[cat] = [];
+        categories.forEach((cat: any) => {
+            grouped[cat.name] = [];
         });
         grouped['Otros'] = [];
 
         filteredProducts.forEach((prod: any) => {
             const desc = (prod.description || '').toLowerCase();
+            const prodCat = prod.category;
             let matched = false;
-            categories.forEach((cat: string) => {
-                if (desc.includes(cat.toLowerCase())) {
-                    grouped[cat].push(prod);
+            categories.forEach((cat: any) => {
+                if (prodCat === cat.name || desc.includes(cat.name.toLowerCase())) {
+                    grouped[cat.name].push(prod);
                     matched = true;
                 }
             });
