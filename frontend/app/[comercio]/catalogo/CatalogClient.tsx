@@ -2,6 +2,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { Zap, Store } from 'lucide-react';
 import { getVipClient, getAsesor } from '../../actions/getUserData';
 import StoreHeader from '../../../components/StoreHeader';
 import StoreSection from '../../../components/StoreSection';
@@ -409,15 +410,15 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
                 <div className="flex shrink-0 bg-white/5 p-1 rounded-full border border-white/10 sticky left-0 z-40 backdrop-blur-xl shadow-[4px_0_10px_rgba(0,0,0,0.5)]">
                    <button 
                      onClick={() => setIsStoreMode(false)} 
-                     className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-[10px] font-bold transition-all uppercase tracking-wider ${!isStoreMode ? 'bg-[var(--theme)] text-[var(--text-contrast)] shadow-[0_0_10px_var(--theme)]' : 'text-white/50 hover:text-white'}`}
+                     className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-[10px] font-bold transition-all uppercase tracking-wider ${!isStoreMode ? 'bg-[var(--theme)] text-[var(--text-contrast)] shadow-[0_0_10px_var(--theme)]' : 'text-white/50 hover:text-white'}`}
                    >
-                      ⚡ Rápido
+                      <Zap size={14} /> Rápido
                    </button>
                    <button 
                      onClick={() => setIsStoreMode(true)} 
-                     className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-[10px] font-bold transition-all uppercase tracking-wider ${isStoreMode ? 'bg-[var(--theme)] text-[var(--text-contrast)] shadow-[0_0_10px_var(--theme)]' : 'text-white/50 hover:text-white'}`}
+                     className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-[10px] font-bold transition-all uppercase tracking-wider ${isStoreMode ? 'bg-[var(--theme)] text-[var(--text-contrast)] shadow-[0_0_10px_var(--theme)]' : 'text-white/50 hover:text-white'}`}
                    >
-                      🛍️ Tienda
+                      <Store size={14} /> Tienda
                    </button>
                 </div>
              )}

@@ -27,7 +27,8 @@ export default function InventoryClient({ commerceId, businessName, themeHex, sc
     // Form State
     const [form, setForm] = useState({
         name: '', brand: '', reference: '', description: '', provider: '',
-        costPrice: '', normalPrice: '', wholesalePrice: '', area: isMaster ? '' : scope
+        costPrice: '', normalPrice: '', wholesalePrice: '', area: isMaster ? '' : scope,
+        category: '', categoryIcon: '', distMargin: '', shippingRules: ''
     });
     
     // Default Variation = Parent
@@ -179,7 +180,8 @@ export default function InventoryClient({ commerceId, businessName, themeHex, sc
 
         setForm({
             name: '', brand: '', reference: '', description: '', provider: '',
-            costPrice: '', normalPrice: '', wholesalePrice: '', area: isMaster ? '' : scope
+            costPrice: '', normalPrice: '', wholesalePrice: '', area: isMaster ? '' : scope,
+            category: '', categoryIcon: '', distMargin: '', shippingRules: ''
         });
         setVariations([{ name: 'Estándar', stock: 0, imageWebp: null }]);
         setEditingLocalId(null);
@@ -192,7 +194,9 @@ export default function InventoryClient({ commerceId, businessName, themeHex, sc
             name: prod.name || '', brand: prod.brand || '', reference: prod.reference || '', 
             description: prod.description || '', provider: prod.provider || '',
             costPrice: prod.costPrice || '', normalPrice: prod.normalPrice || '', 
-            wholesalePrice: prod.wholesalePrice || '', area: prod.area || ''
+            wholesalePrice: prod.wholesalePrice || '', area: prod.area || '',
+            category: prod.category || '', categoryIcon: prod.categoryIcon || '', 
+            distMargin: prod.distMargin || '', shippingRules: prod.shippingRules || ''
         });
         
         let loadedVars = prod.variations || [];
@@ -237,7 +241,9 @@ export default function InventoryClient({ commerceId, businessName, themeHex, sc
                 name: draft.name, brand: draft.brand, reference: draft.reference,
                 description: draft.description, provider: draft.provider,
                 costPrice: draft.costPrice, normalPrice: draft.normalPrice, wholesalePrice: draft.wholesalePrice,
-                area: draft.area, variations: uploadedVars,
+                area: draft.area, category: draft.category, categoryIcon: draft.categoryIcon,
+                distMargin: draft.distMargin, shippingRules: draft.shippingRules,
+                variations: uploadedVars,
                 imageUrl: mainImageUrl, status: 'active'
             };
             
@@ -438,6 +444,14 @@ export default function InventoryClient({ commerceId, businessName, themeHex, sc
                                     <label className="text-xs text-white/50 mb-1 block">Referencia (Única Padre)</label>
                                     <input required type="text" value={form.reference} onChange={e => setForm({...form, reference: e.target.value})} className="w-full bg-black border border-white/10 rounded-lg p-3 text-white text-sm outline-none" />
                                 </div>
+                                <div>
+                                    <label className="text-xs text-white/50 mb-1 block">Categoría Principal</label>
+                                    <input required type="text" value={form.category} onChange={e => setForm({...form, category: e.target.value})} className="w-full bg-black border border-white/10 rounded-lg p-3 text-white text-sm outline-none" placeholder="Ej: Televisores" />
+                                </div>
+                                <div>
+                                    <label className="text-xs text-white/50 mb-1 block">Ícono Categoría (Opcional)</label>
+                                    <input type="text" value={form.categoryIcon} onChange={e => setForm({...form, categoryIcon: e.target.value})} className="w-full bg-black border border-white/10 rounded-lg p-3 text-white text-sm outline-none" placeholder="Ej: Tv" />
+                                </div>
                             </div>
 
                             <div className="grid grid-cols-3 gap-3">
@@ -450,8 +464,16 @@ export default function InventoryClient({ commerceId, businessName, themeHex, sc
                                     <input required type="number" value={form.wholesalePrice} onChange={e => setForm({...form, wholesalePrice: e.target.value})} className="w-full bg-black border border-white/10 rounded-lg p-3 text-white text-sm outline-none" />
                                 </div>
                                 <div>
-                                    <label className="text-xs text-white/50 mb-1 block">Detal ($)</label>
+                                    <label className="text-xs text-white/50 mb-1 block">PVP Normal ($)</label>
                                     <input required type="number" value={form.normalPrice} onChange={e => setForm({...form, normalPrice: e.target.value})} className="w-full bg-black border border-white/10 rounded-lg p-3 text-white text-sm outline-none" />
+                                </div>
+                                <div className="col-span-1">
+                                    <label className="text-xs text-white/50 mb-1 block">Margen Afiliado (%)</label>
+                                    <input type="number" value={form.distMargin} onChange={e => setForm({...form, distMargin: e.target.value})} className="w-full bg-black border border-white/10 rounded-lg p-3 text-white text-sm outline-none" placeholder="Ej: 15" />
+                                </div>
+                                <div className="col-span-2">
+                                    <label className="text-xs text-white/50 mb-1 block">Reglas de Envío / Dropship</label>
+                                    <input type="text" value={form.shippingRules} onChange={e => setForm({...form, shippingRules: e.target.value})} className="w-full bg-black border border-white/10 rounded-lg p-3 text-white text-sm outline-none" placeholder="Ej: Envío gratis nacional" />
                                 </div>
                             </div>
 
