@@ -3,6 +3,11 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getVipClient, getAsesor } from '../../actions/getUserData';
+import StoreHeader from '../../../components/StoreHeader';
+import StoreSection from '../../../components/StoreSection';
+import StoreSectionWrapper from '../../../components/StoreSectionWrapper';
+import StoreCategories from '../../../components/StoreCategories';
+import StoreSectionFilter from '../../../components/StoreSectionFilter';
 
 export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }: any) {
   const router = useRouter();
@@ -47,6 +52,20 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
   
   const [cart, setCart] = useState<any[]>([]);
   const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+     try {
+         const savedCart = localStorage.getItem(`cart_${commerceId}`);
+         if (savedCart) setCart(JSON.parse(savedCart));
+     } catch (e) {}
+     setIsMounted(true);
+  }, [commerceId]);
+
+  useEffect(() => {
+     if (isMounted) {
+         localStorage.setItem(`cart_${commerceId}`, JSON.stringify(cart));
+     }
+  }, [cart, isMounted, commerceId]);
   const [showCheckout, setShowCheckout] = useState(false);
   const [selectedVariations, setSelectedVariations] = useState<{[key: string]: number}>({});
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
@@ -328,8 +347,15 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
     <main className="flex flex-col items-center p-4 min-h-screen w-[100vw] overflow-x-hidden relative bg-black font-sans pb-32" style={{ '--theme': themeHex } as any}>
        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[120%] h-64 opacity-20 blur-[100px] pointer-events-none z-0" style={{ backgroundColor: 'var(--theme)' }} />
 
-       <div className="w-full max-w-lg z-10 flex flex-col gap-4 pt-20">
+       <div className="w-full max-w-lg z-10 flex flex-col gap-4 pt-4">
           
+          <StoreHeader 
+             cartTotal={cartTotal} 
+             cartLength={cart.length} 
+             onCheckoutClick={() => setShowCheckout(true)} 
+             themeHex={themeHex} 
+          />
+
           {/* TOP BAR: BACK BUTTON & SEARCH */}
           <div className="flex items-center gap-3 mt-2">
              <button onClick={() => window.history.back()} className="w-10 h-10 flex shrink-0 items-center justify-center bg-white/10 rounded-full text-white hover:bg-white/20 transition-colors">
@@ -377,55 +403,46 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
              </div>
           )}
 
-          {/* DUAL MODE TOGGLE */}
-          {!isRestaurant && (
-             <div className="flex bg-white/5 p-1 rounded-full border border-white/10 mt-2 mx-auto w-max max-w-full">
-                <button 
-                  onClick={() => setIsStoreMode(false)} 
-                  className={`flex items-center gap-2 px-6 py-2 rounded-full text-xs font-bold transition-all ${!isStoreMode ? 'bg-[var(--theme)] text-black shadow-[0_0_15px_var(--theme)]' : 'text-white/50 hover:text-white'}`}
-                >
-                   ⚡ Rápido
-                </button>
-                <button 
-                  onClick={() => setIsStoreMode(true)} 
-                  className={`flex items-center gap-2 px-6 py-2 rounded-full text-xs font-bold transition-all ${isStoreMode ? 'bg-[var(--theme)] text-black shadow-[0_0_15px_var(--theme)]' : 'text-white/50 hover:text-white'}`}
-                >
-                   🛍️ Tienda
-                </button>
-             </div>
-          )}
+          {/* DUAL MODE & SECTION FILTERS ROW */}
+          <div className="flex items-center gap-3 mt-4 w-full overflow-x-auto scrollbar-hide pb-2 -mx-4 px-4 bg-transparent pt-2">
+             {!isRestaurant && (
+                <div className="flex shrink-0 bg-white/5 p-1 rounded-full border border-white/10 sticky left-0 z-40 backdrop-blur-xl shadow-[4px_0_10px_rgba(0,0,0,0.5)]">
+                   <button 
+                     onClick={() => setIsStoreMode(false)} 
+                     className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-[10px] font-bold transition-all uppercase tracking-wider ${!isStoreMode ? 'bg-[var(--theme)] text-[var(--text-contrast)] shadow-[0_0_10px_var(--theme)]' : 'text-white/50 hover:text-white'}`}
+                   >
+                      ⚡ Rápido
+                   </button>
+                   <button 
+                     onClick={() => setIsStoreMode(true)} 
+                     className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-[10px] font-bold transition-all uppercase tracking-wider ${isStoreMode ? 'bg-[var(--theme)] text-[var(--text-contrast)] shadow-[0_0_10px_var(--theme)]' : 'text-white/50 hover:text-white'}`}
+                   >
+                      🛍️ Tienda
+                   </button>
+                </div>
+             )}
+             
+             <StoreSectionFilter 
+                sections={sections} 
+                selectedSection={selectedSection} 
+                onSelectSection={(sec: any) => { setSelectedSection(sec); setVisibleCount(10); }} 
+             />
+          </div>
 
           {/* CATEGORY FILTERS */}
-          {categories.length > 0 && (
-             <div className="flex overflow-x-auto gap-2 mt-2 pb-2 scrollbar-hide -mx-4 px-4">
-                <button onClick={() => { setSelectedCategory(null); setVisibleCount(10); }} className={`shrink-0 px-4 py-1.5 rounded-full text-xs font-bold transition-all border ${!selectedCategory ? 'bg-[var(--theme)] border-[var(--theme)] text-white shadow-[0_0_10px_var(--theme)]' : 'bg-black/40 border-white/10 text-white/50 hover:text-white'}`}>
-                   Todos
-                </button>
-                {categories.map((cat, idx) => (
-                   <button key={idx} onClick={() => { setSelectedCategory(cat); setVisibleCount(10); }} className={`shrink-0 px-4 py-1.5 rounded-full text-xs font-bold transition-all border ${selectedCategory === cat ? 'bg-[var(--theme)] border-[var(--theme)] text-white shadow-[0_0_10px_var(--theme)]' : 'bg-black/40 border-white/10 text-white/50 hover:text-white'}`}>
-                      {cat}
-                   </button>
-                ))}
-             </div>
-          )}
-
-          {/* SECTION FILTERS */}
-          {sections.length > 0 && (
-             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-2">
-                <button onClick={() => { setSelectedSection(null); setVisibleCount(10); }} className={`p-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all border text-center ${!selectedSection ? 'bg-[var(--theme)] text-black border-[var(--theme)] shadow-[0_0_15px_var(--theme)]' : 'bg-black/40 border-white/10 text-white/50 hover:text-white hover:bg-white/5'}`}>
-                   Todo
-                </button>
-                {sections.map((sec, idx) => (
-                   <button key={idx} onClick={() => { setSelectedSection(sec); setVisibleCount(10); }} className={`p-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all border text-center ${selectedSection === sec ? 'bg-[var(--theme)] text-black border-[var(--theme)] shadow-[0_0_15px_var(--theme)]' : 'bg-black/40 border-white/10 text-white/50 hover:text-white hover:bg-white/5'}`}>
-                      {sec}
-                   </button>
-                ))}
-             </div>
-          )}
+          <StoreCategories 
+             categories={categories} 
+             selectedCategory={selectedCategory} 
+             onSelectCategory={(cat: any) => { setSelectedCategory(cat); setVisibleCount(10); }} 
+          />
 
           {/* LIST / GRID VIEW */}
-          <div className={isStoreMode ? "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 mt-4" : "flex flex-col gap-3 mt-2"}>
-             {visibleProducts.map((prod: any) => {
+          <StoreSectionWrapper 
+              categories={categories}
+              filteredProducts={filteredProducts}
+              isStoreMode={isStoreMode}
+              themeHex={themeHex}
+              renderProductCard={(prod: any, forceList: boolean = false) => {
                 const price = getProductPrice(prod, isWholesale);
                 const refCode = getProductRef(prod);
                 const vIdx = selectedVariations[prod.id] || 0;
@@ -442,7 +459,7 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
 
                 const selectedProductInCart = selectedProduct ? cart.find(i => i.id === selectedProduct.id) : null;
 
-                if (isStoreMode) {
+                if (isStoreMode && !forceList) {
                     return (
                        <div key={prod.id} onClick={() => router.push(`/${commerceId}/producto/${prod.id}`)} className={`bg-white/5 hover:bg-white/10 rounded-[2rem] overflow-hidden flex flex-col border border-white/5 transition-all duration-300 cursor-pointer shadow-lg hover:shadow-[0_10px_30px_rgba(0,0,0,0.5)] hover:-translate-y-1 ${isOut ? 'opacity-70' : ''}`}>
                           <div className={`w-full aspect-square bg-zinc-900/50 relative border-b border-white/5 overflow-hidden ${isOut ? 'grayscale opacity-75' : ''}`}>
@@ -598,8 +615,8 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
                       </div>
                    </div>
                 );
-             })}
-          </div>
+             }}
+          />
 
           {/* LOAD MORE */}
           {visibleCount < filteredProducts.length && (
@@ -615,22 +632,6 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
           )}
 
        </div>
-
-       {/* FIXED FLOATING BUTTON */}
-       <AnimatePresence>
-        <motion.div initial={{ y: -100, x: "-50%" }} animate={{ y: 0, x: "-50%" }} className="fixed top-4 left-1/2 z-40 w-[85%] max-w-[320px] flex justify-center">
-           <button 
-             onClick={() => setShowCheckout(true)}
-             className="w-full bg-[var(--theme)] text-white p-4 rounded-full font-bold shadow-[0_10px_30px_rgba(0,0,0,0.6)] border border-white/20 hover:scale-[1.02] active:scale-95 transition-transform flex justify-between items-center"
-           >
-              <div className="flex items-center gap-2">
-                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
-                 <span>Generar Ticket</span>
-              </div>
-              {cart.length > 0 && <span className="bg-white text-black px-3 py-1 rounded-full text-xs font-black shadow-inner shadow-black/20">${cartTotal.toLocaleString('es-CO')}</span>}
-           </button>
-        </motion.div>
-      </AnimatePresence>
 
        {/* CHECKOUT MODAL */}
       <AnimatePresence>
