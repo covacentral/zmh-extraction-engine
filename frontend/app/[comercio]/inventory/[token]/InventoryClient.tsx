@@ -538,7 +538,7 @@ export default function InventoryClient({ commerceId, businessName, themeHex, sc
                                 <Save className="w-4 h-4" /> {editingLocalId ? 'Actualizar Producto en Borradores' : 'Guardar en Borradores'}
                             </button>
                             {editingLocalId && (
-                                <button type="button" onClick={() => {setEditingLocalId(null); setForm({name:'',brand:'',reference:'',description:'',provider:'',costPrice:'',normalPrice:'',wholesalePrice:'',area:isMaster?'':scope}); setVariations([{ name: 'Estándar', stock: 0, imageWebp: null }]);}} className="text-xs text-white/40 hover:text-white mt-1">
+                                <button type="button" onClick={() => {setEditingLocalId(null); setForm({name:'',brand:'',reference:'',description:'',provider:'',costPrice:'',normalPrice:'',wholesalePrice:'',area:isMaster?'':scope, category: '', categoryIcon: '', distMargin: '', shippingRules: ''}); setVariations([{ name: 'Estándar', stock: 0, imageWebp: null }]);}} className="text-xs text-white/40 hover:text-white mt-1">
                                     Cancelar edición
                                 </button>
                             )}
