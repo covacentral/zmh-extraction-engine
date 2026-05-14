@@ -45,7 +45,7 @@ export default function StoreDualFilter({
                     <span className="text-[10px] text-[var(--theme)] uppercase tracking-widest font-black shrink-0 mr-2 flex items-center gap-1"><LucideIcons.Tag size={12}/> Marcas</span>
                     <button 
                         onClick={() => onSelectBrand(null)} 
-                        className={`shrink-0 px-4 py-1.5 rounded-full text-[10px] font-bold transition-all border uppercase tracking-wider ${!selectedBrand ? 'bg-white/20 border-white/30 text-white' : 'bg-black/40 border-white/10 text-white/50 hover:text-white hover:bg-white/5'}`}
+                        className={`shrink-0 px-4 py-1.5 rounded-full text-[10px] font-bold transition-all border uppercase tracking-wider ${!selectedBrand ? 'bg-[var(--theme)] border-[var(--theme)] text-[var(--text-contrast)] shadow-[0_4px_15px_var(--theme)]' : 'bg-black/40 border-white/10 text-white/50 hover:text-white hover:bg-white/5'}`}
                     >
                         Todas
                     </button>
@@ -53,7 +53,7 @@ export default function StoreDualFilter({
                         <button 
                             key={idx} 
                             onClick={() => onSelectBrand(brand)} 
-                            className={`shrink-0 px-4 py-1.5 rounded-full text-[10px] font-bold transition-all border uppercase tracking-wider ${selectedBrand === brand ? 'bg-white/20 border-white/30 text-white' : 'bg-black/40 border-white/10 text-white/50 hover:text-white hover:bg-white/5'}`}
+                            className={`shrink-0 px-4 py-1.5 rounded-full text-[10px] font-bold transition-all border uppercase tracking-wider ${selectedBrand === brand ? 'bg-[var(--theme)] border-[var(--theme)] text-[var(--text-contrast)] shadow-[0_4px_15px_var(--theme)]' : 'bg-black/40 border-white/10 text-white/50 hover:text-white hover:bg-white/5'}`}
                         >
                             {brand}
                         </button>

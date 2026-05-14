@@ -9,6 +9,7 @@ import StoreSection from '../../../components/StoreSection';
 import StoreSectionWrapper from '../../../components/StoreSectionWrapper';
 import StoreDualFilter from '../../../components/StoreDualFilter';
 import StoreSectionFilter from '../../../components/StoreSectionFilter';
+import { getContrastYIQ } from '../../utils/color';
 
 export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }: any) {
   const router = useRouter();
@@ -240,7 +241,7 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
      }
      
      return filtered;
-  }, [whatsappCatalog, search, selectedCategory, selectedSection]);
+  }, [unifiedCatalog, search, selectedCategory, selectedSection, selectedBrand]);
 
   const visibleProducts = filteredProducts.slice(0, visibleCount);
 
@@ -383,8 +384,10 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
 
   const selectedProductInCart = selectedProduct ? cart.find(i => i.id === selectedProduct.id) : null;
 
+  const textContrast = getContrastYIQ(themeHex);
+
   return (
-    <main className="flex flex-col items-center p-4 min-h-screen w-[100vw] overflow-x-hidden relative bg-black font-sans pb-32" style={{ '--theme': themeHex } as any}>
+    <main className="flex flex-col items-center p-4 min-h-screen w-[100vw] overflow-x-hidden relative bg-black font-sans pb-32" style={{ '--theme': themeHex, '--text-contrast': textContrast } as any}>
        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[120%] h-64 opacity-20 blur-[100px] pointer-events-none z-0" style={{ backgroundColor: 'var(--theme)' }} />
 
        <div className="w-full max-w-lg z-10 flex flex-col gap-4 pt-4">

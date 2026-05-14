@@ -25,15 +25,15 @@ export default function StoreSection({ title, products, renderProductCard, theme
             </div>
             
             <div className={expanded 
-                ? "flex flex-col gap-3 px-2" 
+                ? "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 px-2" 
                 : "flex overflow-x-auto gap-4 pb-4 px-2 snap-x snap-mandatory scrollbar-hide"
             }>
                 {visibleProducts.map((prod: any) => (
                     <div 
                         key={prod.id} 
-                        className={expanded ? "" : "w-[45%] sm:w-[30%] md:w-[22%] shrink-0 snap-start"}
+                        className={expanded ? "w-full" : "w-[45%] sm:w-[30%] md:w-[22%] shrink-0 snap-start"}
                     >
-                        {renderProductCard(prod, expanded)}
+                        {renderProductCard(prod, false)}
                     </div>
                 ))}
             </div>
