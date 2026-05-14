@@ -31,7 +31,7 @@ export default function StoreSection({ title, products, renderProductCard, theme
                 {visibleProducts.map((prod: any) => (
                     <div 
                         key={prod.id} 
-                        className={expanded ? "w-full" : "w-[45%] sm:w-[30%] md:w-[22%] shrink-0 snap-start"}
+                        className={expanded ? "w-full" : "w-32 sm:w-40 md:w-48 shrink-0 snap-start"}
                     >
                         {renderProductCard(prod, false)}
                     </div>
