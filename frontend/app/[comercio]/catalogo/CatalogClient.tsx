@@ -9,7 +9,7 @@ import StoreSection from '../../../components/StoreSection';
 import StoreSectionWrapper from '../../../components/StoreSectionWrapper';
 import StoreDualFilter from '../../../components/StoreDualFilter';
 import StoreSectionFilter from '../../../components/StoreSectionFilter';
-import { getContrastYIQ } from '../../utils/color';
+import { getContrastYIQ } from '../../../utils/color';
 
 export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }: any) {
   const router = useRouter();
