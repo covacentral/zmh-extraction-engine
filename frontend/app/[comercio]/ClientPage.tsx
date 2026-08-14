@@ -244,6 +244,47 @@ export default function ClientPage({ commerceId, data, themeHex, RENDER_API }: a
         })()}
 
         {/* ══════════════════════════════════════════════════════════════════
+            MODULE 0 — SOCIAL MEDIA: 4-COLUMN BRAND GRID (top placement)
+        ══════════════════════════════════════════════════════════════════ */}
+        {socials.length > 0 && (
+          <div className="w-full flex flex-col">
+            <SectionLabel label="Redes Sociales" showToggle={false} expanded={true} count={0} onToggle={() => {}} />
+            <div className="grid grid-cols-4 gap-2 w-full">
+              {socials.map((btn: any, i: number) => {
+                const { Icon, networkType } = getSpecs(btn);
+                const href = formatUrl(btn.url, btn.phone);
+                let border = 'border-white/10 hover:border-white/20 bg-white/[0.04]';
+                if (networkType === 'instagram') border = 'border-pink-500/30 hover:border-pink-500/60 bg-gradient-to-br from-purple-950/30 via-pink-950/20 to-transparent';
+                else if (networkType === 'tiktok') border = 'border-zinc-600/50 hover:border-zinc-400/50 bg-white/[0.03]';
+                else if (networkType === 'facebook') border = 'border-blue-500/30 hover:border-blue-500/60 bg-blue-950/20';
+                else if (networkType === 'youtube') border = 'border-red-500/30 hover:border-red-500/60 bg-red-950/20';
+                else if (networkType === 'twitter' || networkType === 'x') border = 'border-sky-500/30 hover:border-sky-500/60 bg-sky-950/20';
+                else if (networkType === 'pinterest') border = 'border-red-600/30 hover:border-red-600/60 bg-red-950/20';
+                return (
+                  <motion.a
+                    key={i}
+                    initial={{ opacity: 0, scale: 0.88 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: i * 0.03 }}
+                    href={href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={`flex flex-col items-center justify-center gap-1.5 py-3 px-1 rounded-2xl backdrop-blur border transition-all group hover:scale-[1.04] active:scale-[0.96] text-center ${border}`}
+                  >
+                    <div className="w-8 h-8 rounded-xl bg-white/10 border border-white/10 flex items-center justify-center group-hover:scale-105 transition-transform">
+                      <Icon />
+                    </div>
+                    <span className="text-[10px] font-bold text-white/80 group-hover:text-white transition-colors leading-tight line-clamp-1 w-full px-0.5">
+                      {btn.name}
+                    </span>
+                  </motion.a>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* ══════════════════════════════════════════════════════════════════
             MODULE 1 — CHANNELS: HORIZONTAL STORY CAROUSEL (no vertical list)
         ══════════════════════════════════════════════════════════════════ */}
         {channels.length > 0 && (
@@ -317,114 +358,78 @@ export default function ClientPage({ commerceId, data, themeHex, RENDER_API }: a
 
 
         {/* ══════════════════════════════════════════════════════════════════
-            MODULE 2 — DIRECT CONTACTS: FULL-WIDTH ROWS (name + role always visible)
+            MODULE 2 — DIRECT CONTACTS: VERTICAL SCROLL CAROUSEL (bounded height)
         ══════════════════════════════════════════════════════════════════ */}
-        {waChats.length > 0 && (() => {
-          const isExpanded = Boolean(expanded['wa']) || Boolean(searchQuery);
-          const show = isExpanded ? waChats : waChats.slice(0, WA_SHOW);
-          const needToggle = waChats.length > WA_SHOW;
-          return (
-            <div className="w-full flex flex-col">
-              <SectionLabel label="Atencion Directa & Asesores" showToggle={needToggle && !searchQuery} expanded={isExpanded} count={waChats.length} onToggle={() => toggle('wa')} />
-              <div className="flex flex-col gap-2.5 w-full">
-                {show.map((btn: any, i: number) => {
-                  const { avatarUrl, hasAvatar } = getSpecs(btn);
-                  const href = formatUrl(btn.url, btn.phone);
-                  return (
-                    <motion.a
-                      key={i}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: i * 0.04 }}
-                      href={href}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="w-full flex items-center gap-3 p-3.5 rounded-2xl bg-zinc-900/80 backdrop-blur border border-green-500/20 hover:border-green-500/50 transition-all group hover:scale-[1.01] active:scale-[0.99]"
-                    >
-                      {/* Avatar — always 48px, no flex shrinking */}
-                      <div className="relative shrink-0">
-                        <div className="w-12 h-12 rounded-full overflow-hidden bg-zinc-800 border-2 border-green-500/30">
-                          {hasAvatar ? (
-                            <img src={avatarUrl} alt={btn.name} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center bg-green-950">
-                              <WhatsappIcon size={20} />
-                            </div>
-                          )}
-                        </div>
-                        {/* Online indicator */}
-                        <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-black" />
-                      </div>
-
-                      {/* Text — grows to fill remaining space, NO truncate so name/role is always readable */}
-                      <div className="flex flex-col flex-1 min-w-0">
-                        <span className="text-sm font-bold text-white group-hover:text-green-300 transition-colors leading-snug break-words">
-                          {btn.name}
-                        </span>
-                        <span className="text-xs text-white/55 mt-0.5 leading-snug break-words">
-                          {btn.role || 'Chat Directo de WhatsApp'}
-                        </span>
-                      </div>
-
-                      {/* Action button */}
-                      <a
-                        href={href}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-full bg-green-500/20 hover:bg-green-500 text-green-400 hover:text-black border border-green-500/40 text-[11px] font-bold uppercase tracking-wide transition-all"
-                      >
-                        <MessageCircleIcon />
-                        <span>Escribir</span>
-                      </a>
-                    </motion.a>
-                  );
-                })}
-              </div>
-            </div>
-          );
-        })()}
-
-        {/* ══════════════════════════════════════════════════════════════════
-            MODULE 3 — SOCIAL MEDIA: 4-COLUMN BRAND GRID
-        ══════════════════════════════════════════════════════════════════ */}
-        {socials.length > 0 && (
+        {waChats.length > 0 && (
           <div className="w-full flex flex-col">
-            <SectionLabel label="Redes Sociales" showToggle={false} expanded={true} count={0} onToggle={() => {}} />
-            <div className="grid grid-cols-4 gap-2 w-full">
-              {socials.map((btn: any, i: number) => {
-                const { Icon, networkType } = getSpecs(btn);
+            <div className="flex items-center justify-between px-1 mb-2">
+              <h2 className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Atencion Directa & Asesores</h2>
+              {waChats.length > 2 && (
+                <span className="text-[10px] text-white/30 font-medium">Desplaza ↕</span>
+              )}
+            </div>
+
+            {/* Vertical scroll container — shows ~2.5 cards, user scrolls to see rest */}
+            <div
+              className="w-full flex flex-col gap-2.5 overflow-y-auto"
+              style={{
+                maxHeight: '232px',
+                scrollbarWidth: 'none',
+                WebkitOverflowScrolling: 'touch',
+              } as any}
+            >
+              {waChats.map((btn: any, i: number) => {
+                const { avatarUrl, hasAvatar } = getSpecs(btn);
                 const href = formatUrl(btn.url, btn.phone);
-                let border = 'border-white/10 hover:border-white/20 bg-white/[0.04]';
-                if (networkType === 'instagram') border = 'border-pink-500/30 hover:border-pink-500/60 bg-gradient-to-br from-purple-950/30 via-pink-950/20 to-transparent';
-                else if (networkType === 'tiktok') border = 'border-zinc-600/50 hover:border-zinc-400/50 bg-white/[0.03]';
-                else if (networkType === 'facebook') border = 'border-blue-500/30 hover:border-blue-500/60 bg-blue-950/20';
-                else if (networkType === 'youtube') border = 'border-red-500/30 hover:border-red-500/60 bg-red-950/20';
-                else if (networkType === 'twitter' || networkType === 'x') border = 'border-sky-500/30 hover:border-sky-500/60 bg-sky-950/20';
-                else if (networkType === 'pinterest') border = 'border-red-600/30 hover:border-red-600/60 bg-red-950/20';
                 return (
-                  <motion.a
+                  <a
                     key={i}
-                    initial={{ opacity: 0, scale: 0.88 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ delay: i * 0.03 }}
                     href={href}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className={`flex flex-col items-center justify-center gap-1.5 py-3 px-1 rounded-2xl backdrop-blur border transition-all group hover:scale-[1.04] active:scale-[0.96] text-center ${border}`}
+                    className="w-full flex items-center gap-3 p-3.5 rounded-2xl bg-zinc-900/80 backdrop-blur border border-green-500/20 hover:border-green-500/50 transition-all group hover:scale-[1.01] active:scale-[0.99] shrink-0"
                   >
-                    <div className="w-8 h-8 rounded-xl bg-white/10 border border-white/10 flex items-center justify-center group-hover:scale-105 transition-transform">
-                      <Icon />
+                    {/* Avatar 48px with online dot */}
+                    <div className="relative shrink-0">
+                      <div className="w-12 h-12 rounded-full overflow-hidden bg-zinc-800 border-2 border-green-500/30">
+                        {hasAvatar ? (
+                          <img src={avatarUrl} alt={btn.name} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center bg-green-950">
+                            <WhatsappIcon size={20} />
+                          </div>
+                        )}
+                      </div>
+                      <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-black" />
                     </div>
-                    <span className="text-[10px] font-bold text-white/80 group-hover:text-white transition-colors leading-tight line-clamp-1 w-full px-0.5">
-                      {btn.name}
-                    </span>
-                  </motion.a>
+
+                    {/* Name + role — never truncated */}
+                    <div className="flex flex-col flex-1 min-w-0">
+                      <span className="text-sm font-bold text-white group-hover:text-green-300 transition-colors leading-snug break-words">
+                        {btn.name}
+                      </span>
+                      <span className="text-xs text-white/55 mt-0.5 leading-snug break-words">
+                        {btn.role || 'Chat Directo de WhatsApp'}
+                      </span>
+                    </div>
+
+                    {/* Write button */}
+                    <div className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-full bg-green-500/20 group-hover:bg-green-500 text-green-400 group-hover:text-black border border-green-500/40 text-[11px] font-bold uppercase tracking-wide transition-all">
+                      <MessageCircleIcon />
+                      <span>Escribir</span>
+                    </div>
+                  </a>
                 );
               })}
+              {/* Bottom fade gradient to hint at more content */}
+              {waChats.length > 2 && (
+                <div className="sticky bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-black to-transparent pointer-events-none -mt-8" />
+              )}
             </div>
           </div>
         )}
+
+
 
         {/* ══════════════════════════════════════════════════════════════════
             MODULE 4 — WEB LINKS: 2-COLUMN GRID WITH FULL TEXT
