@@ -32,11 +32,15 @@ const TwitterIcon = () => (
 );
 
 const GlobeIcon = () => (
-  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="stroke-indigo-400"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="stroke-indigo-400"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
 );
 
 const ChevronRightIcon = () => (
   <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+);
+
+const MessageCircleIcon = () => (
+  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg>
 );
 
 // URL Sanitizer: Ensures links like 'wa.me/57...' have https:// prepended
@@ -133,130 +137,21 @@ export default function ClientPage({ commerceId, data, themeHex, RENDER_API }: a
   const socialButtons = buttons.filter((b: any) => getNetworkSpecs(b).linkIntent === 'social');
   const webButtons = buttons.filter((b: any) => getNetworkSpecs(b).linkIntent === 'web');
 
-  const sectionsList = [
-    { title: 'Canales de Novedades', items: channelButtons },
-    { title: 'Atencion Directa', items: waChatButtons },
-    { title: 'Redes Sociales', items: socialButtons },
-    { title: 'Sitios & Navegacion Web', items: webButtons },
-  ].filter(s => s.items.length > 0);
-
-  const hasSections = sectionsList.length > 1;
-
-  const renderButtonCard = (btn: any, index: number) => {
-     const { Icon, avatarUrl, hasWAAvatar, linkIntent } = getNetworkSpecs(btn);
-     const href = formatUrl(btn.url, btn.phone);
-
-     // Specialized layout for WhatsApp Channels (Prominent Avatar on the Left)
-     if (linkIntent === 'channel' && hasWAAvatar && avatarUrl) {
-        return (
-           <motion.a 
-              key={index} 
-              initial={{ opacity: 0, y: 15 }} 
-              animate={{ opacity: 1, y: 0 }} 
-              transition={{ delay: index * 0.05 + 0.1 }} 
-              href={href} 
-              target="_blank" 
-              rel="noopener noreferrer" 
-              className="w-full flex items-center justify-between p-3.5 sm:p-4 rounded-2xl backdrop-blur-xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all shadow-[0_4px_20px_rgba(0,0,0,0.4)] hover:shadow-[0_0_25px_var(--theme)] group hover:scale-[1.01] active:scale-[0.99] gap-3.5"
-           >
-              {/* Prominent Large Avatar on Left */}
-              <div className="w-13 h-13 sm:w-14 sm:h-14 rounded-2xl overflow-hidden shrink-0 bg-zinc-900 border-2 border-white/20 shadow-lg relative group-hover:scale-105 transition-transform">
-                 <img 
-                   src={avatarUrl} 
-                   alt={btn.name} 
-                   className="w-full h-full object-cover" 
-                   onError={(e) => (e.currentTarget.style.display = 'none')} 
-                 />
-                 <div className="absolute bottom-0 right-0 p-0.5 bg-black/80 rounded-tl-lg backdrop-blur-sm">
-                    <WhatsappIcon />
-                 </div>
-              </div>
-
-              <div className="flex flex-col min-w-0 flex-1">
-                 <div className="flex items-center gap-2">
-                    <span className="text-sm sm:text-base font-bold text-white group-hover:text-[var(--theme)] transition-colors truncate leading-snug">
-                       {btn.name}
-                    </span>
-                    <span className="text-[10px] uppercase font-extrabold tracking-wider px-2 py-0.5 rounded-full bg-green-500/20 text-green-400 border border-green-500/30 shrink-0">
-                       Canal
-                    </span>
-                 </div>
-                 {btn.role && (
-                    <span className="text-xs font-medium text-white/60 truncate mt-1">
-                       {btn.role}
-                    </span>
-                 )}
-              </div>
-
-              <div className="w-8 h-8 rounded-full flex items-center justify-center text-white/40 group-hover:text-white group-hover:translate-x-0.5 transition-all shrink-0 bg-white/5 group-hover:bg-white/10">
-                 <ChevronRightIcon />
-              </div>
-           </motion.a>
-        );
-     }
-
-     // Standard Full-Width Glass Card for Chats, Socials, and Web Links
-     return (
-        <motion.a 
-           key={index} 
-           initial={{ opacity: 0, y: 15 }} 
-           animate={{ opacity: 1, y: 0 }} 
-           transition={{ delay: index * 0.05 + 0.1 }} 
-           href={href} 
-           target="_blank" 
-           rel="noopener noreferrer" 
-           className="w-full flex items-center justify-between p-3.5 sm:p-4 rounded-2xl backdrop-blur-xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all shadow-[0_4px_20px_rgba(0,0,0,0.4)] hover:shadow-[0_0_25px_var(--theme)] group hover:scale-[1.01] active:scale-[0.99] gap-3"
-        >
-           <div className="flex items-center gap-3.5 min-w-0 flex-1">
-              <div className="shrink-0 bg-white/10 border border-white/15 rounded-xl flex items-center justify-center w-10 h-10 shadow-sm group-hover:scale-105 group-hover:bg-white/20 transition-all">
-                 <Icon />
-              </div>
-              <div className="flex flex-col min-w-0 flex-1">
-                 <span className="text-sm sm:text-base font-bold text-white group-hover:text-[var(--theme)] transition-colors truncate leading-snug">
-                    {btn.name}
-                 </span>
-                 {btn.role && (
-                    <span className="text-xs font-medium text-white/50 truncate mt-0.5">
-                       {btn.role}
-                    </span>
-                 )}
-              </div>
-           </div>
-
-           <div className="flex items-center gap-2 shrink-0">
-              {linkIntent === 'wa_chat' && hasWAAvatar && avatarUrl && (
-                 <div className="w-9 h-9 rounded-full overflow-hidden shrink-0 bg-zinc-900 border border-white/20 shadow-md">
-                    <img src={avatarUrl} alt={btn.name} className="w-full h-full object-cover" onError={(e) => (e.currentTarget.style.display = 'none')} />
-                 </div>
-              )}
-              {linkIntent === 'web' && (
-                 <span className="text-[10px] uppercase font-bold tracking-wider text-white/40 bg-white/5 px-2 py-1 rounded-md border border-white/10 hidden sm:inline-block">
-                    Web
-                 </span>
-              )}
-              <div className="w-7 h-7 rounded-full flex items-center justify-center text-white/30 group-hover:text-white group-hover:translate-x-0.5 transition-all">
-                 <ChevronRightIcon />
-              </div>
-           </div>
-        </motion.a>
-     );
-  };
-
   return (
     <main 
-      className="flex flex-col items-center p-4 sm:p-12 min-h-screen w-full relative bg-black font-sans pb-32"
+      className="flex flex-col items-center px-3.5 py-6 sm:px-8 sm:py-12 min-h-screen w-full relative bg-black font-sans pb-28 overflow-x-hidden"
       style={{ '--theme': themeHex } as any}
     >
-      {/* Glow aura background */}
-      <div className="absolute top-10 left-1/2 -translate-x-1/2 w-[120%] h-96 opacity-35 blur-[120px] pointer-events-none transition-colors duration-1000 z-0" style={{ backgroundColor: 'var(--theme)' }} />
+      {/* Ambient Glow Aura */}
+      <div className="absolute top-6 left-1/2 -translate-x-1/2 w-[120%] h-80 opacity-30 blur-[100px] pointer-events-none transition-colors duration-1000 z-0" style={{ backgroundColor: 'var(--theme)' }} />
 
-      <div className="w-full max-w-md flex-col items-center flex gap-6 z-10">
+      <div className="w-full max-w-md flex-col items-center flex gap-5 z-10">
         
         {/* HERO HEADER */}
-        <div className="w-full flex flex-col items-center text-center mt-6 gap-3">
+        <div className="w-full flex flex-col items-center text-center mt-2 sm:mt-4 gap-2.5">
           <div className="relative">
-             <div className="absolute inset-0 rounded-full blur-xl opacity-60 pointer-events-none" style={{ backgroundColor: 'var(--theme)' }} />
-             <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full overflow-hidden shrink-0 shadow-2xl border-2 border-white/20 relative z-10 bg-zinc-950">
+             <div className="absolute inset-0 rounded-full blur-xl opacity-50 pointer-events-none" style={{ backgroundColor: 'var(--theme)' }} />
+             <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden shrink-0 shadow-2xl border-2 border-white/20 relative z-10 bg-zinc-950">
                <img 
                  src={`${RENDER_API}/api/avatar/${avatarJid}`} 
                  alt={businessName} 
@@ -266,7 +161,7 @@ export default function ClientPage({ commerceId, data, themeHex, RENDER_API }: a
              </div>
           </div>
 
-          <h1 className="text-2xl sm:text-3xl font-black text-white leading-tight drop-shadow-md tracking-tight mt-1">
+          <h1 className="text-xl sm:text-2xl font-black text-white leading-tight drop-shadow-md tracking-tight px-2">
             {businessName}
           </h1>
         </div>
@@ -281,21 +176,21 @@ export default function ClientPage({ commerceId, data, themeHex, RENDER_API }: a
 
            const buttonContent = (
               <div 
-                 className="w-full p-4 sm:p-5 rounded-2xl font-black text-center shadow-[0_10px_35px_rgba(0,0,0,0.6)] border border-white/20 hover:scale-[1.02] active:scale-[0.98] transition-all flex justify-between items-center group cursor-pointer"
+                 className="w-full p-4 rounded-2xl font-black text-center shadow-[0_8px_30px_rgba(0,0,0,0.6)] border border-white/20 hover:scale-[1.01] active:scale-[0.99] transition-all flex justify-between items-center group cursor-pointer"
                  style={{ backgroundColor: 'var(--theme)', color: contrastColor }}
               >
-                 <div className="flex items-center gap-3" style={{ color: contrastColor }}>
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
-                    <span className="text-base sm:text-lg tracking-tight" style={{ color: contrastColor }}>{buttonText}</span>
+                 <div className="flex items-center gap-2.5 min-w-0" style={{ color: contrastColor }}>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                    <span className="text-sm sm:text-base tracking-tight truncate" style={{ color: contrastColor }}>{buttonText}</span>
                  </div>
-                 <div className="w-8 h-8 rounded-full flex items-center justify-center transition-colors" style={{ backgroundColor: contrastColor === 'black' ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.2)', color: contrastColor }}>
+                 <div className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 transition-colors" style={{ backgroundColor: contrastColor === 'black' ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.2)', color: contrastColor }}>
                     <ChevronRightIcon />
                  </div>
               </div>
            );
 
            return (
-              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="w-full">
+              <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="w-full">
                  {isExternal ? (
                     <a href={buttonUrl} target="_blank" rel="noopener noreferrer">
                        {buttonContent}
@@ -309,31 +204,206 @@ export default function ClientPage({ commerceId, data, themeHex, RENDER_API }: a
            );
         })()}
 
-        {/* BUTTONS LIST / CATEGORIZED NAVIGATION */}
-        <div className="w-full flex flex-col gap-6 mt-1">
-           {hasSections ? (
-              sectionsList.map((sec, secIdx) => (
-                 <div key={secIdx} className="w-full flex flex-col gap-2.5">
-                    <h2 className="text-[11px] font-bold text-white/40 uppercase tracking-widest px-1">
-                       {sec.title}
-                    </h2>
-                    <div className="w-full flex flex-col gap-2.5">
-                       {sec.items.map((btn: any, i: number) => renderButtonCard(btn, secIdx * 10 + i))}
-                    </div>
-                 </div>
-              ))
-           ) : (
+        {/* DIFFERENTIATED CONTENT PATTERNS */}
+
+        {/* PATTERN 1: WHATSAPP CHANNELS / BROADCASTS */}
+        {channelButtons.length > 0 && (
+           <div className="w-full flex flex-col gap-2.5">
+              <h2 className="text-[10px] font-bold text-white/40 uppercase tracking-widest px-1">
+                 Canales de Novedades
+              </h2>
               <div className="w-full flex flex-col gap-2.5">
-                 {buttons.map((btn: any, i: number) => renderButtonCard(btn, i))}
+                 {channelButtons.map((btn: any, index: number) => {
+                    const { avatarUrl, hasWAAvatar } = getNetworkSpecs(btn);
+                    const href = formatUrl(btn.url, btn.phone);
+                    return (
+                       <motion.a
+                          key={index}
+                          initial={{ opacity: 0, y: 15 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: index * 0.04 + 0.15 }}
+                          href={href}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="w-full flex items-center justify-between p-3 sm:p-3.5 rounded-2xl backdrop-blur-xl bg-white/[0.06] hover:bg-white/[0.1] border border-green-500/30 transition-all shadow-[0_4px_20px_rgba(0,0,0,0.5)] hover:shadow-[0_0_20px_rgba(34,197,94,0.3)] group hover:scale-[1.01] active:scale-[0.99] gap-3"
+                       >
+                          {/* Featured Large Channel Avatar on the Left */}
+                          {hasWAAvatar && avatarUrl ? (
+                             <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl overflow-hidden shrink-0 bg-zinc-900 border border-green-500/40 shadow-md relative">
+                                <img src={avatarUrl} alt={btn.name} className="w-full h-full object-cover" onError={(e) => (e.currentTarget.style.display = 'none')} />
+                                <div className="absolute bottom-0 right-0 p-0.5 bg-black/80 rounded-tl-md">
+                                   <WhatsappIcon />
+                                </div>
+                             </div>
+                          ) : (
+                             <div className="w-11 h-11 rounded-xl bg-green-500/20 border border-green-500/30 flex items-center justify-center shrink-0">
+                                <WhatsappIcon />
+                             </div>
+                          )}
+
+                          <div className="flex flex-col min-w-0 flex-1">
+                             <div className="flex items-center gap-1.5 min-w-0">
+                                <span className="text-xs sm:text-sm font-bold text-white group-hover:text-green-400 transition-colors truncate leading-snug">
+                                   {btn.name}
+                                </span>
+                                <span className="text-[9px] uppercase font-extrabold tracking-wider px-1.5 py-0.5 rounded-md bg-green-500/20 text-green-400 border border-green-500/30 shrink-0">
+                                   Canal
+                                </span>
+                             </div>
+                             {btn.role && (
+                                <span className="text-[11px] font-medium text-white/60 truncate mt-0.5">
+                                   {btn.role}
+                                </span>
+                             )}
+                          </div>
+
+                          <div className="w-7 h-7 rounded-full flex items-center justify-center text-white/40 group-hover:text-white transition-all shrink-0 bg-white/5 group-hover:bg-white/10">
+                             <ChevronRightIcon />
+                          </div>
+                       </motion.a>
+                    );
+                 })}
               </div>
-           )}
-        </div>
+           </div>
+        )}
+
+        {/* PATTERN 2: DIRECT WHATSAPP CHATS / ATENCION */}
+        {waChatButtons.length > 0 && (
+           <div className="w-full flex flex-col gap-2.5">
+              <h2 className="text-[10px] font-bold text-white/40 uppercase tracking-widest px-1">
+                 Atencion & Chat Directo
+              </h2>
+              <div className="w-full flex flex-col gap-2">
+                 {waChatButtons.map((btn: any, index: number) => {
+                    const href = formatUrl(btn.url, btn.phone);
+                    return (
+                       <motion.a
+                          key={index}
+                          initial={{ opacity: 0, y: 15 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: index * 0.04 + 0.2 }}
+                          href={href}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="w-full flex items-center justify-between p-3 sm:p-3.5 rounded-2xl backdrop-blur-xl bg-gradient-to-r from-green-950/40 via-white/[0.04] to-white/[0.02] border border-green-500/25 hover:border-green-500/50 transition-all shadow-[0_4px_20px_rgba(0,0,0,0.4)] group hover:scale-[1.01] active:scale-[0.99] gap-3"
+                       >
+                          <div className="flex items-center gap-3 min-w-0 flex-1">
+                             <div className="shrink-0 bg-green-500/20 border border-green-500/30 rounded-xl flex items-center justify-center w-10 h-10 shadow-sm group-hover:bg-green-500/30 transition-all">
+                                <WhatsappIcon />
+                             </div>
+                             <div className="flex flex-col min-w-0 flex-1">
+                                <span className="text-xs sm:text-sm font-bold text-white group-hover:text-green-400 transition-colors truncate leading-snug">
+                                   {btn.name}
+                                </span>
+                                {btn.role && (
+                                   <span className="text-[11px] font-medium text-white/50 truncate mt-0.5">
+                                      {btn.role}
+                                   </span>
+                                )}
+                             </div>
+                          </div>
+
+                          <div className="flex items-center gap-1.5 text-[10px] uppercase font-bold tracking-wider px-2.5 py-1 rounded-full bg-green-500/20 text-green-400 border border-green-500/40 shrink-0 group-hover:bg-green-500 group-hover:text-black transition-colors">
+                             <MessageCircleIcon />
+                             <span>Escribir</span>
+                          </div>
+                       </motion.a>
+                    );
+                 })}
+              </div>
+           </div>
+        )}
+
+        {/* PATTERN 3: SOCIAL MEDIA (COMPACT 2-COLUMN GRID) */}
+        {socialButtons.length > 0 && (
+           <div className="w-full flex flex-col gap-2.5">
+              <h2 className="text-[10px] font-bold text-white/40 uppercase tracking-widest px-1">
+                 Redes Sociales
+              </h2>
+              <div className="grid grid-cols-2 gap-2.5 w-full">
+                 {socialButtons.map((btn: any, index: number) => {
+                    const { Icon } = getNetworkSpecs(btn);
+                    const href = formatUrl(btn.url, btn.phone);
+                    return (
+                       <motion.a
+                          key={index}
+                          initial={{ opacity: 0, scale: 0.95 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          transition={{ delay: index * 0.04 + 0.25 }}
+                          href={href}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="w-full flex items-center gap-2.5 p-3 rounded-2xl backdrop-blur-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 transition-all shadow-sm group hover:scale-[1.02] active:scale-[0.98] min-w-0"
+                       >
+                          <div className="shrink-0 bg-white/10 border border-white/15 rounded-xl flex items-center justify-center w-8 h-8 shadow-sm group-hover:scale-105 transition-all">
+                             <Icon />
+                          </div>
+                          <span className="text-xs sm:text-sm font-bold text-white/90 group-hover:text-white transition-colors truncate">
+                             {btn.name}
+                          </span>
+                       </motion.a>
+                    );
+                 })}
+              </div>
+           </div>
+        )}
+
+        {/* PATTERN 4: WEB PLATFORMS & OTHER LINKS */}
+        {webButtons.length > 0 && (
+           <div className="w-full flex flex-col gap-2.5">
+              <h2 className="text-[10px] font-bold text-white/40 uppercase tracking-widest px-1">
+                 Sitios & Navegacion Web
+              </h2>
+              <div className="w-full flex flex-col gap-2">
+                 {webButtons.map((btn: any, index: number) => {
+                    const href = formatUrl(btn.url, btn.phone);
+                    return (
+                       <motion.a
+                          key={index}
+                          initial={{ opacity: 0, y: 15 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: index * 0.04 + 0.3 }}
+                          href={href}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="w-full flex items-center justify-between p-3 sm:p-3.5 rounded-2xl backdrop-blur-xl bg-white/[0.03] hover:bg-white/[0.07] border border-indigo-500/25 hover:border-indigo-500/45 transition-all shadow-sm group hover:scale-[1.01] active:scale-[0.99] gap-3"
+                       >
+                          <div className="flex items-center gap-3 min-w-0 flex-1">
+                             <div className="shrink-0 bg-indigo-500/15 border border-indigo-500/25 rounded-xl flex items-center justify-center w-10 h-10 shadow-sm group-hover:scale-105 transition-all">
+                                <GlobeIcon />
+                             </div>
+                             <div className="flex flex-col min-w-0 flex-1">
+                                <span className="text-xs sm:text-sm font-bold text-white group-hover:text-indigo-300 transition-colors truncate leading-snug">
+                                   {btn.name}
+                                </span>
+                                {btn.role && (
+                                   <span className="text-[11px] font-medium text-white/50 truncate mt-0.5">
+                                      {btn.role}
+                                   </span>
+                                )}
+                             </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 shrink-0">
+                             <span className="text-[9px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                                Web
+                             </span>
+                             <div className="w-6 h-6 rounded-full flex items-center justify-center text-white/30 group-hover:text-white transition-all">
+                                <ChevronRightIcon />
+                             </div>
+                          </div>
+                       </motion.a>
+                    );
+                 })}
+              </div>
+           </div>
+        )}
 
         {/* PROMOS */}
         {promos.length > 0 && (
-           <div className="w-full flex flex-col gap-4 mt-2">
+           <div className="w-full flex flex-col gap-3 mt-1">
              {promos.map((promoId: string, idx: number) => (
-               <motion.div key={idx} initial={{ opacity: 0, y: 25 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 + (idx * 0.1) }} className="w-full aspect-square rounded-3xl overflow-hidden relative shadow-2xl ring-1 ring-white/10">
+               <motion.div key={idx} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 + (idx * 0.1) }} className="w-full aspect-square rounded-3xl overflow-hidden relative shadow-2xl ring-1 ring-white/10">
                  <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent pointer-events-none z-10" />
                  <img 
                    src={`${RENDER_API}/api/avatar/${promoId}?timestamp=${new Date().getTime()}`} 
