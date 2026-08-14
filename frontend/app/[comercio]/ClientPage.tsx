@@ -40,7 +40,11 @@ const ChevronRightIcon = () => (
 );
 
 const MessageCircleIcon = () => (
-  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg>
+  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg>
+);
+
+const VerifiedIcon = () => (
+  <svg viewBox="0 0 24 24" width="14" height="14" className="fill-green-400 shrink-0"><path d="M23 12l-2.44-2.79.34-3.69-3.61-.82-1.89-3.2L12 2.96 8.6 1.5 6.71 4.7l-3.61.81.34 3.7L1 12l2.44 2.79-.34 3.7 3.61.82 1.89 3.2 3.4-1.47 3.4 1.46 1.89-3.19 3.61-.82-.34-3.69L23 12zm-12.91 4.72l-3.8-3.81 1.48-1.48 2.32 2.33 5.85-5.87 1.48 1.48-7.33 7.35z"/></svg>
 );
 
 // URL Sanitizer: Ensures links like 'wa.me/57...' have https:// prepended
@@ -128,7 +132,7 @@ export default function ClientPage({ commerceId, data, themeHex, RENDER_API }: a
        }
      }
 
-     return { Icon, avatarUrl, hasWAAvatar, linkIntent };
+     return { Icon, avatarUrl, hasWAAvatar, linkIntent, networkType };
   };
 
   // Group buttons logically by intent for clean layout hierarchy
@@ -204,15 +208,13 @@ export default function ClientPage({ commerceId, data, themeHex, RENDER_API }: a
            );
         })()}
 
-        {/* DIFFERENTIATED CONTENT PATTERNS */}
-
-        {/* PATTERN 1: WHATSAPP CHANNELS / BROADCASTS */}
+        {/* COMPONENT 1: WHATSAPP CHANNELS / BROADCAST SHOWCASE CARDS */}
         {channelButtons.length > 0 && (
            <div className="w-full flex flex-col gap-2.5">
               <h2 className="text-[10px] font-bold text-white/40 uppercase tracking-widest px-1">
                  Canales de Novedades
               </h2>
-              <div className="w-full flex flex-col gap-2.5">
+              <div className="w-full flex flex-col gap-3">
                  {channelButtons.map((btn: any, index: number) => {
                     const { avatarUrl, hasWAAvatar } = getNetworkSpecs(btn);
                     const href = formatUrl(btn.url, btn.phone);
@@ -225,40 +227,47 @@ export default function ClientPage({ commerceId, data, themeHex, RENDER_API }: a
                           href={href}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="w-full flex items-center justify-between p-3 sm:p-3.5 rounded-2xl backdrop-blur-xl bg-white/[0.06] hover:bg-white/[0.1] border border-green-500/30 transition-all shadow-[0_4px_20px_rgba(0,0,0,0.5)] hover:shadow-[0_0_20px_rgba(34,197,94,0.3)] group hover:scale-[1.01] active:scale-[0.99] gap-3"
+                          className="w-full flex items-center justify-between p-3.5 sm:p-4 rounded-2xl backdrop-blur-xl bg-gradient-to-r from-green-950/60 via-zinc-900/90 to-zinc-950 border border-green-500/30 transition-all shadow-[0_4px_25px_rgba(0,0,0,0.6)] hover:border-green-500/60 hover:shadow-[0_0_25px_rgba(34,197,94,0.3)] group hover:scale-[1.01] active:scale-[0.99] gap-3.5"
                        >
-                          {/* Featured Large Channel Avatar on the Left */}
+                          {/* Large Channel Hero Avatar on the Left */}
                           {hasWAAvatar && avatarUrl ? (
-                             <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl overflow-hidden shrink-0 bg-zinc-900 border border-green-500/40 shadow-md relative">
+                             <div className="w-13 h-13 sm:w-14 sm:h-14 rounded-2xl overflow-hidden shrink-0 bg-zinc-900 border-2 border-green-500/40 shadow-[0_0_15px_rgba(34,197,94,0.25)] relative">
                                 <img src={avatarUrl} alt={btn.name} className="w-full h-full object-cover" onError={(e) => (e.currentTarget.style.display = 'none')} />
-                                <div className="absolute bottom-0 right-0 p-0.5 bg-black/80 rounded-tl-md">
+                                <div className="absolute bottom-0 right-0 p-0.5 bg-black/90 rounded-tl-md">
                                    <WhatsappIcon />
                                 </div>
                              </div>
                           ) : (
-                             <div className="w-11 h-11 rounded-xl bg-green-500/20 border border-green-500/30 flex items-center justify-center shrink-0">
+                             <div className="w-13 h-13 rounded-2xl bg-green-500/20 border border-green-500/30 flex items-center justify-center shrink-0">
                                 <WhatsappIcon />
                              </div>
                           )}
 
                           <div className="flex flex-col min-w-0 flex-1">
                              <div className="flex items-center gap-1.5 min-w-0">
-                                <span className="text-xs sm:text-sm font-bold text-white group-hover:text-green-400 transition-colors truncate leading-snug">
+                                <span className="text-sm sm:text-base font-bold text-white group-hover:text-green-400 transition-colors truncate leading-snug">
                                    {btn.name}
                                 </span>
-                                <span className="text-[9px] uppercase font-extrabold tracking-wider px-1.5 py-0.5 rounded-md bg-green-500/20 text-green-400 border border-green-500/30 shrink-0">
-                                   Canal
-                                </span>
+                                <VerifiedIcon />
                              </div>
-                             {btn.role && (
-                                <span className="text-[11px] font-medium text-white/60 truncate mt-0.5">
+                             {btn.role ? (
+                                <span className="text-xs font-medium text-white/60 truncate mt-1">
                                    {btn.role}
+                                </span>
+                             ) : (
+                                <span className="text-[11px] font-medium text-green-400/80 truncate mt-0.5">
+                                   Canal Oficial de WhatsApp
                                 </span>
                              )}
                           </div>
 
-                          <div className="w-7 h-7 rounded-full flex items-center justify-center text-white/40 group-hover:text-white transition-all shrink-0 bg-white/5 group-hover:bg-white/10">
-                             <ChevronRightIcon />
+                          <div className="flex flex-col items-end gap-1 shrink-0">
+                             <span className="text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full bg-green-500/20 text-green-400 border border-green-500/40">
+                                Canal
+                             </span>
+                             <div className="w-6 h-6 rounded-full flex items-center justify-center text-white/40 group-hover:text-white transition-all">
+                                <ChevronRightIcon />
+                             </div>
                           </div>
                        </motion.a>
                     );
@@ -267,14 +276,15 @@ export default function ClientPage({ commerceId, data, themeHex, RENDER_API }: a
            </div>
         )}
 
-        {/* PATTERN 2: DIRECT WHATSAPP CHATS / ATENCION */}
+        {/* COMPONENT 2: DIRECT WHATSAPP CONTACTS (RESTORED PROFILE PHOTO + ONLINE DOT) */}
         {waChatButtons.length > 0 && (
            <div className="w-full flex flex-col gap-2.5">
               <h2 className="text-[10px] font-bold text-white/40 uppercase tracking-widest px-1">
-                 Atencion & Chat Directo
+                 Atencion Directa & Asesores
               </h2>
-              <div className="w-full flex flex-col gap-2">
+              <div className="w-full flex flex-col gap-2.5">
                  {waChatButtons.map((btn: any, index: number) => {
+                    const { avatarUrl, hasWAAvatar } = getNetworkSpecs(btn);
                     const href = formatUrl(btn.url, btn.phone);
                     return (
                        <motion.a
@@ -285,25 +295,39 @@ export default function ClientPage({ commerceId, data, themeHex, RENDER_API }: a
                           href={href}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="w-full flex items-center justify-between p-3 sm:p-3.5 rounded-2xl backdrop-blur-xl bg-gradient-to-r from-green-950/40 via-white/[0.04] to-white/[0.02] border border-green-500/25 hover:border-green-500/50 transition-all shadow-[0_4px_20px_rgba(0,0,0,0.4)] group hover:scale-[1.01] active:scale-[0.99] gap-3"
+                          className="w-full flex items-center justify-between p-3.5 rounded-2xl backdrop-blur-xl bg-gradient-to-r from-zinc-900/90 via-zinc-900/60 to-zinc-950 border border-green-500/25 hover:border-green-500/50 transition-all shadow-md group hover:scale-[1.01] active:scale-[0.99] gap-3"
                        >
                           <div className="flex items-center gap-3 min-w-0 flex-1">
-                             <div className="shrink-0 bg-green-500/20 border border-green-500/30 rounded-xl flex items-center justify-center w-10 h-10 shadow-sm group-hover:bg-green-500/30 transition-all">
-                                <WhatsappIcon />
-                             </div>
+                             {/* Restored WhatsApp Contact Profile Photo with Online Indicator */}
+                             {hasWAAvatar && avatarUrl ? (
+                                <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-full overflow-hidden shrink-0 bg-zinc-900 border-2 border-green-500/30 relative shadow-md">
+                                   <img src={avatarUrl} alt={btn.name} className="w-full h-full object-cover" onError={(e) => (e.currentTarget.style.display = 'none')} />
+                                   <div className="w-3 h-3 bg-green-500 rounded-full border-2 border-black absolute bottom-0 right-0 z-10" />
+                                </div>
+                             ) : (
+                                <div className="w-11 h-11 rounded-full bg-green-500/20 border border-green-500/30 flex items-center justify-center shrink-0 relative">
+                                   <WhatsappIcon />
+                                   <div className="w-3 h-3 bg-green-500 rounded-full border-2 border-black absolute bottom-0 right-0 z-10" />
+                                </div>
+                             )}
+
                              <div className="flex flex-col min-w-0 flex-1">
                                 <span className="text-xs sm:text-sm font-bold text-white group-hover:text-green-400 transition-colors truncate leading-snug">
                                    {btn.name}
                                 </span>
-                                {btn.role && (
+                                {btn.role ? (
                                    <span className="text-[11px] font-medium text-white/50 truncate mt-0.5">
                                       {btn.role}
+                                   </span>
+                                ) : (
+                                   <span className="text-[10px] font-medium text-green-400/70 truncate mt-0.5">
+                                      Chat Directo
                                    </span>
                                 )}
                              </div>
                           </div>
 
-                          <div className="flex items-center gap-1.5 text-[10px] uppercase font-bold tracking-wider px-2.5 py-1 rounded-full bg-green-500/20 text-green-400 border border-green-500/40 shrink-0 group-hover:bg-green-500 group-hover:text-black transition-colors">
+                          <div className="flex items-center gap-1.5 text-[10px] uppercase font-bold tracking-wider px-3 py-1.5 rounded-full bg-green-500/20 text-green-400 border border-green-500/40 shrink-0 group-hover:bg-green-500 group-hover:text-black transition-colors shadow-sm">
                              <MessageCircleIcon />
                              <span>Escribir</span>
                           </div>
@@ -314,7 +338,7 @@ export default function ClientPage({ commerceId, data, themeHex, RENDER_API }: a
            </div>
         )}
 
-        {/* PATTERN 3: SOCIAL MEDIA (COMPACT 2-COLUMN GRID) */}
+        {/* COMPONENT 3: SOCIAL MEDIA (BRAND ACCENT 2-COLUMN GRID) */}
         {socialButtons.length > 0 && (
            <div className="w-full flex flex-col gap-2.5">
               <h2 className="text-[10px] font-bold text-white/40 uppercase tracking-widest px-1">
@@ -322,8 +346,18 @@ export default function ClientPage({ commerceId, data, themeHex, RENDER_API }: a
               </h2>
               <div className="grid grid-cols-2 gap-2.5 w-full">
                  {socialButtons.map((btn: any, index: number) => {
-                    const { Icon } = getNetworkSpecs(btn);
+                    const { Icon, networkType } = getNetworkSpecs(btn);
                     const href = formatUrl(btn.url, btn.phone);
+
+                    // Brand-specific accent styling
+                    let brandBorder = 'border-white/10 hover:border-white/20 bg-white/[0.04]';
+                    if (networkType === 'instagram') brandBorder = 'border-pink-500/30 hover:border-pink-500/60 bg-gradient-to-br from-purple-950/20 via-pink-950/20 to-transparent';
+                    else if (networkType === 'tiktok') brandBorder = 'border-zinc-700/50 hover:border-zinc-400/50 bg-white/[0.03]';
+                    else if (networkType === 'facebook') brandBorder = 'border-blue-500/30 hover:border-blue-500/60 bg-blue-950/20';
+                    else if (networkType === 'youtube') brandBorder = 'border-red-500/30 hover:border-red-500/60 bg-red-950/20';
+                    else if (networkType === 'twitter' || networkType === 'x') brandBorder = 'border-sky-500/30 hover:border-sky-500/60 bg-sky-950/20';
+                    else if (networkType === 'pinterest') brandBorder = 'border-red-600/30 hover:border-red-600/60 bg-red-950/20';
+
                     return (
                        <motion.a
                           key={index}
@@ -333,7 +367,7 @@ export default function ClientPage({ commerceId, data, themeHex, RENDER_API }: a
                           href={href}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="w-full flex items-center gap-2.5 p-3 rounded-2xl backdrop-blur-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 transition-all shadow-sm group hover:scale-[1.02] active:scale-[0.98] min-w-0"
+                          className={`w-full flex items-center gap-2.5 p-3 rounded-2xl backdrop-blur-xl transition-all shadow-sm group hover:scale-[1.02] active:scale-[0.98] min-w-0 ${brandBorder}`}
                        >
                           <div className="shrink-0 bg-white/10 border border-white/15 rounded-xl flex items-center justify-center w-8 h-8 shadow-sm group-hover:scale-105 transition-all">
                              <Icon />
@@ -348,7 +382,7 @@ export default function ClientPage({ commerceId, data, themeHex, RENDER_API }: a
            </div>
         )}
 
-        {/* PATTERN 4: WEB PLATFORMS & OTHER LINKS */}
+        {/* COMPONENT 4: WEB PLATFORMS & OTHER LINKS (BROWSER TAB BOOKMARKS) */}
         {webButtons.length > 0 && (
            <div className="w-full flex flex-col gap-2.5">
               <h2 className="text-[10px] font-bold text-white/40 uppercase tracking-widest px-1">
@@ -366,7 +400,7 @@ export default function ClientPage({ commerceId, data, themeHex, RENDER_API }: a
                           href={href}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="w-full flex items-center justify-between p-3 sm:p-3.5 rounded-2xl backdrop-blur-xl bg-white/[0.03] hover:bg-white/[0.07] border border-indigo-500/25 hover:border-indigo-500/45 transition-all shadow-sm group hover:scale-[1.01] active:scale-[0.99] gap-3"
+                          className="w-full flex items-center justify-between p-3.5 sm:p-4 rounded-2xl backdrop-blur-xl bg-zinc-900/80 border border-indigo-500/25 hover:border-indigo-500/50 transition-all shadow-sm group hover:scale-[1.01] active:scale-[0.99] gap-3"
                        >
                           <div className="flex items-center gap-3 min-w-0 flex-1">
                              <div className="shrink-0 bg-indigo-500/15 border border-indigo-500/25 rounded-xl flex items-center justify-center w-10 h-10 shadow-sm group-hover:scale-105 transition-all">
@@ -376,9 +410,13 @@ export default function ClientPage({ commerceId, data, themeHex, RENDER_API }: a
                                 <span className="text-xs sm:text-sm font-bold text-white group-hover:text-indigo-300 transition-colors truncate leading-snug">
                                    {btn.name}
                                 </span>
-                                {btn.role && (
+                                {btn.role ? (
                                    <span className="text-[11px] font-medium text-white/50 truncate mt-0.5">
                                       {btn.role}
+                                   </span>
+                                ) : (
+                                   <span className="text-[10px] font-medium text-indigo-400/70 truncate mt-0.5">
+                                      Pagina Web Externa
                                    </span>
                                 )}
                              </div>
