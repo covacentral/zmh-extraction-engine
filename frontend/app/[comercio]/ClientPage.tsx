@@ -515,11 +515,28 @@ export default function ClientPage({ commerceId, data, themeHex, RENDER_API }: a
         )}
 
         {/* ── LOCATION MAP CARD ── */}
-        {(data?.address || data?.direccion || data?.location || data?.mapUrl) && (() => {
-          const address: string = data?.address || data?.direccion || data?.location || '';
-          const mapsQuery = encodeURIComponent(address);
-          const embedUrl = `https://maps.google.com/maps?q=${mapsQuery}&z=15&ie=UTF8&iwloc=&output=embed`;
-          const mapsLink = `https://maps.google.com/maps?q=${mapsQuery}`;
+        {(data?.address || data?.nomenclatura || data?.direccion) && (() => {
+          // Display label — what the user sees written in the card
+          const displayLabel: string = data?.address || data?.nomenclatura || data?.direccion || '';
+
+          // Map query — prefer coordinates (more precise), fall back to the display label
+          const lat: number | undefined = data?.lat;
+          const lng: number | undefined = data?.lng;
+          const coordsString: string = data?.coordinates || '';  // format "6.2442,-75.5812"
+
+          let mapsQuery: string;
+          if (lat && lng) {
+            mapsQuery = `${lat},${lng}`;
+          } else if (coordsString) {
+            mapsQuery = coordsString;
+          } else {
+            mapsQuery = encodeURIComponent(displayLabel);
+          }
+
+          const encodedQuery = lat || coordsString ? mapsQuery : mapsQuery; // already handled above
+          const embedUrl = `https://maps.google.com/maps?q=${encodedQuery}&z=16&ie=UTF8&iwloc=&output=embed`;
+          const mapsLink = `https://maps.google.com/maps?q=${encodedQuery}`;
+
           return (
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -527,7 +544,7 @@ export default function ClientPage({ commerceId, data, themeHex, RENDER_API }: a
               transition={{ delay: 0.4 }}
               className="w-full rounded-2xl overflow-hidden bg-zinc-900/80 backdrop-blur border border-white/10 shadow-xl"
             >
-              {/* Header row: address + controls */}
+              {/* Header row: nomenclatura label + controls */}
               <div className="flex items-start justify-between gap-3 p-3.5">
                 <div className="flex items-center gap-2.5 min-w-0 flex-1">
                   <div className="w-8 h-8 rounded-xl bg-red-500/15 border border-red-500/25 flex items-center justify-center shrink-0">
@@ -537,12 +554,12 @@ export default function ClientPage({ commerceId, data, themeHex, RENDER_API }: a
                     </svg>
                   </div>
                   <div className="flex flex-col min-w-0">
-                    <span className="text-xs font-bold text-white leading-snug break-words">{address}</span>
+                    {/* Always shows the human-readable nomenclature */}
+                    <span className="text-xs font-bold text-white leading-snug break-words">{displayLabel}</span>
                     <span className="text-[10px] text-white/40 mt-0.5">Ubicacion del comercio</span>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  {/* Open in Maps */}
                   <a
                     href={mapsLink}
                     target="_blank"
@@ -551,7 +568,6 @@ export default function ClientPage({ commerceId, data, themeHex, RENDER_API }: a
                   >
                     Ver en Maps
                   </a>
-                  {/* Expand / collapse toggle */}
                   <button
                     onClick={() => setMapExpanded(p => !p)}
                     className="w-7 h-7 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
@@ -563,7 +579,7 @@ export default function ClientPage({ commerceId, data, themeHex, RENDER_API }: a
                 </div>
               </div>
 
-              {/* Expandable map iframe */}
+              {/* Expandable map iframe — uses coordinates for precision */}
               <motion.div
                 initial={false}
                 animate={{ height: mapExpanded ? 220 : 0, opacity: mapExpanded ? 1 : 0 }}
