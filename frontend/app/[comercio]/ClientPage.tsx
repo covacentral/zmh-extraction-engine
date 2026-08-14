@@ -41,14 +41,31 @@ export default function ClientPage({ commerceId, data, themeHex, RENDER_API }: a
      let avatarUrl = btn.scrapedImage || '';
      const fallback = `https://ui-avatars.com/api/?name=${btn.name}&background=18181b&color=fff`;
 
-     if (!avatarUrl && networkType === 'whatsapp') {
-       let waId = btn.phone || '';
-       if (!waId && btn.url) {
-           if (btn.url.includes('channel/')) waId = btn.url.split('channel/')[1].split('/')[0].split('?')[0];
-           else if (btn.url.includes('wa.me/')) waId = btn.url.split('wa.me/')[1].split('/')[0].split('?')[0];
-       }
-       avatarUrl = waId ? `${RENDER_API}/api/avatar/${waId}` : fallback;
-     } 
+      if (!avatarUrl && networkType === 'whatsapp') {
+        let waId = btn.phone || '';
+        if (!waId && btn.url) {
+            const url = btn.url.trim();
+            if (url.includes('channel/')) {
+                waId = url.split('channel/')[1].split('/')[0].split('?')[0];
+            } else if (url.includes('wa.me/')) {
+                waId = url.split('wa.me/')[1].split('/')[0].split('?')[0];
+            } else if (url.includes('api.whatsapp.com/send') || url.includes('web.whatsapp.com/send') || url.includes('whatsapp.com/send')) {
+                try {
+                    const urlObj = new URL(url);
+                    waId = urlObj.searchParams.get('phone') || '';
+                } catch (e) {
+                    const match = url.match(/[?&]phone=([^&#\s]+)/);
+                    if (match) waId = match[1];
+                }
+            } else if (url.includes('chat.whatsapp.com/')) {
+                waId = url.split('chat.whatsapp.com/')[1].split('/')[0].split('?')[0];
+            }
+        }
+        if (waId) {
+            waId = waId.replace(/[+\s\-()]/g, '');
+        }
+        avatarUrl = waId ? `${RENDER_API}/api/avatar/${waId}` : fallback;
+      } 
      else if (!avatarUrl && btn.url) {
        try {
            const urlObj = new URL(btn.url);
