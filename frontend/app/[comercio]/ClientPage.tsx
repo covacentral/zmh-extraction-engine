@@ -95,6 +95,7 @@ export default function ClientPage({ commerceId, data, themeHex, RENDER_API }: a
   const [searchQuery, setSearchQuery] = useState('');
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [mapExpanded, setMapExpanded] = useState(false);
+  const [activeContactTab, setActiveContactTab] = useState<string>('all');
 
   if (promoJid && (!Array.isArray(promos) || promos.length === 0)) {
     promos = [promoJid];
@@ -370,76 +371,80 @@ export default function ClientPage({ commerceId, data, themeHex, RENDER_API }: a
 
 
         {/* ══════════════════════════════════════════════════════════════════
-            MODULE 2 — DIRECT CONTACTS: VERTICAL SCROLL CAROUSEL (bounded height)
+            MODULE 2 — DIRECT CONTACTS: CATEGORY TABS + VERTICAL SCROLL CAROUSEL
         ══════════════════════════════════════════════════════════════════ */}
-        {waChats.length > 0 && (
-          <div className="w-full flex flex-col">
-            <div className="flex items-center justify-between px-1 mb-2">
-              <h2 className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Atencion Directa & Asesores</h2>
-              {waChats.length > 2 && (
-                <span className="text-[10px] text-white/30 font-medium">Desplaza ↕</span>
-              )}
-            </div>
+        {waChats.length > 0 && (() => {
+          const allRoles: string[] = waChats.map((b: any) => (b.role || '').trim()).filter(Boolean);
+          const uniqueRoles: string[] = Array.from(new Set<string>(allRoles));
+          const hasTabs = uniqueRoles.length > 1;
+          const visibleContacts = activeContactTab === 'all'
+            ? waChats
+            : waChats.filter((b: any) => (b.role || '').trim() === activeContactTab);
+          return (
+            <div className="w-full flex flex-col gap-2">
+              <div className="flex items-center justify-between px-1">
+                <h2 className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Atencion Directa &amp; Asesores</h2>
+                {visibleContacts.length > 2 && <span className="text-[10px] text-white/30 font-medium">Desplaza</span>}
+              </div>
 
-            {/* Vertical scroll container — shows ~2.5 cards, user scrolls to see rest */}
-            <div
-              className="w-full flex flex-col gap-2.5 overflow-y-auto"
-              style={{
-                maxHeight: '280px',
-                scrollbarWidth: 'none',
-                WebkitOverflowScrolling: 'touch',
-              } as any}
-            >
-              {waChats.map((btn: any, i: number) => {
-                const { avatarUrl, hasAvatar } = getSpecs(btn);
-                const href = formatUrl(btn.url, btn.phone);
-                return (
-                  <a
-                    key={i}
-                    href={href}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-full flex items-center gap-3 p-3.5 rounded-2xl bg-zinc-900/80 backdrop-blur border border-green-500/20 hover:border-green-500/50 transition-all group hover:scale-[1.01] active:scale-[0.99] shrink-0"
-                  >
-                    {/* Avatar 48px with online dot */}
-                    <div className="relative shrink-0">
-                      <div className="w-12 h-12 rounded-full overflow-hidden bg-zinc-800 border-2 border-green-500/30">
-                        {hasAvatar ? (
-                          <img src={avatarUrl} alt={btn.name} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center bg-green-950">
-                            <WhatsappIcon size={20} />
-                          </div>
-                        )}
+              {hasTabs && (
+                <div className="w-full overflow-x-auto" style={{ scrollbarWidth: 'none' } as any}>
+                  <div className="flex gap-1.5 pb-0.5">
+                    <button
+                      onClick={() => setActiveContactTab('all')}
+                      className={`shrink-0 px-3 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wide transition-all ${activeContactTab === 'all' ? 'bg-green-500 text-black shadow-[0_0_12px_rgba(34,197,94,0.4)]' : 'bg-white/[0.06] text-white/60 hover:bg-white/10 border border-white/10'}`}
+                    >
+                      Todos ({waChats.length})
+                    </button>
+                    {uniqueRoles.map((role: string) => (
+                      <button
+                        key={role}
+                        onClick={() => setActiveContactTab(role)}
+                        className={`shrink-0 px-3 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wide transition-all ${activeContactTab === role ? 'bg-green-500 text-black shadow-[0_0_12px_rgba(34,197,94,0.4)]' : 'bg-white/[0.06] text-white/60 hover:bg-white/10 border border-white/10'}`}
+                      >
+                        {role} ({waChats.filter((b: any) => (b.role || '').trim() === role).length})
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div
+                className="w-full flex flex-col gap-2.5 overflow-y-auto"
+                style={{ maxHeight: '280px', scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' } as any}
+              >
+                {visibleContacts.map((btn: any, i: number) => {
+                  const { avatarUrl, hasAvatar } = getSpecs(btn);
+                  const href = formatUrl(btn.url, btn.phone);
+                  return (
+                    <a key={i} href={href} target="_blank" rel="noopener noreferrer"
+                      className="w-full flex items-center gap-3 p-3.5 rounded-2xl bg-zinc-900/80 backdrop-blur border border-green-500/20 hover:border-green-500/50 transition-all group hover:scale-[1.01] active:scale-[0.99] shrink-0"
+                    >
+                      <div className="relative shrink-0">
+                        <div className="w-12 h-12 rounded-full overflow-hidden bg-zinc-800 border-2 border-green-500/30">
+                          {hasAvatar
+                            ? <img src={avatarUrl} alt={btn.name} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                            : <div className="w-full h-full flex items-center justify-center bg-green-950"><WhatsappIcon size={20} /></div>}
+                        </div>
+                        <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-black" />
                       </div>
-                      <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-black" />
-                    </div>
-
-                    {/* Name + role — never truncated */}
-                    <div className="flex flex-col flex-1 min-w-0">
-                      <span className="text-sm font-bold text-white group-hover:text-green-300 transition-colors leading-snug break-words">
-                        {btn.name}
-                      </span>
-                      <span className="text-xs text-white/55 mt-0.5 leading-snug break-words">
-                        {btn.role || 'Chat Directo de WhatsApp'}
-                      </span>
-                    </div>
-
-                    {/* Write button */}
-                    <div className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-full bg-green-500/20 group-hover:bg-green-500 text-green-400 group-hover:text-black border border-green-500/40 text-[11px] font-bold uppercase tracking-wide transition-all">
-                      <MessageCircleIcon />
-                      <span>Escribir</span>
-                    </div>
-                  </a>
-                );
-              })}
-              {/* Bottom fade gradient to hint at more content */}
-              {waChats.length > 2 && (
-                <div className="sticky bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-black to-transparent pointer-events-none -mt-8" />
-              )}
+                      <div className="flex flex-col flex-1 min-w-0">
+                        <span className="text-sm font-bold text-white group-hover:text-green-300 transition-colors leading-snug break-words">{btn.name}</span>
+                        <span className="text-xs text-white/55 mt-0.5 leading-snug break-words">{btn.role || 'Chat Directo de WhatsApp'}</span>
+                      </div>
+                      <div className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-full bg-green-500/20 group-hover:bg-green-500 text-green-400 group-hover:text-black border border-green-500/40 text-[11px] font-bold uppercase tracking-wide transition-all">
+                        <MessageCircleIcon /><span>Escribir</span>
+                      </div>
+                    </a>
+                  );
+                })}
+                {visibleContacts.length > 2 && (
+                  <div className="sticky bottom-0 h-8 bg-gradient-to-t from-black to-transparent pointer-events-none -mt-8" />
+                )}
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
 
 
@@ -515,14 +520,15 @@ export default function ClientPage({ commerceId, data, themeHex, RENDER_API }: a
         )}
 
         {/* ── LOCATION MAP CARD ── */}
-        {(data?.address || data?.nomenclatura || data?.direccion) && (() => {
-          // Display label — what the user sees written in the card
-          const displayLabel: string = data?.address || data?.nomenclatura || data?.direccion || '';
-
-          // Map query — prefer coordinates (more precise), fall back to the display label
-          const lat: number | undefined = data?.lat;
-          const lng: number | undefined = data?.lng;
-          const coordsString: string = data?.coordinates || '';  // format "6.2442,-75.5812"
+        {(data?.location?.label || data?.address || data?.nomenclatura || data?.direccion) && (() => {
+          // New format: data.location = { label, lat, lng }
+          // Old flat fields: data.address / data.lat / data.lng (backward compat)
+          const loc = (data?.location && typeof data.location === 'object') ? data.location : {};
+          const displayLabel: string = loc.label || data?.address || data?.nomenclatura || data?.direccion || '';
+          
+          const lat: number | undefined = loc.lat ?? data?.lat;
+          const lng: number | undefined = loc.lng ?? data?.lng;
+          const coordsString: string = loc.coordinates || data?.coordinates || '';
 
           let mapsQuery: string;
           if (lat && lng) {
@@ -533,9 +539,8 @@ export default function ClientPage({ commerceId, data, themeHex, RENDER_API }: a
             mapsQuery = encodeURIComponent(displayLabel);
           }
 
-          const encodedQuery = lat || coordsString ? mapsQuery : mapsQuery; // already handled above
-          const embedUrl = `https://maps.google.com/maps?q=${encodedQuery}&z=16&ie=UTF8&iwloc=&output=embed`;
-          const mapsLink = `https://maps.google.com/maps?q=${encodedQuery}`;
+          const embedUrl = `https://maps.google.com/maps?q=${mapsQuery}&z=16&ie=UTF8&iwloc=&output=embed`;
+          const mapsLink = `https://maps.google.com/maps?q=${mapsQuery}`;
 
           return (
             <motion.div
