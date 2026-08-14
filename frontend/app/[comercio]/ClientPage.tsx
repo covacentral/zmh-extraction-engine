@@ -248,14 +248,17 @@ export default function ClientPage({ commerceId, data, themeHex, RENDER_API }: a
         ══════════════════════════════════════════════════════════════════ */}
         {channels.length > 0 && (
           <div className="w-full flex flex-col">
-            <div className="flex items-center justify-between px-1 mb-2">
+            <div className="flex items-center justify-between px-1 mb-2.5">
               <h2 className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Canales de Novedades</h2>
-              <span className="text-[10px] text-white/30 font-medium">Desliza para ver mas</span>
+              <span className="text-[10px] text-white/30 font-medium">Desliza →</span>
             </div>
 
-            {/* Horizontal scroll rail — behaves like Instagram Stories */}
-            <div className="w-full overflow-x-auto" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-              <div className="flex gap-3 px-1 pb-1" style={{ width: 'max-content' }}>
+            {/* Full-width carousel breaking out of max-w-md so the next card peeks at screen edge */}
+            <div
+              className="w-screen -mx-3.5 overflow-x-auto"
+              style={{ scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' } as any}
+            >
+              <div className="flex gap-3 px-3.5 py-2">
                 {channels.map((btn: any, i: number) => {
                   const { avatarUrl, hasAvatar } = getSpecs(btn);
                   const href = formatUrl(btn.url, btn.phone);
@@ -268,12 +271,17 @@ export default function ClientPage({ commerceId, data, themeHex, RENDER_API }: a
                       href={href}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex flex-col items-center gap-2 w-20 shrink-0 group"
+                      className="flex flex-col items-center w-[76px] shrink-0 group"
                     >
-                      {/* Avatar ring */}
-                      <div className="relative">
-                        <div className="absolute -inset-0.5 rounded-2xl bg-gradient-to-br from-green-400 to-green-600 opacity-80 group-hover:opacity-100 transition-opacity" />
-                        <div className="relative w-16 h-16 rounded-2xl overflow-hidden bg-zinc-900 border-2 border-black">
+                      {/* Badge at top — fixed position, not pushed by name length */}
+                      <span className="text-[9px] uppercase tracking-widest font-bold text-green-400 bg-green-500/15 border border-green-500/30 px-2 py-0.5 rounded-full mb-2">
+                        Canal
+                      </span>
+
+                      {/* Circular avatar with green ring */}
+                      <div className="relative mb-2">
+                        <div className="absolute -inset-[3px] rounded-full bg-gradient-to-br from-green-400 via-green-500 to-green-700 opacity-80 group-hover:opacity-100 transition-opacity" />
+                        <div className="relative w-[60px] h-[60px] rounded-full overflow-hidden bg-zinc-900 border-2 border-black">
                           {hasAvatar ? (
                             <img
                               src={avatarUrl}
@@ -283,28 +291,30 @@ export default function ClientPage({ commerceId, data, themeHex, RENDER_API }: a
                             />
                           ) : (
                             <div className="w-full h-full flex items-center justify-center bg-green-950">
-                              <WhatsappIcon size={26} />
+                              <WhatsappIcon size={24} />
                             </div>
                           )}
                         </div>
-                        {/* Verified dot */}
-                        <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-green-500 border-2 border-black flex items-center justify-center">
+                        {/* Verified checkmark */}
+                        <div className="absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full bg-green-500 border-2 border-black flex items-center justify-center">
                           <svg viewBox="0 0 24 24" width="10" height="10" className="fill-black"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>
                         </div>
                       </div>
 
-                      {/* Name */}
-                      <div className="flex flex-col items-center gap-0.5 w-full text-center">
-                        <span className="text-[11px] font-semibold text-white leading-tight line-clamp-2 w-full">{btn.name}</span>
-                        <span className="text-[9px] uppercase tracking-wider font-bold text-green-400">Canal</span>
-                      </div>
+                      {/* Name — 2 lines max, centered */}
+                      <span className="text-[11px] font-semibold text-white text-center line-clamp-2 w-full leading-tight">
+                        {btn.name}
+                      </span>
                     </motion.a>
                   );
                 })}
+                {/* Trailing spacer so last card doesn't sit flush against edge */}
+                <div className="w-3.5 shrink-0" />
               </div>
             </div>
           </div>
         )}
+
 
         {/* ══════════════════════════════════════════════════════════════════
             MODULE 2 — DIRECT CONTACTS: FULL-WIDTH ROWS (name + role always visible)
