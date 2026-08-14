@@ -94,6 +94,7 @@ export default function ClientPage({ commerceId, data, themeHex, RENDER_API }: a
 
   const [searchQuery, setSearchQuery] = useState('');
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [mapExpanded, setMapExpanded] = useState(false);
 
   if (promoJid && (!Array.isArray(promos) || promos.length === 0)) {
     promos = [promoJid];
@@ -183,11 +184,12 @@ export default function ClientPage({ commerceId, data, themeHex, RENDER_API }: a
 
       <div className="w-full max-w-md flex flex-col items-center gap-5 z-10">
 
-        {/* ── HEADER ── */}
-        <div className="flex flex-col items-center text-center gap-2.5 mt-2 w-full">
-          <div className="relative">
-            <div className="absolute inset-0 rounded-full blur-2xl opacity-40 pointer-events-none" style={{ backgroundColor: 'var(--theme)' }} />
-            <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-white/20 shadow-2xl relative z-10 bg-zinc-950">
+        {/* ── HEADER: horizontal glass card ── */}
+        <div className="w-full flex items-center gap-3.5 mt-2 p-3.5 rounded-2xl bg-white/[0.05] backdrop-blur-xl border border-white/[0.08] shadow-[0_4px_24px_rgba(0,0,0,0.4)]">
+          {/* Avatar */}
+          <div className="relative shrink-0">
+            <div className="absolute -inset-1 rounded-full blur-lg opacity-50 pointer-events-none" style={{ backgroundColor: 'var(--theme)' }} />
+            <div className="relative w-14 h-14 rounded-full overflow-hidden border-2 border-white/20 shadow-xl bg-zinc-950 z-10">
               <img
                 src={`${RENDER_API}/api/avatar/${avatarJid}`}
                 alt={businessName}
@@ -196,7 +198,17 @@ export default function ClientPage({ commerceId, data, themeHex, RENDER_API }: a
               />
             </div>
           </div>
-          <h1 className="text-xl font-black text-white tracking-tight leading-tight px-2">{businessName}</h1>
+          {/* Business info */}
+          <div className="flex flex-col min-w-0 flex-1">
+            <h1 className="text-base font-black text-white leading-tight break-words">{businessName}</h1>
+            {(data?.city || data?.category || data?.businessType) && (
+              <span className="text-[11px] text-white/50 mt-0.5 leading-tight">
+                {data?.city || data?.category || data?.businessType}
+              </span>
+            )}
+          </div>
+          {/* Theme accent dot */}
+          <div className="w-2.5 h-2.5 rounded-full shrink-0 opacity-80" style={{ backgroundColor: 'var(--theme)' }} />
         </div>
 
         {/* ── SEARCH BAR ── */}
@@ -373,7 +385,7 @@ export default function ClientPage({ commerceId, data, themeHex, RENDER_API }: a
             <div
               className="w-full flex flex-col gap-2.5 overflow-y-auto"
               style={{
-                maxHeight: '232px',
+                maxHeight: '280px',
                 scrollbarWidth: 'none',
                 WebkitOverflowScrolling: 'touch',
               } as any}
@@ -501,6 +513,76 @@ export default function ClientPage({ commerceId, data, themeHex, RENDER_API }: a
             ))}
           </div>
         )}
+
+        {/* ── LOCATION MAP CARD ── */}
+        {(data?.address || data?.direccion || data?.location || data?.mapUrl) && (() => {
+          const address: string = data?.address || data?.direccion || data?.location || '';
+          const mapsQuery = encodeURIComponent(address);
+          const embedUrl = `https://maps.google.com/maps?q=${mapsQuery}&z=15&ie=UTF8&iwloc=&output=embed`;
+          const mapsLink = `https://maps.google.com/maps?q=${mapsQuery}`;
+          return (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4 }}
+              className="w-full rounded-2xl overflow-hidden bg-zinc-900/80 backdrop-blur border border-white/10 shadow-xl"
+            >
+              {/* Header row: address + controls */}
+              <div className="flex items-start justify-between gap-3 p-3.5">
+                <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                  <div className="w-8 h-8 rounded-xl bg-red-500/15 border border-red-500/25 flex items-center justify-center shrink-0">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="stroke-red-400">
+                      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                      <circle cx="12" cy="10" r="3"></circle>
+                    </svg>
+                  </div>
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-xs font-bold text-white leading-snug break-words">{address}</span>
+                    <span className="text-[10px] text-white/40 mt-0.5">Ubicacion del comercio</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  {/* Open in Maps */}
+                  <a
+                    href={mapsLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[10px] font-bold uppercase tracking-wide px-2.5 py-1.5 rounded-lg bg-red-500/15 hover:bg-red-500/30 text-red-400 border border-red-500/30 transition-colors"
+                  >
+                    Ver en Maps
+                  </a>
+                  {/* Expand / collapse toggle */}
+                  <button
+                    onClick={() => setMapExpanded(p => !p)}
+                    className="w-7 h-7 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
+                  >
+                    <div className={`transition-transform duration-300 ${mapExpanded ? 'rotate-180' : ''}`}>
+                      <ChevronDownIcon />
+                    </div>
+                  </button>
+                </div>
+              </div>
+
+              {/* Expandable map iframe */}
+              <motion.div
+                initial={false}
+                animate={{ height: mapExpanded ? 220 : 0, opacity: mapExpanded ? 1 : 0 }}
+                transition={{ duration: 0.35, ease: 'easeInOut' }}
+                style={{ overflow: 'hidden' }}
+              >
+                <iframe
+                  title="Ubicacion"
+                  src={embedUrl}
+                  width="100%"
+                  height="220"
+                  style={{ border: 0, display: 'block' }}
+                  loading="lazy"
+                  referrerPolicy="no-referrer-when-downgrade"
+                />
+              </motion.div>
+            </motion.div>
+          );
+        })()}
 
       </div>
     </main>
