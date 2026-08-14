@@ -94,7 +94,6 @@ export default function ClientPage({ commerceId, data, themeHex, RENDER_API }: a
 
   const [searchQuery, setSearchQuery] = useState('');
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
-  const [mapExpanded, setMapExpanded] = useState(false);
   const [activeContactTab, setActiveContactTab] = useState<string>('all');
 
   if (promoJid && (!Array.isArray(promos) || promos.length === 0)) {
@@ -411,7 +410,7 @@ export default function ClientPage({ commerceId, data, themeHex, RENDER_API }: a
 
               <div
                 className="w-full flex flex-col gap-2.5 overflow-y-auto"
-                style={{ maxHeight: '280px', scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' } as any}
+                style={{ maxHeight: '315px', scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' } as any}
               >
                 {visibleContacts.map((btn: any, i: number) => {
                   const { avatarUrl, hasAvatar } = getSpecs(btn);
@@ -547,50 +546,38 @@ export default function ClientPage({ commerceId, data, themeHex, RENDER_API }: a
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.4 }}
-              className="w-full rounded-2xl overflow-hidden bg-zinc-900/80 backdrop-blur border border-white/10 shadow-xl"
+              className="w-full rounded-2xl overflow-hidden bg-gradient-to-b from-zinc-900 to-black border border-red-500/20 shadow-[0_8px_30px_rgba(239,68,68,0.15)] relative"
             >
+              <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-red-500/50 to-transparent" />
+              
               {/* Header row: nomenclatura label + controls */}
-              <div className="flex items-start justify-between gap-3 p-3.5">
-                <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                  <div className="w-8 h-8 rounded-xl bg-red-500/15 border border-red-500/25 flex items-center justify-center shrink-0">
-                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="stroke-red-400">
+              <div className="flex items-start justify-between gap-3 p-4">
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <div className="w-10 h-10 rounded-xl bg-red-500/15 border border-red-500/30 flex items-center justify-center shrink-0 shadow-[0_0_15px_rgba(239,68,68,0.2)]">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="stroke-red-400">
                       <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
                       <circle cx="12" cy="10" r="3"></circle>
                     </svg>
                   </div>
                   <div className="flex flex-col min-w-0">
-                    {/* Always shows the human-readable nomenclature */}
-                    <span className="text-xs font-bold text-white leading-snug break-words">{displayLabel}</span>
-                    <span className="text-[10px] text-white/40 mt-0.5">Ubicacion del comercio</span>
+                    <span className="text-sm font-bold text-white leading-snug break-words">{displayLabel}</span>
+                    <span className="text-[11px] text-red-400/80 font-medium tracking-wide mt-0.5">Ubicacion Central</span>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center shrink-0">
                   <a
                     href={mapsLink}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-[10px] font-bold uppercase tracking-wide px-2.5 py-1.5 rounded-lg bg-red-500/15 hover:bg-red-500/30 text-red-400 border border-red-500/30 transition-colors"
+                    className="text-[10px] font-bold uppercase tracking-wider px-3 py-2 rounded-xl bg-red-500 text-black hover:bg-red-400 shadow-[0_0_15px_rgba(239,68,68,0.3)] transition-all transform hover:scale-105 active:scale-95"
                   >
-                    Ver en Maps
+                    Abrir App
                   </a>
-                  <button
-                    onClick={() => setMapExpanded(p => !p)}
-                    className="w-7 h-7 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
-                  >
-                    <div className={`transition-transform duration-300 ${mapExpanded ? 'rotate-180' : ''}`}>
-                      <ChevronDownIcon />
-                    </div>
-                  </button>
                 </div>
               </div>
 
-              {/* Expandable map iframe — uses coordinates for precision */}
-              <motion.div
-                initial={false}
-                animate={{ height: mapExpanded ? 220 : 0, opacity: mapExpanded ? 1 : 0 }}
-                transition={{ duration: 0.35, ease: 'easeInOut' }}
-                style={{ overflow: 'hidden' }}
-              >
+              {/* Map iframe — always expanded */}
+              <div style={{ overflow: 'hidden' }}>
                 <iframe
                   title="Ubicacion"
                   src={embedUrl}
@@ -600,7 +587,7 @@ export default function ClientPage({ commerceId, data, themeHex, RENDER_API }: a
                   loading="lazy"
                   referrerPolicy="no-referrer-when-downgrade"
                 />
-              </motion.div>
+              </div>
             </motion.div>
           );
         })()}
