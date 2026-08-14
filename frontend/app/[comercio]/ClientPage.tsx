@@ -32,12 +32,24 @@ const TwitterIcon = () => (
 );
 
 const GlobeIcon = () => (
-  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="stroke-indigo-400"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="stroke-indigo-400"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
 );
 
 const ChevronRightIcon = () => (
   <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
 );
+
+// URL Sanitizer: Ensures links like 'wa.me/57...' have https:// prepended
+const formatUrl = (rawUrl: string, phone?: string) => {
+  if (!rawUrl && phone) return `https://wa.me/${phone.replace(/\D/g, '')}`;
+  if (!rawUrl) return '#';
+  let url = rawUrl.trim();
+  if (!url) return '#';
+  if (!/^https?:\/\//i.test(url) && !/^mailto:/i.test(url) && !/^tel:/i.test(url)) {
+    url = `https://${url}`;
+  }
+  return url;
+};
 
 export default function ClientPage({ commerceId, data, themeHex, RENDER_API }: any) {
   let { businessName, avatarJid, promoJid, buttons = [], promos = [] } = data;
@@ -46,31 +58,52 @@ export default function ClientPage({ commerceId, data, themeHex, RENDER_API }: a
      promos = [promoJid];
   }
 
+  // Catalog presence & visibility logic
+  const hasCatalogProducts = Boolean(
+    (data?.whatsappCatalog && data.whatsappCatalog.length > 0) ||
+    (data?.compiledCatalog && data.compiledCatalog.length > 0) ||
+    (data?.catalogs && data.catalogs.length > 0) ||
+    data?.catalogJid
+  );
+  const hasCustomCatalogConfig = Boolean(data?.catalogButtonUrl || data?.catalogButtonText);
+  const isCatalogExplicitlyHidden = data?.hideCatalogButton === true || data?.showCatalogButton === false;
+  const shouldShowCatalogButton = !isCatalogExplicitlyHidden && (hasCatalogProducts || hasCustomCatalogConfig);
+
   const getNetworkSpecs = (btn: any) => {
      const networkType = (btn.type || '').toLowerCase();
+     const rawUrl = btn.url || '';
+     const isChannel = rawUrl.includes('channel/') || networkType === 'channel';
+
      let Icon = GlobeIcon;
-     if (networkType === 'whatsapp') Icon = WhatsappIcon;
-     else if (networkType === 'instagram') Icon = InstagramIcon;
-     else if (networkType === 'tiktok') Icon = TiktokIcon;
-     else if (networkType === 'facebook') Icon = FacebookIcon;
-     else if (networkType === 'pinterest') Icon = PinterestIcon;
-     else if (networkType === 'youtube') Icon = YoutubeIcon;
-     else if (networkType === 'twitter' || networkType === 'x') Icon = TwitterIcon;
+     let linkIntent: 'channel' | 'wa_chat' | 'social' | 'web' = 'web';
+
+     if (isChannel || (networkType === 'whatsapp' && rawUrl.includes('channel/'))) {
+        Icon = WhatsappIcon;
+        linkIntent = 'channel';
+     } else if (networkType === 'whatsapp' || rawUrl.includes('wa.me') || rawUrl.includes('api.whatsapp.com') || btn.phone) {
+        Icon = WhatsappIcon;
+        linkIntent = 'wa_chat';
+     } else if (networkType === 'instagram') { Icon = InstagramIcon; linkIntent = 'social'; }
+     else if (networkType === 'tiktok') { Icon = TiktokIcon; linkIntent = 'social'; }
+     else if (networkType === 'facebook') { Icon = FacebookIcon; linkIntent = 'social'; }
+     else if (networkType === 'pinterest') { Icon = PinterestIcon; linkIntent = 'social'; }
+     else if (networkType === 'youtube') { Icon = YoutubeIcon; linkIntent = 'social'; }
+     else if (networkType === 'twitter' || networkType === 'x') { Icon = TwitterIcon; linkIntent = 'social'; }
 
      let avatarUrl = btn.scrapedImage || '';
      let hasWAAvatar = false;
 
-     if (networkType === 'whatsapp') {
+     if (linkIntent === 'channel' || linkIntent === 'wa_chat') {
        let waId = btn.phone || '';
-       if (!waId && btn.url) {
-           const url = btn.url.trim();
+       if (!waId && rawUrl) {
+           const url = rawUrl.trim();
            if (url.includes('channel/')) {
                waId = url.split('channel/')[1].split('/')[0].split('?')[0];
            } else if (url.includes('wa.me/')) {
                waId = url.split('wa.me/')[1].split('/')[0].split('?')[0];
            } else if (url.includes('api.whatsapp.com/send') || url.includes('web.whatsapp.com/send') || url.includes('whatsapp.com/send')) {
                try {
-                   const urlObj = new URL(url);
+                   const urlObj = new URL(url.startsWith('http') ? url : `https://${url}`);
                    waId = urlObj.searchParams.get('phone') || '';
                } catch (e) {
                    const match = url.match(/[?&]phone=([^&#\s]+)/);
@@ -91,27 +124,78 @@ export default function ClientPage({ commerceId, data, themeHex, RENDER_API }: a
        }
      }
 
-     return { Icon, avatarUrl, hasWAAvatar };
+     return { Icon, avatarUrl, hasWAAvatar, linkIntent };
   };
 
-  // Group buttons logically to handle many links cleanly
-  const whatsappButtons = buttons.filter((b: any) => (b.type || '').toLowerCase() === 'whatsapp');
-  const socialButtons = buttons.filter((b: any) => ['instagram', 'tiktok', 'facebook', 'pinterest', 'youtube', 'twitter', 'x'].includes((b.type || '').toLowerCase()));
-  const webButtons = buttons.filter((b: any) => !['whatsapp', 'instagram', 'tiktok', 'facebook', 'pinterest', 'youtube', 'twitter', 'x'].includes((b.type || '').toLowerCase()));
+  // Group buttons logically by intent for clean layout hierarchy
+  const channelButtons = buttons.filter((b: any) => getNetworkSpecs(b).linkIntent === 'channel');
+  const waChatButtons = buttons.filter((b: any) => getNetworkSpecs(b).linkIntent === 'wa_chat');
+  const socialButtons = buttons.filter((b: any) => getNetworkSpecs(b).linkIntent === 'social');
+  const webButtons = buttons.filter((b: any) => getNetworkSpecs(b).linkIntent === 'web');
 
   const sectionsList = [
-    { title: 'Atención & Canales Directos', items: whatsappButtons },
+    { title: 'Canales de Novedades', items: channelButtons },
+    { title: 'Atencion Directa', items: waChatButtons },
     { title: 'Redes Sociales', items: socialButtons },
-    { title: 'Sitios & Plataformas Web', items: webButtons },
+    { title: 'Sitios & Navegacion Web', items: webButtons },
   ].filter(s => s.items.length > 0);
 
-  // Fallback if no specific categorization matches
   const hasSections = sectionsList.length > 1;
 
   const renderButtonCard = (btn: any, index: number) => {
-     const { Icon, avatarUrl, hasWAAvatar } = getNetworkSpecs(btn);
-     const href = btn.url ? btn.url : (btn.phone ? `https://wa.me/${btn.phone}` : '#');
+     const { Icon, avatarUrl, hasWAAvatar, linkIntent } = getNetworkSpecs(btn);
+     const href = formatUrl(btn.url, btn.phone);
 
+     // Specialized layout for WhatsApp Channels (Prominent Avatar on the Left)
+     if (linkIntent === 'channel' && hasWAAvatar && avatarUrl) {
+        return (
+           <motion.a 
+              key={index} 
+              initial={{ opacity: 0, y: 15 }} 
+              animate={{ opacity: 1, y: 0 }} 
+              transition={{ delay: index * 0.05 + 0.1 }} 
+              href={href} 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              className="w-full flex items-center justify-between p-3.5 sm:p-4 rounded-2xl backdrop-blur-xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all shadow-[0_4px_20px_rgba(0,0,0,0.4)] hover:shadow-[0_0_25px_var(--theme)] group hover:scale-[1.01] active:scale-[0.99] gap-3.5"
+           >
+              {/* Prominent Large Avatar on Left */}
+              <div className="w-13 h-13 sm:w-14 sm:h-14 rounded-2xl overflow-hidden shrink-0 bg-zinc-900 border-2 border-white/20 shadow-lg relative group-hover:scale-105 transition-transform">
+                 <img 
+                   src={avatarUrl} 
+                   alt={btn.name} 
+                   className="w-full h-full object-cover" 
+                   onError={(e) => (e.currentTarget.style.display = 'none')} 
+                 />
+                 <div className="absolute bottom-0 right-0 p-0.5 bg-black/80 rounded-tl-lg backdrop-blur-sm">
+                    <WhatsappIcon />
+                 </div>
+              </div>
+
+              <div className="flex flex-col min-w-0 flex-1">
+                 <div className="flex items-center gap-2">
+                    <span className="text-sm sm:text-base font-bold text-white group-hover:text-[var(--theme)] transition-colors truncate leading-snug">
+                       {btn.name}
+                    </span>
+                    <span className="text-[10px] uppercase font-extrabold tracking-wider px-2 py-0.5 rounded-full bg-green-500/20 text-green-400 border border-green-500/30 shrink-0">
+                       Canal
+                    </span>
+                 </div>
+                 {btn.role && (
+                    <span className="text-xs font-medium text-white/60 truncate mt-1">
+                       {btn.role}
+                    </span>
+                 )}
+              </div>
+
+              <div className="w-8 h-8 rounded-full flex items-center justify-center text-white/40 group-hover:text-white group-hover:translate-x-0.5 transition-all shrink-0 bg-white/5 group-hover:bg-white/10">
+                 <ChevronRightIcon />
+              </div>
+           </motion.a>
+        );
+     }
+
+     // Standard Full-Width Glass Card for Chats, Socials, and Web Links
      return (
         <motion.a 
            key={index} 
@@ -121,7 +205,7 @@ export default function ClientPage({ commerceId, data, themeHex, RENDER_API }: a
            href={href} 
            target="_blank" 
            rel="noopener noreferrer" 
-           className="w-full flex items-center justify-between p-4 rounded-2xl backdrop-blur-xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all shadow-[0_4px_20px_rgba(0,0,0,0.4)] hover:shadow-[0_0_25px_var(--theme)] group hover:scale-[1.01] active:scale-[0.99] gap-3"
+           className="w-full flex items-center justify-between p-3.5 sm:p-4 rounded-2xl backdrop-blur-xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all shadow-[0_4px_20px_rgba(0,0,0,0.4)] hover:shadow-[0_0_25px_var(--theme)] group hover:scale-[1.01] active:scale-[0.99] gap-3"
         >
            <div className="flex items-center gap-3.5 min-w-0 flex-1">
               <div className="shrink-0 bg-white/10 border border-white/15 rounded-xl flex items-center justify-center w-10 h-10 shadow-sm group-hover:scale-105 group-hover:bg-white/20 transition-all">
@@ -140,12 +224,17 @@ export default function ClientPage({ commerceId, data, themeHex, RENDER_API }: a
            </div>
 
            <div className="flex items-center gap-2 shrink-0">
-              {hasWAAvatar && avatarUrl && (
-                 <div className="w-8 h-8 rounded-full overflow-hidden shrink-0 bg-zinc-900 border border-white/20 shadow-md">
+              {linkIntent === 'wa_chat' && hasWAAvatar && avatarUrl && (
+                 <div className="w-9 h-9 rounded-full overflow-hidden shrink-0 bg-zinc-900 border border-white/20 shadow-md">
                     <img src={avatarUrl} alt={btn.name} className="w-full h-full object-cover" onError={(e) => (e.currentTarget.style.display = 'none')} />
                  </div>
               )}
-              <div className="w-6 h-6 rounded-full flex items-center justify-center text-white/30 group-hover:text-white group-hover:translate-x-0.5 transition-all">
+              {linkIntent === 'web' && (
+                 <span className="text-[10px] uppercase font-bold tracking-wider text-white/40 bg-white/5 px-2 py-1 rounded-md border border-white/10 hidden sm:inline-block">
+                    Web
+                 </span>
+              )}
+              <div className="w-7 h-7 rounded-full flex items-center justify-center text-white/30 group-hover:text-white group-hover:translate-x-0.5 transition-all">
                  <ChevronRightIcon />
               </div>
            </div>
@@ -182,11 +271,11 @@ export default function ClientPage({ commerceId, data, themeHex, RENDER_API }: a
           </h1>
         </div>
 
-        {/* PRIMARY CTA CATALOG BUTTON */}
-        {(() => {
-           const buttonUrl = data?.catalogButtonUrl || `/${commerceId}/catalogo`;
+        {/* PRIMARY CTA CATALOG BUTTON (CONDITIONAL) */}
+        {shouldShowCatalogButton && (() => {
+           const buttonUrl = formatUrl(data?.catalogButtonUrl || `/${commerceId}/catalogo`);
            const isExternal = buttonUrl.startsWith('http://') || buttonUrl.startsWith('https://');
-           const defaultText = data?.businessType === 'restaurante' ? 'Menú & Pedidos' : 'Catálogo & Agendamiento';
+           const defaultText = data?.businessType === 'restaurante' ? 'Menu & Pedidos' : 'Catalogo & Agendamiento';
            const buttonText = data?.catalogButtonText || defaultText;
            const contrastColor = getContrastYIQ(themeHex);
 
