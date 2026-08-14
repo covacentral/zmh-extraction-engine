@@ -1,5 +1,6 @@
 'use client';
-import { motion } from 'framer-motion';
+import { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
 import { getContrastYIQ } from '../../utils/color';
 
@@ -39,8 +40,16 @@ const ChevronRightIcon = () => (
   <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
 );
 
+const ChevronDownIcon = () => (
+  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+);
+
 const MessageCircleIcon = () => (
   <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg>
+);
+
+const SearchIcon = () => (
+  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="stroke-white/40"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
 );
 
 const VerifiedIcon = () => (
@@ -62,6 +71,9 @@ const formatUrl = (rawUrl: string, phone?: string) => {
 export default function ClientPage({ commerceId, data, themeHex, RENDER_API }: any) {
   let { businessName, avatarJid, promoJid, buttons = [], promos = [] } = data;
 
+  const [searchQuery, setSearchQuery] = useState('');
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
+
   if (promoJid && (!Array.isArray(promos) || promos.length === 0)) {
      promos = [promoJid];
   }
@@ -76,6 +88,10 @@ export default function ClientPage({ commerceId, data, themeHex, RENDER_API }: a
   const hasCustomCatalogConfig = Boolean(data?.catalogButtonUrl || data?.catalogButtonText);
   const isCatalogExplicitlyHidden = data?.hideCatalogButton === true || data?.showCatalogButton === false;
   const shouldShowCatalogButton = !isCatalogExplicitlyHidden && (hasCatalogProducts || hasCustomCatalogConfig);
+
+  const toggleSection = (key: string) => {
+    setCollapsedSections(prev => ({ ...prev, [key]: !prev[key] }));
+  };
 
   const getNetworkSpecs = (btn: any) => {
      const networkType = (btn.type || '').toLowerCase();
@@ -135,11 +151,20 @@ export default function ClientPage({ commerceId, data, themeHex, RENDER_API }: a
      return { Icon, avatarUrl, hasWAAvatar, linkIntent, networkType };
   };
 
-  // Group buttons logically by intent for clean layout hierarchy
-  const channelButtons = buttons.filter((b: any) => getNetworkSpecs(b).linkIntent === 'channel');
-  const waChatButtons = buttons.filter((b: any) => getNetworkSpecs(b).linkIntent === 'wa_chat');
-  const socialButtons = buttons.filter((b: any) => getNetworkSpecs(b).linkIntent === 'social');
-  const webButtons = buttons.filter((b: any) => getNetworkSpecs(b).linkIntent === 'web');
+  // Filter buttons by search query if user typed
+  const filteredButtons = buttons.filter((btn: any) => {
+     if (!searchQuery.trim()) return true;
+     const q = searchQuery.toLowerCase().trim();
+     return (btn.name || '').toLowerCase().includes(q) || 
+            (btn.role || '').toLowerCase().includes(q) || 
+            (btn.type || '').toLowerCase().includes(q);
+  });
+
+  // Group buttons logically into Bento Box modules
+  const channelButtons = filteredButtons.filter((b: any) => getNetworkSpecs(b).linkIntent === 'channel');
+  const waChatButtons = filteredButtons.filter((b: any) => getNetworkSpecs(b).linkIntent === 'wa_chat');
+  const socialButtons = filteredButtons.filter((b: any) => getNetworkSpecs(b).linkIntent === 'social');
+  const webButtons = filteredButtons.filter((b: any) => getNetworkSpecs(b).linkIntent === 'web');
 
   return (
     <main 
@@ -168,6 +193,28 @@ export default function ClientPage({ commerceId, data, themeHex, RENDER_API }: a
           <h1 className="text-xl sm:text-2xl font-black text-white leading-tight drop-shadow-md tracking-tight px-2">
             {businessName}
           </h1>
+        </div>
+
+        {/* SEARCH BAR INPUT */}
+        <div className="w-full relative">
+           <div className="absolute inset-y-0 left-3.5 flex items-center pointer-events-none">
+              <SearchIcon />
+           </div>
+           <input 
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Buscar canal, servicio o enlace..."
+              className="w-full bg-white/[0.06] hover:bg-white/[0.09] focus:bg-white/[0.1] border border-white/10 focus:border-[var(--theme)] rounded-2xl py-3 pl-10 pr-9 text-xs sm:text-sm text-white placeholder-white/40 outline-none transition-all shadow-inner"
+           />
+           {searchQuery && (
+              <button 
+                onClick={() => setSearchQuery('')}
+                className="absolute inset-y-0 right-3 flex items-center text-white/40 hover:text-white text-xs font-bold transition-colors"
+              >
+                ✕
+              </button>
+           )}
         </div>
 
         {/* PRIMARY CTA CATALOG BUTTON (CONDITIONAL) */}
@@ -208,234 +255,317 @@ export default function ClientPage({ commerceId, data, themeHex, RENDER_API }: a
            );
         })()}
 
-        {/* COMPONENT 1: WHATSAPP CHANNELS / BROADCAST SHOWCASE CARDS */}
-        {channelButtons.length > 0 && (
-           <div className="w-full flex flex-col gap-2.5">
-              <h2 className="text-[10px] font-bold text-white/40 uppercase tracking-widest px-1">
-                 Canales de Novedades
-              </h2>
-              <div className="w-full flex flex-col gap-3">
-                 {channelButtons.map((btn: any, index: number) => {
-                    const { avatarUrl, hasWAAvatar } = getNetworkSpecs(btn);
-                    const href = formatUrl(btn.url, btn.phone);
-                    return (
-                       <motion.a
-                          key={index}
-                          initial={{ opacity: 0, y: 15 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: index * 0.04 + 0.15 }}
-                          href={href}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="w-full flex items-center justify-between p-3.5 sm:p-4 rounded-2xl backdrop-blur-xl bg-gradient-to-r from-green-950/60 via-zinc-900/90 to-zinc-950 border border-green-500/30 transition-all shadow-[0_4px_25px_rgba(0,0,0,0.6)] hover:border-green-500/60 hover:shadow-[0_0_25px_rgba(34,197,94,0.3)] group hover:scale-[1.01] active:scale-[0.99] gap-3.5"
-                       >
-                          {/* Large Channel Hero Avatar on the Left */}
-                          {hasWAAvatar && avatarUrl ? (
-                             <div className="w-13 h-13 sm:w-14 sm:h-14 rounded-2xl overflow-hidden shrink-0 bg-zinc-900 border-2 border-green-500/40 shadow-[0_0_15px_rgba(34,197,94,0.25)] relative">
-                                <img src={avatarUrl} alt={btn.name} className="w-full h-full object-cover" onError={(e) => (e.currentTarget.style.display = 'none')} />
-                                <div className="absolute bottom-0 right-0 p-0.5 bg-black/90 rounded-tl-md">
-                                   <WhatsappIcon />
-                                </div>
-                             </div>
-                          ) : (
-                             <div className="w-13 h-13 rounded-2xl bg-green-500/20 border border-green-500/30 flex items-center justify-center shrink-0">
-                                <WhatsappIcon />
-                             </div>
-                          )}
+        {/* BENTO BOX SYSTEM & ACCORDION MODULES */}
 
-                          <div className="flex flex-col min-w-0 flex-1">
-                             <div className="flex items-center gap-1.5 min-w-0">
-                                <span className="text-sm sm:text-base font-bold text-white group-hover:text-green-400 transition-colors truncate leading-snug">
-                                   {btn.name}
-                                </span>
-                                <VerifiedIcon />
-                             </div>
-                             {btn.role ? (
-                                <span className="text-xs font-medium text-white/60 truncate mt-1">
-                                   {btn.role}
-                                </span>
-                             ) : (
-                                <span className="text-[11px] font-medium text-green-400/80 truncate mt-0.5">
-                                   Canal Oficial de WhatsApp
-                                </span>
-                             )}
-                          </div>
+        {/* BENTO MODULE 1: WHATSAPP CHANNELS SHOWCASE */}
+        {channelButtons.length > 0 && (() => {
+           const sectionKey = 'channels';
+           const isCollapsed = Boolean(collapsedSections[sectionKey]) && !searchQuery;
+           const shouldShowAccordionToggle = channelButtons.length > 2 && !searchQuery;
+           const visibleItems = isCollapsed ? channelButtons.slice(0, 2) : channelButtons;
 
-                          <div className="flex flex-col items-end gap-1 shrink-0">
-                             <span className="text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full bg-green-500/20 text-green-400 border border-green-500/40">
-                                Canal
-                             </span>
-                             <div className="w-6 h-6 rounded-full flex items-center justify-center text-white/40 group-hover:text-white transition-all">
-                                <ChevronRightIcon />
-                             </div>
-                          </div>
-                       </motion.a>
-                    );
-                 })}
-              </div>
-           </div>
-        )}
-
-        {/* COMPONENT 2: DIRECT WHATSAPP CONTACTS (RESTORED PROFILE PHOTO + ONLINE DOT) */}
-        {waChatButtons.length > 0 && (
-           <div className="w-full flex flex-col gap-2.5">
-              <h2 className="text-[10px] font-bold text-white/40 uppercase tracking-widest px-1">
-                 Atencion Directa & Asesores
-              </h2>
+           return (
               <div className="w-full flex flex-col gap-2.5">
-                 {waChatButtons.map((btn: any, index: number) => {
-                    const { avatarUrl, hasWAAvatar } = getNetworkSpecs(btn);
-                    const href = formatUrl(btn.url, btn.phone);
-                    return (
-                       <motion.a
-                          key={index}
-                          initial={{ opacity: 0, y: 15 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: index * 0.04 + 0.2 }}
-                          href={href}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="w-full flex items-center justify-between p-3.5 rounded-2xl backdrop-blur-xl bg-gradient-to-r from-zinc-900/90 via-zinc-900/60 to-zinc-950 border border-green-500/25 hover:border-green-500/50 transition-all shadow-md group hover:scale-[1.01] active:scale-[0.99] gap-3"
+                 <div className="w-full flex items-center justify-between px-1">
+                    <h2 className="text-[10px] font-bold text-white/40 uppercase tracking-widest">
+                       Canales de Novedades
+                    </h2>
+                    {shouldShowAccordionToggle && (
+                       <button 
+                         onClick={() => toggleSection(sectionKey)}
+                         className="text-[10px] font-bold text-white/50 hover:text-white flex items-center gap-1 transition-colors"
                        >
-                          <div className="flex items-center gap-3 min-w-0 flex-1">
-                             {/* Restored WhatsApp Contact Profile Photo with Online Indicator */}
+                          <span>{isCollapsed ? `Ver todos (${channelButtons.length})` : 'Colapsar'}</span>
+                          <div className={`transition-transform duration-300 ${isCollapsed ? '' : 'rotate-180'}`}>
+                             <ChevronDownIcon />
+                          </div>
+                       </button>
+                    )}
+                 </div>
+
+                 <div className="w-full flex flex-col gap-3">
+                    {visibleItems.map((btn: any, index: number) => {
+                       const { avatarUrl, hasWAAvatar } = getNetworkSpecs(btn);
+                       const href = formatUrl(btn.url, btn.phone);
+                       return (
+                          <motion.a
+                             key={index}
+                             initial={{ opacity: 0, y: 12 }}
+                             animate={{ opacity: 1, y: 0 }}
+                             transition={{ delay: index * 0.04 + 0.15 }}
+                             href={href}
+                             target="_blank"
+                             rel="noopener noreferrer"
+                             className="w-full flex items-center justify-between p-3.5 sm:p-4 rounded-2xl backdrop-blur-xl bg-gradient-to-r from-green-950/60 via-zinc-900/90 to-zinc-950 border border-green-500/30 transition-all shadow-[0_4px_25px_rgba(0,0,0,0.6)] hover:border-green-500/60 hover:shadow-[0_0_25px_rgba(34,197,94,0.3)] group hover:scale-[1.01] active:scale-[0.99] gap-3.5"
+                          >
                              {hasWAAvatar && avatarUrl ? (
-                                <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-full overflow-hidden shrink-0 bg-zinc-900 border-2 border-green-500/30 relative shadow-md">
+                                <div className="w-13 h-13 sm:w-14 sm:h-14 rounded-2xl overflow-hidden shrink-0 bg-zinc-900 border-2 border-green-500/40 shadow-[0_0_15px_rgba(34,197,94,0.25)] relative">
                                    <img src={avatarUrl} alt={btn.name} className="w-full h-full object-cover" onError={(e) => (e.currentTarget.style.display = 'none')} />
-                                   <div className="w-3 h-3 bg-green-500 rounded-full border-2 border-black absolute bottom-0 right-0 z-10" />
+                                   <div className="absolute bottom-0 right-0 p-0.5 bg-black/90 rounded-tl-md">
+                                      <WhatsappIcon />
+                                   </div>
                                 </div>
                              ) : (
-                                <div className="w-11 h-11 rounded-full bg-green-500/20 border border-green-500/30 flex items-center justify-center shrink-0 relative">
+                                <div className="w-13 h-13 rounded-2xl bg-green-500/20 border border-green-500/30 flex items-center justify-center shrink-0">
                                    <WhatsappIcon />
-                                   <div className="w-3 h-3 bg-green-500 rounded-full border-2 border-black absolute bottom-0 right-0 z-10" />
                                 </div>
                              )}
 
                              <div className="flex flex-col min-w-0 flex-1">
-                                <span className="text-xs sm:text-sm font-bold text-white group-hover:text-green-400 transition-colors truncate leading-snug">
-                                   {btn.name}
-                                </span>
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                   <span className="text-sm sm:text-base font-bold text-white group-hover:text-green-400 transition-colors truncate leading-snug">
+                                      {btn.name}
+                                   </span>
+                                   <VerifiedIcon />
+                                </div>
                                 {btn.role ? (
-                                   <span className="text-[11px] font-medium text-white/50 truncate mt-0.5">
+                                   <span className="text-xs font-medium text-white/60 truncate mt-1">
                                       {btn.role}
                                    </span>
                                 ) : (
-                                   <span className="text-[10px] font-medium text-green-400/70 truncate mt-0.5">
-                                      Chat Directo
+                                   <span className="text-[11px] font-medium text-green-400/80 truncate mt-0.5">
+                                      Canal Oficial de WhatsApp
                                    </span>
                                 )}
                              </div>
-                          </div>
 
-                          <div className="flex items-center gap-1.5 text-[10px] uppercase font-bold tracking-wider px-3 py-1.5 rounded-full bg-green-500/20 text-green-400 border border-green-500/40 shrink-0 group-hover:bg-green-500 group-hover:text-black transition-colors shadow-sm">
-                             <MessageCircleIcon />
-                             <span>Escribir</span>
-                          </div>
-                       </motion.a>
-                    );
-                 })}
-              </div>
-           </div>
-        )}
-
-        {/* COMPONENT 3: SOCIAL MEDIA (BRAND ACCENT 2-COLUMN GRID) */}
-        {socialButtons.length > 0 && (
-           <div className="w-full flex flex-col gap-2.5">
-              <h2 className="text-[10px] font-bold text-white/40 uppercase tracking-widest px-1">
-                 Redes Sociales
-              </h2>
-              <div className="grid grid-cols-2 gap-2.5 w-full">
-                 {socialButtons.map((btn: any, index: number) => {
-                    const { Icon, networkType } = getNetworkSpecs(btn);
-                    const href = formatUrl(btn.url, btn.phone);
-
-                    // Brand-specific accent styling
-                    let brandBorder = 'border-white/10 hover:border-white/20 bg-white/[0.04]';
-                    if (networkType === 'instagram') brandBorder = 'border-pink-500/30 hover:border-pink-500/60 bg-gradient-to-br from-purple-950/20 via-pink-950/20 to-transparent';
-                    else if (networkType === 'tiktok') brandBorder = 'border-zinc-700/50 hover:border-zinc-400/50 bg-white/[0.03]';
-                    else if (networkType === 'facebook') brandBorder = 'border-blue-500/30 hover:border-blue-500/60 bg-blue-950/20';
-                    else if (networkType === 'youtube') brandBorder = 'border-red-500/30 hover:border-red-500/60 bg-red-950/20';
-                    else if (networkType === 'twitter' || networkType === 'x') brandBorder = 'border-sky-500/30 hover:border-sky-500/60 bg-sky-950/20';
-                    else if (networkType === 'pinterest') brandBorder = 'border-red-600/30 hover:border-red-600/60 bg-red-950/20';
-
-                    return (
-                       <motion.a
-                          key={index}
-                          initial={{ opacity: 0, scale: 0.95 }}
-                          animate={{ opacity: 1, scale: 1 }}
-                          transition={{ delay: index * 0.04 + 0.25 }}
-                          href={href}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className={`w-full flex items-center gap-2.5 p-3 rounded-2xl backdrop-blur-xl transition-all shadow-sm group hover:scale-[1.02] active:scale-[0.98] min-w-0 ${brandBorder}`}
-                       >
-                          <div className="shrink-0 bg-white/10 border border-white/15 rounded-xl flex items-center justify-center w-8 h-8 shadow-sm group-hover:scale-105 transition-all">
-                             <Icon />
-                          </div>
-                          <span className="text-xs sm:text-sm font-bold text-white/90 group-hover:text-white transition-colors truncate">
-                             {btn.name}
-                          </span>
-                       </motion.a>
-                    );
-                 })}
-              </div>
-           </div>
-        )}
-
-        {/* COMPONENT 4: WEB PLATFORMS & OTHER LINKS (BROWSER TAB BOOKMARKS) */}
-        {webButtons.length > 0 && (
-           <div className="w-full flex flex-col gap-2.5">
-              <h2 className="text-[10px] font-bold text-white/40 uppercase tracking-widest px-1">
-                 Sitios & Navegacion Web
-              </h2>
-              <div className="w-full flex flex-col gap-2">
-                 {webButtons.map((btn: any, index: number) => {
-                    const href = formatUrl(btn.url, btn.phone);
-                    return (
-                       <motion.a
-                          key={index}
-                          initial={{ opacity: 0, y: 15 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: index * 0.04 + 0.3 }}
-                          href={href}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="w-full flex items-center justify-between p-3.5 sm:p-4 rounded-2xl backdrop-blur-xl bg-zinc-900/80 border border-indigo-500/25 hover:border-indigo-500/50 transition-all shadow-sm group hover:scale-[1.01] active:scale-[0.99] gap-3"
-                       >
-                          <div className="flex items-center gap-3 min-w-0 flex-1">
-                             <div className="shrink-0 bg-indigo-500/15 border border-indigo-500/25 rounded-xl flex items-center justify-center w-10 h-10 shadow-sm group-hover:scale-105 transition-all">
-                                <GlobeIcon />
-                             </div>
-                             <div className="flex flex-col min-w-0 flex-1">
-                                <span className="text-xs sm:text-sm font-bold text-white group-hover:text-indigo-300 transition-colors truncate leading-snug">
-                                   {btn.name}
+                             <div className="flex flex-col items-end gap-1 shrink-0">
+                                <span className="text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full bg-green-500/20 text-green-400 border border-green-500/40">
+                                   Canal
                                 </span>
-                                {btn.role ? (
-                                   <span className="text-[11px] font-medium text-white/50 truncate mt-0.5">
-                                      {btn.role}
-                                   </span>
-                                ) : (
-                                   <span className="text-[10px] font-medium text-indigo-400/70 truncate mt-0.5">
-                                      Pagina Web Externa
-                                   </span>
-                                )}
+                                <div className="w-6 h-6 rounded-full flex items-center justify-center text-white/40 group-hover:text-white transition-all">
+                                   <ChevronRightIcon />
+                                </div>
                              </div>
-                          </div>
+                          </motion.a>
+                       );
+                    })}
+                 </div>
+              </div>
+           );
+        })()}
 
-                          <div className="flex items-center gap-2 shrink-0">
-                             <span className="text-[9px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                                Web
+        {/* BENTO MODULE 2: DIRECT WHATSAPP CONTACTS (2-COLUMN GRID / CARDS WITH ONLINE DOT) */}
+        {waChatButtons.length > 0 && (() => {
+           const sectionKey = 'wa_chats';
+           const isCollapsed = Boolean(collapsedSections[sectionKey]) && !searchQuery;
+           const shouldShowAccordionToggle = waChatButtons.length > 4 && !searchQuery;
+           const visibleItems = isCollapsed ? waChatButtons.slice(0, 4) : waChatButtons;
+
+           return (
+              <div className="w-full flex flex-col gap-2.5">
+                 <div className="w-full flex items-center justify-between px-1">
+                    <h2 className="text-[10px] font-bold text-white/40 uppercase tracking-widest">
+                       Atencion Directa & Asesores
+                    </h2>
+                    {shouldShowAccordionToggle && (
+                       <button 
+                         onClick={() => toggleSection(sectionKey)}
+                         className="text-[10px] font-bold text-white/50 hover:text-white flex items-center gap-1 transition-colors"
+                       >
+                          <span>{isCollapsed ? `Ver todos (${waChatButtons.length})` : 'Colapsar'}</span>
+                          <div className={`transition-transform duration-300 ${isCollapsed ? '' : 'rotate-180'}`}>
+                             <ChevronDownIcon />
+                          </div>
+                       </button>
+                    )}
+                 </div>
+
+                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full">
+                    {visibleItems.map((btn: any, index: number) => {
+                       const { avatarUrl, hasWAAvatar } = getNetworkSpecs(btn);
+                       const href = formatUrl(btn.url, btn.phone);
+                       return (
+                          <motion.a
+                             key={index}
+                             initial={{ opacity: 0, y: 12 }}
+                             animate={{ opacity: 1, y: 0 }}
+                             transition={{ delay: index * 0.04 + 0.2 }}
+                             href={href}
+                             target="_blank"
+                             rel="noopener noreferrer"
+                             className="w-full flex items-center justify-between p-3.5 rounded-2xl backdrop-blur-xl bg-gradient-to-r from-zinc-900/90 via-zinc-900/60 to-zinc-950 border border-green-500/25 hover:border-green-500/50 transition-all shadow-md group hover:scale-[1.01] active:scale-[0.99] gap-3"
+                          >
+                             <div className="flex items-center gap-3 min-w-0 flex-1">
+                                {hasWAAvatar && avatarUrl ? (
+                                   <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-full overflow-hidden shrink-0 bg-zinc-900 border-2 border-green-500/30 relative shadow-md">
+                                      <img src={avatarUrl} alt={btn.name} className="w-full h-full object-cover" onError={(e) => (e.currentTarget.style.display = 'none')} />
+                                      <div className="w-3 h-3 bg-green-500 rounded-full border-2 border-black absolute bottom-0 right-0 z-10" />
+                                   </div>
+                                ) : (
+                                   <div className="w-11 h-11 rounded-full bg-green-500/20 border border-green-500/30 flex items-center justify-center shrink-0 relative">
+                                      <WhatsappIcon />
+                                      <div className="w-3 h-3 bg-green-500 rounded-full border-2 border-black absolute bottom-0 right-0 z-10" />
+                                   </div>
+                                )}
+
+                                <div className="flex flex-col min-w-0 flex-1">
+                                   <span className="text-xs sm:text-sm font-bold text-white group-hover:text-green-400 transition-colors truncate leading-snug">
+                                      {btn.name}
+                                   </span>
+                                   {btn.role ? (
+                                      <span className="text-[11px] font-medium text-white/50 truncate mt-0.5">
+                                         {btn.role}
+                                      </span>
+                                   ) : (
+                                      <span className="text-[10px] font-medium text-green-400/70 truncate mt-0.5">
+                                         Chat Directo
+                                      </span>
+                                   )}
+                                </div>
+                             </div>
+
+                             <div className="flex items-center gap-1 text-[10px] uppercase font-bold tracking-wider px-2.5 py-1 rounded-full bg-green-500/20 text-green-400 border border-green-500/40 shrink-0 group-hover:bg-green-500 group-hover:text-black transition-colors shadow-sm">
+                                <MessageCircleIcon />
+                                <span>Escribir</span>
+                             </div>
+                          </motion.a>
+                       );
+                    })}
+                 </div>
+              </div>
+           );
+        })()}
+
+        {/* BENTO MODULE 3: SOCIAL MEDIA (ULTRA-COMPACT 4-COLUMN BRAND GRID) */}
+        {socialButtons.length > 0 && (() => {
+           const sectionKey = 'socials';
+           const isCollapsed = Boolean(collapsedSections[sectionKey]) && !searchQuery;
+           const shouldShowAccordionToggle = socialButtons.length > 8 && !searchQuery;
+           const visibleItems = isCollapsed ? socialButtons.slice(0, 8) : socialButtons;
+
+           return (
+              <div className="w-full flex flex-col gap-2.5">
+                 <div className="w-full flex items-center justify-between px-1">
+                    <h2 className="text-[10px] font-bold text-white/40 uppercase tracking-widest">
+                       Redes Sociales
+                    </h2>
+                    {shouldShowAccordionToggle && (
+                       <button 
+                         onClick={() => toggleSection(sectionKey)}
+                         className="text-[10px] font-bold text-white/50 hover:text-white flex items-center gap-1 transition-colors"
+                       >
+                          <span>{isCollapsed ? `Ver todas (${socialButtons.length})` : 'Colapsar'}</span>
+                          <div className={`transition-transform duration-300 ${isCollapsed ? '' : 'rotate-180'}`}>
+                             <ChevronDownIcon />
+                          </div>
+                       </button>
+                    )}
+                 </div>
+
+                 <div className="grid grid-cols-4 gap-2 w-full">
+                    {visibleItems.map((btn: any, index: number) => {
+                       const { Icon, networkType } = getNetworkSpecs(btn);
+                       const href = formatUrl(btn.url, btn.phone);
+
+                       let brandBorder = 'border-white/10 hover:border-white/20 bg-white/[0.04]';
+                       if (networkType === 'instagram') brandBorder = 'border-pink-500/30 hover:border-pink-500/60 bg-gradient-to-br from-purple-950/20 via-pink-950/20 to-transparent';
+                       else if (networkType === 'tiktok') brandBorder = 'border-zinc-700/50 hover:border-zinc-400/50 bg-white/[0.03]';
+                       else if (networkType === 'facebook') brandBorder = 'border-blue-500/30 hover:border-blue-500/60 bg-blue-950/20';
+                       else if (networkType === 'youtube') brandBorder = 'border-red-500/30 hover:border-red-500/60 bg-red-950/20';
+                       else if (networkType === 'twitter' || networkType === 'x') brandBorder = 'border-sky-500/30 hover:border-sky-500/60 bg-sky-950/20';
+                       else if (networkType === 'pinterest') brandBorder = 'border-red-600/30 hover:border-red-600/60 bg-red-950/20';
+
+                       return (
+                          <motion.a
+                             key={index}
+                             initial={{ opacity: 0, scale: 0.9 }}
+                             animate={{ opacity: 1, scale: 1 }}
+                             transition={{ delay: index * 0.03 + 0.2 }}
+                             href={href}
+                             target="_blank"
+                             rel="noopener noreferrer"
+                             className={`w-full flex flex-col items-center justify-center p-2.5 rounded-2xl backdrop-blur-xl transition-all shadow-sm group hover:scale-[1.03] active:scale-[0.97] min-w-0 text-center ${brandBorder}`}
+                          >
+                             <div className="bg-white/10 border border-white/15 rounded-xl flex items-center justify-center w-8 h-8 shadow-sm group-hover:scale-110 transition-transform mb-1">
+                                <Icon />
+                             </div>
+                             <span className="text-[11px] font-bold text-white/90 group-hover:text-white transition-colors truncate w-full">
+                                {btn.name}
                              </span>
-                             <div className="w-6 h-6 rounded-full flex items-center justify-center text-white/30 group-hover:text-white transition-all">
-                                <ChevronRightIcon />
-                             </div>
-                          </div>
-                       </motion.a>
-                    );
-                 })}
+                          </motion.a>
+                       );
+                    })}
+                 </div>
               </div>
-           </div>
-        )}
+           );
+        })()}
+
+        {/* BENTO MODULE 4: WEB PLATFORMS & OTHER LINKS (2-COLUMN BOOKMARKS) */}
+        {webButtons.length > 0 && (() => {
+           const sectionKey = 'web_links';
+           const isCollapsed = Boolean(collapsedSections[sectionKey]) && !searchQuery;
+           const shouldShowAccordionToggle = webButtons.length > 4 && !searchQuery;
+           const visibleItems = isCollapsed ? webButtons.slice(0, 4) : webButtons;
+
+           return (
+              <div className="w-full flex flex-col gap-2.5">
+                 <div className="w-full flex items-center justify-between px-1">
+                    <h2 className="text-[10px] font-bold text-white/40 uppercase tracking-widest">
+                       Sitios & Navegacion Web
+                    </h2>
+                    {shouldShowAccordionToggle && (
+                       <button 
+                         onClick={() => toggleSection(sectionKey)}
+                         className="text-[10px] font-bold text-white/50 hover:text-white flex items-center gap-1 transition-colors"
+                       >
+                          <span>{isCollapsed ? `Ver todos (${webButtons.length})` : 'Colapsar'}</span>
+                          <div className={`transition-transform duration-300 ${isCollapsed ? '' : 'rotate-180'}`}>
+                             <ChevronDownIcon />
+                          </div>
+                       </button>
+                    )}
+                 </div>
+
+                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full">
+                    {visibleItems.map((btn: any, index: number) => {
+                       const href = formatUrl(btn.url, btn.phone);
+                       return (
+                          <motion.a
+                             key={index}
+                             initial={{ opacity: 0, y: 12 }}
+                             animate={{ opacity: 1, y: 0 }}
+                             transition={{ delay: index * 0.04 + 0.25 }}
+                             href={href}
+                             target="_blank"
+                             rel="noopener noreferrer"
+                             className="w-full flex items-center justify-between p-3.5 sm:p-4 rounded-2xl backdrop-blur-xl bg-zinc-900/80 border border-indigo-500/25 hover:border-indigo-500/50 transition-all shadow-sm group hover:scale-[1.01] active:scale-[0.99] gap-3"
+                          >
+                             <div className="flex items-center gap-3 min-w-0 flex-1">
+                                <div className="shrink-0 bg-indigo-500/15 border border-indigo-500/25 rounded-xl flex items-center justify-center w-10 h-10 shadow-sm group-hover:scale-105 transition-all">
+                                   <GlobeIcon />
+                                </div>
+                                <div className="flex flex-col min-w-0 flex-1">
+                                   <span className="text-xs sm:text-sm font-bold text-white group-hover:text-indigo-300 transition-colors truncate leading-snug">
+                                      {btn.name}
+                                   </span>
+                                   {btn.role ? (
+                                      <span className="text-[11px] font-medium text-white/50 truncate mt-0.5">
+                                         {btn.role}
+                                      </span>
+                                   ) : (
+                                      <span className="text-[10px] font-medium text-indigo-400/70 truncate mt-0.5">
+                                         Pagina Web Externa
+                                      </span>
+                                   )}
+                                </div>
+                             </div>
+
+                             <div className="flex items-center gap-2 shrink-0">
+                                <span className="text-[9px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 hidden sm:inline-block">
+                                   Web
+                                </span>
+                                <div className="w-6 h-6 rounded-full flex items-center justify-center text-white/30 group-hover:text-white transition-all">
+                                   <ChevronRightIcon />
+                                </div>
+                             </div>
+                          </motion.a>
+                       );
+                    })}
+                 </div>
+              </div>
+           );
+        })()}
 
         {/* PROMOS */}
         {promos.length > 0 && (
