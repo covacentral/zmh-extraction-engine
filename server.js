@@ -576,37 +576,54 @@ async function extractChannelProducts(sock, channelJidOrInvite, count = 5, comme
 
     const finalArea = (areaName && areaName.trim()) ? areaName.trim() : (channelMetaName || 'Canal');
 
+function findNodesByTag(node, tag) {
+    let results = [];
+    if (!node || typeof node !== 'object') return results;
+    if (node.tag === tag) results.push(node);
+    if (Array.isArray(node.content)) {
+        for (const child of node.content) {
+            results = results.concat(findNodesByTag(child, tag));
+        }
+    }
+    return results;
+}
+
     let rawMessages = [];
     try {
+        let resNode = null;
         if (typeof sock.newsletterFetchMessages === 'function') {
-            const resNode = await sock.newsletterFetchMessages(targetJid, Number(count) || 5);
+            resNode = await sock.newsletterFetchMessages(targetJid, Number(count) || 5);
+        }
+
+        if (Array.isArray(resNode)) {
+            rawMessages = resNode;
+        } else if (resNode && typeof resNode === 'object') {
+            const messageNodes = findNodesByTag(resNode, 'message');
             
-            if (Array.isArray(resNode)) {
-                rawMessages = resNode;
-            } else if (resNode && typeof resNode === 'object') {
-                const messageUpdatesNode = getBinaryNodeChild(resNode, 'message_updates') || getBinaryNodeChild(resNode, 'messages') || resNode;
-                const messageNodes = getAllBinaryNodeChildren(messageUpdatesNode, 'message');
-                
-                for (const mNode of messageNodes) {
-                    let msgProto = null;
-                    const plaintext = getBinaryNodeChild(mNode, 'plaintext');
-                    if (plaintext && plaintext.content) {
+            for (const mNode of messageNodes) {
+                let msgProto = null;
+                const plaintextNodes = findNodesByTag(mNode, 'plaintext');
+                for (const pt of plaintextNodes) {
+                    if (pt && pt.content) {
                         try {
-                            const buf = Buffer.isBuffer(plaintext.content) ? plaintext.content : Buffer.from(plaintext.content);
+                            const buf = Buffer.isBuffer(pt.content) ? pt.content : Buffer.from(pt.content);
                             msgProto = proto.Message.decode(buf);
                         } catch (decodeErr) {
                             console.warn('[Channel Proto Decode]', decodeErr.message);
                         }
                     }
-                    rawMessages.push({
-                        key: {
-                            id: mNode.attrs?.id || mNode.attrs?.server_id || `post_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-                            remoteJid: targetJid
-                        },
-                        messageTimestamp: Number(mNode.attrs?.t || Date.now() / 1000),
-                        message: msgProto || {}
-                    });
                 }
+
+                rawMessages.push({
+                    key: {
+                        id: mNode.attrs?.id || mNode.attrs?.server_id || `post_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+                        remoteJid: targetJid
+                    },
+                    messageTimestamp: Number(mNode.attrs?.t || Date.now() / 1000),
+                    message: msgProto || mNode,
+                    attrs: mNode.attrs || {},
+                    content: mNode.content || []
+                });
             }
         }
     } catch (fetchErr) {

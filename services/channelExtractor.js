@@ -79,21 +79,56 @@ function cleanTitle(rawFirstLine) {
 }
 
 /**
- * Extract structured product from a WhatsApp Newsletter message object
+ * Extract structured product from a WhatsApp Newsletter message object or node
  */
 function extractProductFromMessage(msgObj, channelName = 'Canal Oficial') {
-  const msg = msgObj?.message || msgObj;
-  if (!msg) return null;
+  if (!msgObj) return null;
 
-  // Extract caption from imageMessage, videoMessage, or extendedTextMessage
-  const caption = 
-    msg.imageMessage?.caption || 
-    msg.videoMessage?.caption || 
-    msg.extendedTextMessage?.text || 
-    msg.conversation || 
-    '';
+  let caption = '';
+  let imageUrl = '';
+  let postId = msgObj.key?.id || msgObj.id || `post_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+  let timestamp = msgObj.messageTimestamp 
+    ? (typeof msgObj.messageTimestamp === 'number' ? msgObj.messageTimestamp * 1000 : Number(msgObj.messageTimestamp) * 1000)
+    : Date.now();
 
-  if (!caption && !msg.imageMessage) return null;
+  // 1. Check if it's a standard WAMessage with protobuf message property
+  const msg = msgObj.message || msgObj;
+  if (msg) {
+    caption = 
+      msg.imageMessage?.caption || 
+      msg.videoMessage?.caption || 
+      msg.extendedTextMessage?.text || 
+      msg.conversation || 
+      msg.text || 
+      '';
+
+    imageUrl = msg.imageMessage?.url || msg.imageUrl || '';
+    if (!imageUrl && msg.imageMessage?.directPath) {
+      imageUrl = `https://mmg.whatsapp.net${msg.imageMessage.directPath}`;
+    }
+  }
+
+  // 2. If it's a direct XML BinaryNode structure
+  if (!caption && msgObj.attrs) {
+    postId = msgObj.attrs.id || msgObj.attrs.server_id || postId;
+    if (msgObj.attrs.t) timestamp = Number(msgObj.attrs.t) * 1000;
+  }
+
+  if (!caption && msgObj.content && Array.isArray(msgObj.content)) {
+    for (const child of msgObj.content) {
+      if (child && typeof child === 'object') {
+        if (child.tag === 'image' || child.tag === 'video') {
+          if (child.attrs?.caption) caption = child.attrs.caption;
+          if (child.attrs?.url) imageUrl = child.attrs.url;
+        } else if (child.tag === 'text' || child.tag === 'caption' || child.tag === 'body') {
+          if (typeof child.content === 'string') caption = child.content;
+          else if (child.attrs?.text) caption = child.attrs.text;
+        }
+      }
+    }
+  }
+
+  if (!caption && !imageUrl) return null;
 
   const lines = caption.split('\n').map(l => l.trim()).filter(Boolean);
   const rawTitle = lines[0] || 'Producto de Canal';
