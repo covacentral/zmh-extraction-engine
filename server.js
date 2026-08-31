@@ -19,6 +19,7 @@ const PDFDocument = require('pdfkit');
 
 const { db, admin }            = require('./services/firebase');
 const { deductInventory, savePremiumMetrics } = require('./services/metrics');
+const { extractProductFromMessage } = require('./services/channelExtractor');
 
 // ── Global error guards (keep process alive from Baileys rejections) ──────────
 process.on('unhandledRejection', (reason) => console.error('[UnhandledRejection]', reason));
@@ -135,6 +136,37 @@ async function startWhatsApp() {
                 isReady      = true;
                 globalSock   = sock;
                 reconnecting = false;
+            }
+        });
+
+        // ── Real-time WhatsApp Channel Post Listener ─────────────────────────
+        sock.ev.on('messages.upsert', async ({ messages }) => {
+            if (!db || !messages || !Array.isArray(messages)) return;
+            for (const msg of messages) {
+                const remoteJid = msg.key?.remoteJid || '';
+                if (!remoteJid.endsWith('@newsletter')) continue;
+
+                try {
+                    const comerciosSnap = await db.collection('comercios').get();
+                    for (const doc of comerciosSnap.docs) {
+                        const data = doc.data();
+                        const channelList = Array.isArray(data.catalogs) ? data.catalogs : [];
+                        const isMatchingChannel = 
+                            data.channelJid === remoteJid ||
+                            channelList.some(c => c.jid === remoteJid || c.channelJid === remoteJid);
+
+                        if (isMatchingChannel && data.channelSync !== false) {
+                            const channelName = data.channelName || data.businessName || 'Canal';
+                            const product = extractProductFromMessage(msg, channelName);
+                            if (product && product.name) {
+                                await upsertChannelProduct(doc.id, product);
+                                console.log(`[WA Channel Realtime] Producto extraído para ${doc.id}: ${product.name} ($${product.price})`);
+                            }
+                        }
+                    }
+                } catch (chErr) {
+                    console.error('[WA Channel Upsert Error]', chErr.message);
+                }
             }
         });
     } catch (err) {
@@ -487,5 +519,93 @@ app.get('/api/report/daily', async (req, res) => {
     }
 });
 
+// ── Channel Product Helpers ──────────────────────────────────────────────────
+async function upsertChannelProduct(commerceId, product) {
+    if (!db || !commerceId || !product) return;
+    const catRef = db.collection('comercios').doc(commerceId).collection('_system').doc('catalog');
+    const catDoc = await catRef.get();
+    let catalog = catDoc.exists ? (catDoc.data()?.compiledCatalog || []) : [];
+
+    const existingIdx = catalog.findIndex(p => 
+        (product.channelPostId && p.channelPostId === product.channelPostId) || 
+        (p.id === product.id) ||
+        (product.reference && p.reference && p.reference.toLowerCase() === product.reference.toLowerCase())
+    );
+
+    if (existingIdx >= 0) {
+        catalog[existingIdx] = { ...catalog[existingIdx], ...product, updatedAt: Date.now() };
+    } else {
+        catalog.unshift(product);
+    }
+
+    await catRef.set({ compiledCatalog: catalog }, { merge: true });
+}
+
+async function extractChannelProducts(sock, channelJidOrInvite, count = 5, commerceId = '') {
+    if (!sock) throw new Error('WhatsApp bot no está conectado');
+    let targetJid = channelJidOrInvite.trim();
+
+    if (targetJid.includes('whatsapp.com/channel/')) {
+        const inviteCode = targetJid.replace('https://whatsapp.com/channel/', '').replace('https://chat.whatsapp.com/', '').split('/')[0].trim();
+        try {
+            if (typeof sock.newsletterMetadata === 'function') {
+                const metadata = await sock.newsletterMetadata('invite', inviteCode);
+                if (metadata?.id) targetJid = metadata.id;
+            }
+        } catch (invErr) {
+            console.warn('[WA Channel] Invite resolve fallback:', invErr.message);
+        }
+    }
+
+    if (!targetJid.includes('@')) {
+        targetJid = `${targetJid}@newsletter`;
+    }
+
+    let messages = [];
+    try {
+        if (typeof sock.newsletterFetchMessages === 'function') {
+            messages = await sock.newsletterFetchMessages(targetJid, count);
+        }
+    } catch (fetchErr) {
+        console.warn('[WA Channel Fetch Warning]', fetchErr.message);
+    }
+
+    if (!messages || !Array.isArray(messages)) messages = [];
+
+    const extractedProducts = [];
+    for (const msg of messages) {
+        const prod = extractProductFromMessage(msg);
+        if (prod && prod.name) {
+            extractedProducts.push(prod);
+            if (commerceId) {
+                await upsertChannelProduct(commerceId, prod);
+            }
+        }
+    }
+
+    return {
+        channelJid: targetJid,
+        totalFetched: messages.length,
+        extractedCount: extractedProducts.length,
+        products: extractedProducts
+    };
+}
+
+// WhatsApp Channel Extraction endpoint
+app.post('/api/channel/extract', async (req, res) => {
+    if (!isReady || !globalSock) return res.status(503).json({ error: 'WhatsApp offline' });
+    try {
+        const { commerceId, channelJid, count = 5 } = req.body;
+        if (!channelJid) return res.status(400).json({ error: 'channelJid is required' });
+
+        const result = await extractChannelProducts(globalSock, channelJid, Number(count) || 5, commerceId);
+        res.json({ ok: true, ...result });
+    } catch (e) {
+        console.error('[Channel Extract Route Error]', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // ── Start server ──────────────────────────────────────────────────────────────
 app.listen(port, () => console.log(`[Server] API listening on port ${port}`));
+
