@@ -106,42 +106,6 @@ export async function deleteCommerce(masterToken: string, commerceId: string) {
   return { success: true };
 }
 
-export async function triggerChannelExtraction(
-  masterToken: string,
-  commerceId: string,
-  channelJid: string,
-  count: number = 5,
-  areaName: string = ''
-) {
-  checkAuth(masterToken);
-  if (!channelJid) throw new Error('Se requiere el JID o Link del canal.');
-
-  const botUrl = process.env.RENDER_API || process.env.BOT_URL || 'https://botwhatsappbeily-333769495786.us-west1.run.app';
-
-  try {
-    const response = await fetch(`${botUrl}/api/channel/extract`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        commerceId,
-        channelJid,
-        count,
-        areaName
-      }),
-      signal: AbortSignal.timeout(25000)
-    });
-
-    if (!response.ok) {
-      const errData = await response.json().catch(() => ({}));
-      throw new Error(errData.error || `Error del bot (${response.status})`);
-    }
-
-    const data = await response.json();
-    return { success: true, data };
-  } catch (err: any) {
-    throw new Error(`Fallo al conectar con el bot de WhatsApp: ${err.message}`);
-  }
-}
 
 export async function saveCatalogProducts(masterToken: string, commerceId: string, products: any[]) {
   checkAuth(masterToken);

@@ -6,7 +6,6 @@ import {
   saveCommerceConfig,
   createCommerce,
   deleteCommerce,
-  triggerChannelExtraction,
   saveCatalogProducts
 } from '../../actions/superAdminActions';
 
@@ -20,7 +19,7 @@ export default function SuperAdminClient({ masterToken, initialComercios }: Supe
   const [selectedCommerceId, setSelectedCommerceId] = useState<string>(
     initialComercios.length > 0 ? initialComercios[0].id : ''
   );
-  const [activeTab, setActiveTab] = useState<'branding' | 'bot' | 'channel' | 'pos' | 'inventory' | 'metrics' | 'catalog' | 'links'>('branding');
+  const [activeTab, setActiveTab] = useState<'branding' | 'bot' | 'pos' | 'inventory' | 'metrics' | 'catalog' | 'links'>('branding');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
@@ -37,11 +36,6 @@ export default function SuperAdminClient({ masterToken, initialComercios }: Supe
     businessType: 'tienda',
     themeHex: '#e11d48'
   });
-
-  // Channel extraction state
-  const [extractCount, setExtractCount] = useState<number>(5);
-  const [extracting, setExtracting] = useState(false);
-  const [extractedResult, setExtractedResult] = useState<any>(null);
 
   // Catalog search / filter
   const [searchTerm, setSearchTerm] = useState('');
@@ -116,38 +110,6 @@ export default function SuperAdminClient({ masterToken, initialComercios }: Supe
       setMessage({ type: 'error', text: err.message });
     } finally {
       setSaving(false);
-    }
-  };
-
-  const handleExtractChannelPosts = async () => {
-    if (!selectedCommerceId || !commerceData?.channelJid) {
-      setMessage({ type: 'error', text: 'Por favor ingresa primero el Link o JID del Canal de WhatsApp.' });
-      return;
-    }
-
-    setExtracting(true);
-    setExtractedResult(null);
-    setMessage({ type: 'info', text: `Conectando con el bot de WhatsApp para extraer ${extractCount} publicaciones...` });
-
-    try {
-      const res = await triggerChannelExtraction(
-        masterToken,
-        selectedCommerceId,
-        commerceData.channelJid,
-        extractCount,
-        commerceData.channelName || ''
-      );
-      setExtractedResult(res.data);
-      setMessage({
-        type: 'success',
-        text: `¡Extracción exitosa! Se extrajeron ${res.data?.extractedCount || 0} productos categorizados en el área "${res.data?.area || commerceData.channelName || 'Canal'}".`
-      });
-      // Refresh catalog
-      await loadCommerceDetails(selectedCommerceId);
-    } catch (err: any) {
-      setMessage({ type: 'error', text: err.message });
-    } finally {
-      setExtracting(false);
     }
   };
 
@@ -270,7 +232,6 @@ export default function SuperAdminClient({ masterToken, initialComercios }: Supe
         <aside className="w-full md:w-64 shrink-0 flex md:flex-col gap-2 overflow-x-auto md:overflow-x-visible pb-2 md:pb-0">
           {[
             { id: 'branding', label: 'General & Branding', icon: '🏢' },
-            { id: 'channel', label: 'Extractor de Canales', icon: '📢' },
             { id: 'bot', label: 'Bot WhatsApp & Despacho', icon: '🤖' },
             { id: 'catalog', label: 'Editor de Catálogo', icon: '🏷️' },
             { id: 'pos', label: 'Caja & POS', icon: '🧾' },
@@ -406,120 +367,6 @@ export default function SuperAdminClient({ masterToken, initialComercios }: Supe
                       className="w-full bg-black/60 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-rose-500"
                       placeholder="Breve presentación del comercio para el enlace de inicio..."
                     />
-                  </div>
-                </div>
-              )}
-
-              {/* ── TAB 2: WHATSAPP CHANNEL EXTRACTOR ──────────────────────────── */}
-              {activeTab === 'channel' && (
-                <div className="flex flex-col gap-6">
-                  <div className="border-b border-white/10 pb-4">
-                    <div className="flex items-center gap-2">
-                      <h2 className="text-xl font-black text-white">Extractor Inteligente de Canales WhatsApp</h2>
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">Newsletters AI</span>
-                    </div>
-                    <p className="text-xs text-zinc-400">
-                      Extrae automáticamente productos con su descripción, precio detal, precio mayorista y foto directamente desde las publicaciones de un canal de WhatsApp.
-                    </p>
-                  </div>
-
-                  <div className="bg-black/40 border border-white/10 rounded-2xl p-5 flex flex-col gap-4">
-                    <h3 className="text-sm font-bold text-white">Configuración del Canal</h3>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="text-xs font-bold text-zinc-400 block mb-1">Enlace o JID del Canal de WhatsApp</label>
-                        <input
-                          type="text"
-                          value={commerceData.channelJid || ''}
-                          onChange={(e) => setCommerceData({ ...commerceData, channelJid: e.target.value })}
-                          className="w-full bg-black/60 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-rose-500 font-mono"
-                          placeholder="https://whatsapp.com/channel/0029Va... o 120363...@newsletter"
-                        />
-                        <p className="text-[11px] text-zinc-500 mt-1">Pega el link de invitación oficial de tu canal de WhatsApp.</p>
-                      </div>
-
-                      <div>
-                        <label className="text-xs font-bold text-zinc-400 block mb-1">Nombre de la Sección / Área en Catálogo</label>
-                        <input
-                          type="text"
-                          value={commerceData.channelName || ''}
-                          onChange={(e) => setCommerceData({ ...commerceData, channelName: e.target.value })}
-                          className="w-full bg-black/60 border border-white/10 rounded-xl px-4 py-2.5 text-sm font-bold text-white outline-none focus:border-rose-500"
-                          placeholder="Ej. CACHARROS, ROPA, TECNOLOGÍA..."
-                        />
-                        <p className="text-[11px] text-zinc-500 mt-1">Todos los productos extraídos de este canal se categorizarán automáticamente en esta área.</p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-3 pt-2">
-                      <input
-                        type="checkbox"
-                        id="channelSync"
-                        checked={commerceData.channelSync !== false}
-                        onChange={(e) => setCommerceData({ ...commerceData, channelSync: e.target.checked })}
-                        className="w-5 h-5 rounded accent-rose-600 cursor-pointer"
-                      />
-                      <label htmlFor="channelSync" className="text-xs font-bold text-zinc-300 cursor-pointer">
-                        ⚡ Sincronizar automáticamente en tiempo real conforme publiquen nuevos posts en el canal
-                      </label>
-                    </div>
-                  </div>
-
-                  {/* Manual Batch Extraction Trigger */}
-                  <div className="bg-gradient-to-br from-rose-950/40 to-black border border-rose-500/30 rounded-2xl p-5 flex flex-col gap-4">
-                    <div>
-                      <h3 className="text-base font-black text-rose-400">📥 Extracción Inmediata de Publicaciones Recientes</h3>
-                      <p className="text-xs text-zinc-400 mt-1">
-                        El bot leerá los posts más recientes del canal, extraerá el título, precio detal/mayorista, referencia, marca y foto, y los agregará al catálogo.
-                      </p>
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-4">
-                      <div className="flex items-center gap-2 bg-black/80 border border-white/10 rounded-xl px-3 py-2">
-                        <span className="text-xs font-bold text-zinc-400">Cantidad de posts:</span>
-                        <select
-                          value={extractCount}
-                          onChange={(e) => setExtractCount(Number(e.target.value))}
-                          className="bg-transparent text-white font-black text-sm outline-none cursor-pointer"
-                        >
-                          <option value={1} className="bg-zinc-900">1 publicación</option>
-                          <option value={5} className="bg-zinc-900">5 publicaciones (Recomendado)</option>
-                          <option value={10} className="bg-zinc-900">10 publicaciones</option>
-                          <option value={20} className="bg-zinc-900">20 publicaciones</option>
-                        </select>
-                      </div>
-
-                      <button
-                        onClick={handleExtractChannelPosts}
-                        disabled={extracting}
-                        className="px-6 py-3 bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-lg shadow-rose-600/30 flex items-center gap-2 disabled:opacity-50"
-                      >
-                        {extracting ? (
-                          <>
-                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                            Extrayendo publicaciones...
-                          </>
-                        ) : (
-                          <>
-                            📥 Extraer {extractCount} Posts y Crear Productos
-                          </>
-                        )}
-                      </button>
-                    </div>
-
-                    {/* Result Preview */}
-                    {extractedResult && (
-                      <div className="mt-4 p-4 bg-black/80 rounded-xl border border-emerald-500/30 text-xs font-mono text-zinc-300 flex flex-col gap-2">
-                        <span className="text-emerald-400 font-bold">✓ Éxito: {extractedResult.extractedCount} productos procesados del canal.</span>
-                        {extractedResult.products?.map((p: any, idx: number) => (
-                          <div key={idx} className="flex items-center justify-between border-t border-white/5 pt-2">
-                            <span className="text-white font-bold">{p.name}</span>
-                            <span className="text-rose-400 font-black">Detal: ${(p.price || 0).toLocaleString('es-CO')} | Mayorista: ${(p.wholesalePrice * 1000 || 0).toLocaleString('es-CO')}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
                   </div>
                 </div>
               )}
