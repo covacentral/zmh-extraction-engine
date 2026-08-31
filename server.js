@@ -191,6 +191,14 @@ async function warmupAvatars(sock) {
     }
 }
 
+// Periodic background avatar refresh every 4 hours to detect updated WhatsApp profile pictures
+setInterval(() => {
+    if (globalSock && isReady) {
+        console.log('[Avatar Periodic Refresh] Checking for updated profile pictures in WhatsApp...');
+        warmupAvatars(globalSock);
+    }
+}, 4 * 60 * 60 * 1000);
+
 // Launch WhatsApp non-blocking so HTTP server binds immediately
 setImmediate(() => {
     startWhatsApp();
@@ -346,22 +354,41 @@ function generateInlinePDF(orderData, facCode) {
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok', ready: isReady, bot: isReady ? 'connected' : 'offline' }));
 
-// Avatar proxy (with robust Firestore cache and live WhatsApp fallback)
+// Avatar proxy (with Stale-While-Revalidate and background auto-sync)
 app.get('/api/avatar/:jid', async (req, res) => {
     const rawJid = req.params.jid || '';
     const clean = rawJid.replace(/[^\d]/g, '');
 
-    // 1. Check Firestore cache first for immediate zero-delay response
+    // 1. Check Firestore cache first for immediate zero-delay response (<50ms)
     if (db && clean) {
         try {
             const cachedDoc = await db.collection('avatar_cache').doc(clean).get();
             if (cachedDoc.exists && cachedDoc.data()?.url) {
+                const cachedData = cachedDoc.data();
+                const isStale = !cachedData.updatedAt || (Date.now() - cachedData.updatedAt > 4 * 3600 * 1000); // 4 hours TTL
+
+                // If cache is older than 4 hours, trigger background refresh so profile picture updates automatically
+                if (isStale && globalSock && isReady) {
+                    setImmediate(async () => {
+                        try {
+                            const freshUrl = await globalSock.profilePictureUrl(`${clean}@s.whatsapp.net`, 'image');
+                            if (freshUrl && freshUrl !== cachedData.url) {
+                                await db.collection('avatar_cache').doc(clean).set({
+                                    url: freshUrl,
+                                    updatedAt: Date.now()
+                                }, { merge: true });
+                                console.log(`[Avatar Auto-Refresh] Detected and updated new photo for +${clean}`);
+                            }
+                        } catch {}
+                    });
+                }
+
                 const fetch = (await import('node-fetch')).default;
-                const resp = await (global.fetch ? global.fetch(cachedDoc.data().url) : fetch(cachedDoc.data().url));
+                const resp = await (global.fetch ? global.fetch(cachedData.url) : fetch(cachedData.url));
                 if (resp.ok) {
                     const buffer = await resp.arrayBuffer();
                     res.set('Content-Type', 'image/jpeg');
-                    res.set('Cache-Control', 'public, max-age=86400');
+                    res.set('Cache-Control', 'public, max-age=14400, stale-while-revalidate=86400');
                     return res.send(Buffer.from(buffer));
                 }
             }
@@ -422,7 +449,7 @@ app.get('/api/avatar/:jid', async (req, res) => {
 
         const buffer = await resp.arrayBuffer();
         res.set('Content-Type', 'image/jpeg');
-        res.set('Cache-Control', 'public, max-age=86400');
+        res.set('Cache-Control', 'public, max-age=14400, stale-while-revalidate=86400');
         res.send(Buffer.from(buffer));
     } catch (e) {
         console.error('[Avatar Error]', e.message);

@@ -105,7 +105,7 @@ export async function GET(
               status: 200,
               headers: {
                 'Content-Type': contentType,
-                'Cache-Control': 'public, max-age=86400, stale-while-revalidate=604800',
+                'Cache-Control': 'public, max-age=14400, stale-while-revalidate=86400',
               },
             });
           }
@@ -125,7 +125,7 @@ export async function GET(
 
     const resp = await fetch(targetUrl, {
       signal: controller.signal,
-      next: { revalidate: 86400 },
+      next: { revalidate: 14400 },
     });
     clearTimeout(timeoutId);
 
@@ -136,7 +136,7 @@ export async function GET(
         status: 200,
         headers: {
           'Content-Type': contentType,
-          'Cache-Control': 'public, max-age=86400, stale-while-revalidate=604800',
+          'Cache-Control': 'public, max-age=14400, stale-while-revalidate=86400',
         },
       });
     }
