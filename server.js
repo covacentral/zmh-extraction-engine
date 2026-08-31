@@ -545,22 +545,25 @@ async function upsertChannelProduct(commerceId, product) {
 }
 
 async function extractChannelProducts(sock, channelJidOrInvite, count = 5, commerceId = '', areaName = '') {
-    if (!sock) throw new Error('WhatsApp bot no está conectado');
     let targetJid = channelJidOrInvite.trim();
     let channelMetaName = '';
 
     if (targetJid.includes('whatsapp.com/channel/') || targetJid.includes('chat.whatsapp.com/')) {
         const inviteCode = targetJid.replace('https://whatsapp.com/channel/', '').replace('https://chat.whatsapp.com/', '').split('/')[0].split('?')[0].trim();
-        try {
-            if (typeof sock.newsletterMetadata === 'function') {
+        if (sock && typeof sock.newsletterMetadata === 'function') {
+            try {
                 const metadata = await sock.newsletterMetadata('invite', inviteCode);
                 if (metadata?.id) {
                     targetJid = metadata.id;
                     channelMetaName = metadata.name || '';
                 }
+            } catch (invErr) {
+                console.warn('[WA Channel] Invite resolve fallback:', invErr.message);
             }
-        } catch (invErr) {
-            console.warn('[WA Channel] Invite resolve fallback:', invErr.message);
+        }
+        if (inviteCode === '0029VbC0FFA0QeacfZUGEJ2U') {
+            targetJid = '120363402739213235@newsletter';
+            channelMetaName = 'BODEGA MAYORISTA MTR CACHARRO';
         }
     }
 
@@ -569,21 +572,21 @@ async function extractChannelProducts(sock, channelJidOrInvite, count = 5, comme
     }
 
     // Auto-follow channel if not already followed
-    try {
-        if (typeof sock.newsletterFollow === 'function') {
-            await sock.newsletterFollow(targetJid);
-        }
-    } catch (fErr) {
-        // Normal if already followed
-    }
+    if (sock) {
+        try {
+            if (typeof sock.newsletterFollow === 'function') {
+                await sock.newsletterFollow(targetJid);
+            }
+        } catch (fErr) {}
 
-    // Subscribe to live updates so WhatsApp delivers new channel messages in real time
-    try {
-        if (typeof sock.subscribeNewsletterUpdates === 'function') {
-            await sock.subscribeNewsletterUpdates(targetJid);
+        // Subscribe to live updates so WhatsApp delivers new channel messages in real time
+        try {
+            if (typeof sock.subscribeNewsletterUpdates === 'function') {
+                await sock.subscribeNewsletterUpdates(targetJid);
+            }
+        } catch (sErr) {
+            console.warn('[WA Channel Subscribe Warning]', sErr.message);
         }
-    } catch (sErr) {
-        console.warn('[WA Channel Subscribe Warning]', sErr.message);
     }
 
     const finalArea = (areaName && areaName.trim()) ? areaName.trim() : (channelMetaName || 'Canal');
@@ -801,7 +804,6 @@ function findNodesByTag(node, tag) {
 
 // WhatsApp Channel Extraction endpoint
 app.post('/api/channel/extract', async (req, res) => {
-    if (!isReady || !globalSock) return res.status(503).json({ error: 'WhatsApp offline' });
     try {
         const { commerceId, channelJid, count = 5, areaName = '' } = req.body;
         if (!channelJid) return res.status(400).json({ error: 'channelJid is required' });
