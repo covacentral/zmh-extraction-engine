@@ -9,9 +9,9 @@ function parsePrice(text, type = 'normal') {
   // Specific regex for retail (detal) vs wholesale (mayorista)
   let regex;
   if (type === 'wholesale') {
-    regex = /(?:mayorista|por\s*mayor|p\.?\s*mayor|mayor|x\s*mayor|mayoreo):\s*\$?\s*([\d\.,]+k?)/i;
+    regex = /(?:mayorista|por\s*mayor|p\.?\s*mayor|mayor|x\s*mayor|mayoreo)[:;]?\s*\$?\s*([\d\.,’'k]+)/i;
   } else {
-    regex = /(?:detal|precio\s*detal|p\.?\s*detal|unidad|precio|c\/u):\s*\$?\s*([\d\.,]+k?)/i;
+    regex = /(?:detal|precio\s*detal|p\.?\s*detal|unidad|precio|c\/u)[:;]?\s*\$?\s*([\d\.,’'k]+)/i;
   }
 
   const match = text.match(regex);
@@ -21,7 +21,7 @@ function parsePrice(text, type = 'normal') {
 
   // If normal price wasn't found with specific label, check generic price patterns
   if (type === 'normal') {
-    const genericMatch = text.match(/\$\s*([\d\.,]+k?)/i);
+    const genericMatch = text.match(/\$\s*([\d\.,’'k]+)/i);
     if (genericMatch && genericMatch[1]) {
       return cleanPriceValue(genericMatch[1]);
     }
@@ -35,7 +35,7 @@ function cleanPriceValue(val) {
   let isK = cleaned.endsWith('k');
   if (isK) cleaned = cleaned.slice(0, -1);
 
-  // Remove dots and commas
+  // Remove dots, commas, apostrophes
   cleaned = cleaned.replace(/[^\d]/g, '');
   let num = parseInt(cleaned, 10);
   if (isNaN(num)) return 0;
@@ -70,12 +70,25 @@ function cleanTitle(rawFirstLine) {
   // Remove markdown symbols like * _ ~ and leading/trailing emojis
   let title = rawFirstLine
     .replace(/[\*\_~]/g, '')
-    .replace(/^[\s\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F1E6}-\u{1F1FF}✨🔥🌟⭐🚨📦🛍️]+/gu, '')
-    .replace(/[\s\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F1E6}-\u{1F1FF}✨🔥🌟⭐🚨📦🛍️]+$/gu, '')
+    .replace(/^[\s\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F1E6}-\u{1F1FF}✨🔥🌟⭐🚨📦🛍️😍🩷💜🤩🏠💅☕️🍩]+/gu, '')
+    .replace(/[\s\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F1E6}-\u{1F1FF}✨🔥🌟⭐🚨📦🛍️😍🩷💜🤩🏠💅☕️🍩]+$/gu, '')
     .trim();
 
   if (title.length > 80) title = title.slice(0, 80).trim();
   return title || 'Producto de Canal';
+}
+
+function extractBestTitle(caption) {
+  if (!caption) return 'Producto de Canal';
+  const lines = caption.split('\n').map(l => l.trim()).filter(Boolean);
+  const ignorePatterns = /^(?:familia\s*mayorista|buenos\s*d[ií]as|feliz\s*d[ií]a|hola|atenci[oó]n|nuevo\s*ingreso|promoci[oó]n|oferta\s*del\s*d[ií]a|llegando\s*de\s*todo|reenviado)/i;
+  for (const line of lines) {
+    const cleaned = cleanTitle(line);
+    if (cleaned && !ignorePatterns.test(cleaned) && !cleaned.toLowerCase().startsWith('detal') && !cleaned.toLowerCase().startsWith('mayor') && !cleaned.startsWith('$') && cleaned.length > 2) {
+      return cleaned;
+    }
+  }
+  return cleanTitle(lines[0]) || 'Producto de Canal';
 }
 
 /**
@@ -130,9 +143,7 @@ function extractProductFromMessage(msgObj, channelName = 'Canal Oficial') {
 
   if (!caption && !imageUrl) return null;
 
-  const lines = caption.split('\n').map(l => l.trim()).filter(Boolean);
-  const rawTitle = lines[0] || 'Producto de Canal';
-  const name = cleanTitle(rawTitle);
+  const name = extractBestTitle(caption);
 
   // Prices (in pesos colombianos)
   const normalPriceAmount = parsePrice(caption, 'normal');
