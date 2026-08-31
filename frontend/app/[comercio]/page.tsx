@@ -9,42 +9,11 @@ const RENDER_API = process.env.NEXT_PUBLIC_RENDER_API || '';
 export const revalidate = 30; 
 
 export default async function ComercioServerPage({ params }: { params: { comercio: string } }) {
+  if (!db) return <div>DB Missing</div>;
+
+  let resolved = null;
   try {
-    if (!db) return <div>DB Missing</div>;
-
-    const resolved = await resolveCommerce(params.comercio);
-    if (!resolved) {
-      notFound();
-    }
-
-    const { commerceId, data } = resolved;
-
-    // Prevent maps from throwing map is not a function
-    let safeButtons = data?.buttons;
-    if (!Array.isArray(safeButtons)) {
-        safeButtons = [];
-    }
-
-    // Scrape precise channel images on the server to spare the client
-    const enhancedButtons = await Promise.all(safeButtons.map(async (btn: any) => {
-      let scrapedImage = null;
-      if (btn.url && btn.url.includes('whatsapp.com/channel/')) {
-        try {
-          const resp = await fetch(btn.url, { next: { revalidate: 3600 } });
-          const html = await resp.text();
-          const imageMatch = html.match(/<meta[^>]*property="og:image"[^>]*content="([^"]+)"/i) || html.match(/<meta[^>]*content="([^"]+)"[^>]*property="og:image"/i);
-          if (imageMatch && imageMatch[1]) {
-             // Fix Facebook HTML entity escaping for ampersands which breaks hash signatures in Whatsapp CDNs
-             scrapedImage = imageMatch[1].replace(/&amp;/g, '&');
-          }
-        } catch(e) { console.error("Scrape Error:", e) }
-      }
-      return { ...btn, scrapedImage };
-    }));
-
-    const safeData = { ...data, buttons: enhancedButtons };
-
-    return <ClientPage commerceId={commerceId} data={safeData} themeHex={data?.themeHex || '#4F46E5'} RENDER_API={RENDER_API} />;
+    resolved = await resolveCommerce(params.comercio);
   } catch (error: any) {
     return (
       <div className="p-10 text-white text-center flex flex-col items-center justify-center min-h-screen bg-black">
@@ -55,4 +24,37 @@ export default async function ComercioServerPage({ params }: { params: { comerci
       </div>
     );
   }
+
+  if (!resolved) {
+    notFound();
+  }
+
+  const { commerceId, data } = resolved;
+
+  // Prevent maps from throwing map is not a function
+  let safeButtons = data?.buttons;
+  if (!Array.isArray(safeButtons)) {
+      safeButtons = [];
+  }
+
+  // Scrape precise channel images on the server to spare the client
+  const enhancedButtons = await Promise.all(safeButtons.map(async (btn: any) => {
+    let scrapedImage = null;
+    if (btn.url && btn.url.includes('whatsapp.com/channel/')) {
+      try {
+        const resp = await fetch(btn.url, { next: { revalidate: 3600 } });
+        const html = await resp.text();
+        const imageMatch = html.match(/<meta[^>]*property="og:image"[^>]*content="([^"]+)"/i) || html.match(/<meta[^>]*content="([^"]+)"[^>]*property="og:image"/i);
+        if (imageMatch && imageMatch[1]) {
+           // Fix Facebook HTML entity escaping for ampersands which breaks hash signatures in Whatsapp CDNs
+           scrapedImage = imageMatch[1].replace(/&amp;/g, '&');
+        }
+      } catch(e) { console.error("Scrape Error:", e) }
+    }
+    return { ...btn, scrapedImage };
+  }));
+
+  const safeData = { ...data, buttons: enhancedButtons };
+
+  return <ClientPage commerceId={commerceId} data={safeData} themeHex={data?.themeHex || '#4F46E5'} RENDER_API={RENDER_API} />;
 }
