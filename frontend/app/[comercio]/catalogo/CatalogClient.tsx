@@ -24,18 +24,19 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
      let mappedCompiled: any[] = [];
      if (compiledCatalog && compiledCatalog.length > 0) {
          mappedCompiled = compiledCatalog
-             .filter((p: any) => p.status === 'active')
+             .filter((p: any) => p.status === 'active' || !p.status)
              .map((p: any) => ({
              id: p.id,
              name: p.name,
-             price: p.normalPrice * 1000,
-             priceAmount1000: p.normalPrice * 1000,
-             description: `${p.description || ''}\nReferencia: ${p.reference || ''}\nMarca: ${p.brand || ''}\nMayorista: $${p.wholesalePrice || p.normalPrice}`,
-             imageUrls: p.imageUrl,
-             sectionName: p.area || 'Catálogo',
+             price: p.normalPrice ? p.normalPrice * 1000 : (p.priceAmount1000 || p.price || 0),
+             priceAmount1000: p.normalPrice ? p.normalPrice * 1000 : (p.priceAmount1000 || p.price || 0),
+             description: `${p.description || ''}\nReferencia: ${p.reference || ''}\nMarca: ${p.brand || ''}\nMayorista: $${p.wholesalePrice || p.normalPrice || ''}`,
+             imageUrls: p.imageUrl || p.imageUrls || p.image || p.imageWebp || (p.variations && p.variations[0]?.imageWebp),
+             sectionName: p.area || p.sectionName || 'Catálogo',
              category: p.category || '',
              categoryIcon: p.categoryIcon || '',
-             brand: p.brand || ''
+             brand: p.brand || '',
+             variations: p.variations
          }));
      }
      return [...whatsappCatalog, ...mappedCompiled];
@@ -135,22 +136,26 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
       return null;
   };
 
-  // Fallback for image URLs based on standard Baileys Product structure
+  // Fallback for image URLs based on standard Baileys Product structure or Firebase Storage
   const getImageUrl = (prod: any) => {
-    if (!prod.imageUrls) return '';
-    if (typeof prod.imageUrls === 'string') return prod.imageUrls;
-    if (prod.imageUrls.requested) return prod.imageUrls.requested;
-    if (prod.imageUrls.original) return prod.imageUrls.original;
-    if (Array.isArray(prod.imageUrls)) return prod.imageUrls[0] || '';
+    if (!prod) return '';
+    const raw = prod.imageUrls || prod.imageUrl || prod.image || prod.imageWebp || (prod.variations && prod.variations[0]?.imageWebp);
+    if (!raw) return '';
+    if (typeof raw === 'string') return raw;
+    if (raw.requested) return raw.requested;
+    if (raw.original) return raw.original;
+    if (Array.isArray(raw)) return raw[0] || '';
     return '';
   };
 
-    const getHighResImageUrl = (prod: any) => {
-    if (!prod.imageUrls) return '';
-    if (typeof prod.imageUrls === 'string') return prod.imageUrls;
-    if (prod.imageUrls.original) return prod.imageUrls.original;
-    if (prod.imageUrls.requested) return prod.imageUrls.requested;
-    if (Array.isArray(prod.imageUrls)) return prod.imageUrls[0] || '';
+  const getHighResImageUrl = (prod: any) => {
+    if (!prod) return '';
+    const raw = prod.imageUrls || prod.imageUrl || prod.image || prod.imageWebp || (prod.variations && prod.variations[0]?.imageWebp);
+    if (!raw) return '';
+    if (typeof raw === 'string') return raw;
+    if (raw.original) return raw.original;
+    if (raw.requested) return raw.requested;
+    if (Array.isArray(raw)) return raw[0] || '';
     return '';
   };
 
@@ -515,13 +520,15 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
                                    alt={prod.name} 
                                    loading={isPriority ? "eager" : "lazy"} 
                                    decoding="async"
+                                   onError={(e) => {
+                                      e.currentTarget.style.display = 'none';
+                                   }}
                                    className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 hover:scale-110" 
                                 />
-                             ) : (
-                                <div className="absolute inset-0 w-full h-full flex items-center justify-center text-white/20">
-                                   <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
-                                </div>
-                             )}
+                             ) : null}
+                             <div className="absolute inset-0 w-full h-full flex items-center justify-center text-white/20 -z-0">
+                                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+                             </div>
                              {isOut && (
                                 <div className="absolute inset-0 bg-black/60 flex items-center justify-center backdrop-blur-sm">
                                    <span className="text-white text-[12px] font-black tracking-widest uppercase bg-red-600/90 px-3 py-1.5 rounded-lg border-2 border-red-500 shadow-2xl rotate-[-15deg]">Agotado</span>
@@ -595,13 +602,15 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
                                alt={prod.name} 
                                loading={isPriority ? "eager" : "lazy"}
                                decoding="async"
-                               className="w-full h-full object-cover" 
+                               onError={(e) => {
+                                  e.currentTarget.style.display = 'none';
+                               }}
+                               className="w-full h-full object-cover relative z-10" 
                             />
-                         ) : (
-                            <div className="w-full h-full flex items-center justify-center text-white/20">
-                               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
-                            </div>
-                         )}
+                         ) : null}
+                         <div className="absolute inset-0 w-full h-full flex items-center justify-center text-white/20 z-0">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+                         </div>
                          {isOut && (
                             <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
                                <span className="text-white text-[10px] font-black tracking-widest uppercase bg-red-600/90 px-1.5 py-0.5 rounded border border-red-500 shadow-lg rotate-[-15deg]">Agotado</span>

@@ -57,11 +57,13 @@ export default function ProductClient({ commerceId, productId, data, themeHex, R
   };
 
   const getHighResImageUrl = (prod: any) => {
-    if (!prod.imageUrls) return '';
-    if (typeof prod.imageUrls === 'string') return prod.imageUrls;
-    if (prod.imageUrls.original) return prod.imageUrls.original;
-    if (prod.imageUrls.requested) return prod.imageUrls.requested;
-    if (Array.isArray(prod.imageUrls)) return prod.imageUrls[0] || '';
+    if (!prod) return '';
+    const raw = prod.imageUrls || prod.imageUrl || prod.image || prod.imageWebp || (prod.variations && prod.variations[0]?.imageWebp);
+    if (!raw) return '';
+    if (typeof raw === 'string') return raw;
+    if (raw.original) return raw.original;
+    if (raw.requested) return raw.requested;
+    if (Array.isArray(raw)) return raw[0] || '';
     return '';
   };
 
@@ -118,12 +120,17 @@ export default function ProductClient({ commerceId, productId, data, themeHex, R
           <div className="flex flex-col md:flex-row gap-8 px-4 mt-4">
               <div className="w-full md:w-1/2 relative bg-black rounded-[2.5rem] overflow-hidden border border-white/5 flex items-center justify-center min-h-[40vh] md:min-h-[60vh] shadow-[0_20px_50px_rgba(0,0,0,0.5)]">
                  {imageUrl ? (
-                     <img src={imageUrl} alt={product.name} className={`w-full h-auto object-contain max-h-[70vh] transition-transform duration-700 hover:scale-105 ${isOut ? 'grayscale opacity-75' : ''}`} />
-                 ) : (
-                     <div className="w-full h-full flex items-center justify-center text-white/20">
-                         <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
-                     </div>
-                 )}
+                     <img 
+                        src={imageUrl} 
+                        alt={product.name} 
+                        decoding="async"
+                        onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                        className={`w-full h-auto object-contain max-h-[70vh] transition-transform duration-700 hover:scale-105 relative z-10 ${isOut ? 'grayscale opacity-75' : ''}`} 
+                     />
+                 ) : null}
+                 <div className="absolute inset-0 w-full h-full flex items-center justify-center text-white/20 z-0">
+                     <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+                 </div>
                  {isOut && (
                      <div className="absolute inset-0 bg-black/60 flex items-center justify-center backdrop-blur-sm pointer-events-none">
                          <span className="text-white text-3xl font-black tracking-widest uppercase bg-red-600/90 px-6 py-2 rounded-xl border-4 border-red-500 shadow-2xl rotate-[-15deg]">Agotado</span>
