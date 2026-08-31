@@ -94,7 +94,8 @@ export default function ProductClient({ commerceId, productId, data, themeHex, R
 
   const price = getProductPrice(product);
   const selectedVar = product.variations?.[selectedVariationIdx];
-  const imageUrl = selectedVar?.imageWebp || getHighResImageUrl(product);
+  const selectedVarImg = selectedVar?.imageWebp;
+  const imageUrl = (selectedVarImg && !selectedVarImg.includes('picsum.photos')) ? selectedVarImg : getHighResImageUrl(product);
   const isOut = product.isHidden === true || (selectedVar && selectedVar.stock === 0);
   const cartId = product.variations ? `${product.id}_${selectedVariationIdx}` : product.id;
   const inCart = cart.find(i => i.id === cartId);

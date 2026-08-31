@@ -529,7 +529,8 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
                 const refCode = getProductRef(prod);
                 const vIdx = selectedVariations[prod.id] || 0;
                 const selectedVar = prod.variations?.[vIdx];
-                const imageUrl = selectedVar?.imageWebp || getImageUrl(prod);
+                const selectedVarImg = selectedVar?.imageWebp;
+                const imageUrl = (selectedVarImg && !selectedVarImg.includes('picsum.photos')) ? selectedVarImg : getImageUrl(prod);
                 const cartId = prod.variations ? `${prod.id}_${vIdx}` : prod.id;
                 const stock = selectedVar ? selectedVar.stock : 999;
                 const isOut = prod.isHidden === true || stock === 0;
