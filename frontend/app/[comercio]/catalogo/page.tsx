@@ -15,7 +15,7 @@ export default async function CatalogoPage({ params }: { params: { comercio: str
   if (!doc.exists) return notFound();
 
   const data = doc.data() || {};
-  const RENDER_API = process.env.NEXT_PUBLIC_RENDER_API || 'https://zmh-extraction-engine.onrender.com';
+  const RENDER_API = process.env.NEXT_PUBLIC_RENDER_API || process.env.BOT_SERVER_URL || '';
 
   // API Pasarela: Fetch multi-catalog directly from WhatsApp (Node.js cache) instead of Firestore
   const catalogsConfig = data.catalogs || [];
@@ -27,7 +27,7 @@ export default async function CatalogoPage({ params }: { params: { comercio: str
 
   let mergedCatalog: any[] = [];
 
-  if (catalogsConfig.length > 0) {
+  if (catalogsConfig.length > 0 && RENDER_API) {
       try {
           const fetchPromises = catalogsConfig.map(async (cat: any) => {
               if (!cat.jid) return [];

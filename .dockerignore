@@ -1,0 +1,10 @@
+node_modules
+npm-debug.log
+Dockerfile
+.dockerignore
+.git
+.github
+frontend
+repomix-output.xml
+*.log
+.DS_Store

@@ -17,7 +17,7 @@ export async function generateMetadata(
   if (!doc.exists) return {};
 
   const data = doc.data() || {};
-  const RENDER_API = process.env.NEXT_PUBLIC_RENDER_API || 'https://zmh-extraction-engine.onrender.com';
+  const RENDER_API = process.env.NEXT_PUBLIC_RENDER_API || process.env.BOT_SERVER_URL || '';
 
   const catalogsConfig = data.catalogs || [];
   const legacyJid = data.catalogJid || data.avatarJid;
@@ -27,7 +27,7 @@ export async function generateMetadata(
   }
 
   let mergedCatalog: any[] = [];
-  if (catalogsConfig.length > 0) {
+  if (catalogsConfig.length > 0 && RENDER_API) {
       try {
           const fetchPromises = catalogsConfig.map(async (cat: any) => {
               if (!cat.jid) return [];
@@ -88,7 +88,7 @@ export default async function ProductoPage({ params }: { params: { comercio: str
   if (!doc.exists) return notFound();
 
   const data = doc.data() || {};
-  const RENDER_API = process.env.NEXT_PUBLIC_RENDER_API || 'https://zmh-extraction-engine.onrender.com';
+  const RENDER_API = process.env.NEXT_PUBLIC_RENDER_API || process.env.BOT_SERVER_URL || '';
 
   const catalogsConfig = data.catalogs || [];
   const legacyJid = data.catalogJid || data.avatarJid;
@@ -98,7 +98,7 @@ export default async function ProductoPage({ params }: { params: { comercio: str
   }
 
   let mergedCatalog: any[] = [];
-  if (catalogsConfig.length > 0) {
+  if (catalogsConfig.length > 0 && RENDER_API) {
       try {
           const fetchPromises = catalogsConfig.map(async (cat: any) => {
               if (!cat.jid) return [];

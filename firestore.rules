@@ -1,0 +1,68 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Default deny-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // ── Baileys WhatsApp Session Storage (Strictly Admin SDK Only) ──
+    match /baileys_sessions/{document=**} {
+      allow read, write: if false;
+    }
+
+    // ── Public Avatar Cache (Read Only) ──
+    match /avatar_cache/{document=**} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // ── Multi-Tenant Comercios ──
+    match /comercios/{comercioId} {
+      // Public read for storefront & link concentrator landing
+      allow read: if true;
+      allow write: if false;
+
+      // System compiled catalog (CQRS read model)
+      match /_system/{document=**} {
+        allow read: if true;
+        allow write: if false;
+      }
+
+      // Catalog items
+      match /catalogo/{productId} {
+        allow read: if true;
+        allow write: if false;
+      }
+
+      // POS / Online Orders (Server Actions / Cloud Admin SDK Only)
+      match /pedidos/{pedidoId} {
+        allow read, write: if false;
+      }
+
+      // Financial & Sales Metrics (Strictly Admin / Server Actions)
+      match /estadisticas/{dateDoc} {
+        allow read, write: if false;
+      }
+
+      // Internal Store Areas & Token Mappings
+      match /areas/{areaId} {
+        allow read, write: if false;
+      }
+
+      // Providers & Suppliers
+      match /providers/{providerId} {
+        allow read, write: if false;
+      }
+
+      // VIP Clients & Advisors
+      match /clientes/{clienteId} {
+        allow read, write: if false;
+      }
+      match /asesores/{asesorId} {
+        allow read, write: if false;
+      }
+    }
+  }
+}

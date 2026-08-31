@@ -1,6 +1,6 @@
 /**
  * server.js — Entry point for ZMH WhatsApp Bot
- * Refactored from the monolithic index.js into modular services and routes.
+ * Modular, resilient, and hardened against disconnects and unhandled errors.
  *
  * Architecture:
  *   server.js           ← Express init, global error handlers, WhatsApp connection
@@ -13,7 +13,6 @@
 
 const express = require('express');
 const cors    = require('cors');
-const cron    = require('node-cron');
 
 const { default: makeWASocket, fetchLatestBaileysVersion, initAuthCreds, BufferJSON } = require('@whiskeysockets/baileys');
 const PDFDocument = require('pdfkit');
@@ -29,11 +28,12 @@ process.on('uncaughtException',  (err)    => console.error('[UncaughtException]'
 const app  = express();
 const port = process.env.PORT || 10000;
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 
 // ── WhatsApp state ────────────────────────────────────────────────────────────
-let isReady   = false;
+let isReady    = false;
 let globalSock = null;
+let reconnecting = false;
 
 // ── Firebase Auth State for Baileys (persists WA session in Firestore) ────────
 const useFirebaseAuthState = async (sessionId) => {
@@ -94,29 +94,53 @@ const useFirebaseAuthState = async (sessionId) => {
 
 // ── WhatsApp connection ───────────────────────────────────────────────────────
 async function startWhatsApp() {
-    const { state, saveCreds } = await useFirebaseAuthState('zmh_hub');
-    const { version } = await fetchLatestBaileysVersion();
+    if (reconnecting) return;
+    try {
+        const { state, saveCreds } = await useFirebaseAuthState('zmh_hub');
+        const { version } = await fetchLatestBaileysVersion();
 
-    const sock = makeWASocket({ version, auth: state, printQRInTerminal: false, syncFullHistory: false });
-    sock.ev.on('creds.update', saveCreds);
+        const sock = makeWASocket({
+            version,
+            auth: state,
+            printQRInTerminal: false,
+            syncFullHistory: false,
+            connectTimeoutMs: 30000,
+            defaultQueryTimeoutMs: 15000,
+        });
 
-    sock.ev.on('connection.update', ({ connection, lastDisconnect, qr }) => {
-        if (qr) {
-            console.log('\n================================');
-            console.log('👉 QR CODE: https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=' + encodeURIComponent(qr));
-            console.log('================================\n');
-        }
-        if (connection === 'close') {
-            isReady = false;
-            const statusCode = lastDisconnect?.error?.output?.statusCode;
-            if (statusCode !== 401) { console.log('[WA] Reconnecting...'); startWhatsApp(); }
-            else console.log('[WA] Disconnected by WhatsApp. Delete baileys_sessions in Firebase and restart.');
-        } else if (connection === 'open') {
-            console.log('\n==== OBSERVADOR LISTO Y CONECTADO ====');
-            isReady    = true;
-            globalSock = sock;
-        }
-    });
+        sock.ev.on('creds.update', saveCreds);
+
+        sock.ev.on('connection.update', ({ connection, lastDisconnect, qr }) => {
+            if (qr) {
+                console.log('\n================================');
+                console.log('👉 QR CODE: https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=' + encodeURIComponent(qr));
+                console.log('================================\n');
+            }
+            if (connection === 'close') {
+                isReady = false;
+                globalSock = null;
+                const statusCode = lastDisconnect?.error?.output?.statusCode;
+                if (statusCode !== 401) {
+                    console.log('[WA] Connection closed, reconnecting in 5s (status:', statusCode, ')...');
+                    reconnecting = true;
+                    setTimeout(() => {
+                        reconnecting = false;
+                        startWhatsApp();
+                    }, 5000);
+                } else {
+                    console.log('[WA] Disconnected by WhatsApp (401). Session reset needed in Firestore.');
+                }
+            } else if (connection === 'open') {
+                console.log('\n==== WHATSAPP BOT CONECTADO Y ACTIVO ====');
+                isReady      = true;
+                globalSock   = sock;
+                reconnecting = false;
+            }
+        });
+    } catch (err) {
+        console.error('[WA Init Error]', err);
+        setTimeout(() => startWhatsApp(), 10000);
+    }
 }
 
 startWhatsApp();
@@ -128,12 +152,14 @@ async function resolveJid(rawJid, commerceDoc, field) {
 
     const inviteCode = rawJid.replace('https://chat.whatsapp.com/', '').trim();
     try {
-        const groupInfo = await globalSock.groupGetInviteInfo(inviteCode);
-        if (groupInfo?.id) {
-            await commerceDoc.ref.update({ [field]: groupInfo.id });
-            return groupInfo.id;
+        if (globalSock) {
+            const groupInfo = await globalSock.groupGetInviteInfo(inviteCode);
+            if (groupInfo?.id) {
+                await commerceDoc.ref.update({ [field]: groupInfo.id });
+                return groupInfo.id;
+            }
         }
-    } catch (e) { console.error('[JID] Failed to resolve invite link:', e); }
+    } catch (e) { console.error('[JID] Failed to resolve invite link:', e.message); }
     return rawJid;
 }
 
@@ -186,7 +212,7 @@ function buildOrderMessage({ name, phone, datetime, cart, total, isWholesale, is
     return msg;
 }
 
-// ── Helper: generate PDF in-line (preserving original layout exactly) ─────────
+// ── Helper: generate PDF in-line ─────────────────────────────────────────────
 function generateInlinePDF(orderData, facCode) {
     const { name, phone, cart, total, isWholesale, asesorName, businessType, orderContext, businessName } = orderData;
     const commerceName = businessName || 'BODEGA MAYORISTA';
@@ -267,54 +293,77 @@ function generateInlinePDF(orderData, facCode) {
 // ROUTES
 // ══════════════════════════════════════════════════════════════════════════════
 
-app.get('/api/health', (req, res) => res.json({ status: 'ok', ready: isReady }));
+app.get('/api/health', (req, res) => res.json({ status: 'ok', ready: isReady, bot: isReady ? 'connected' : 'offline' }));
 
-// Avatar proxy (avoids CORS on client)
+// Avatar proxy (with robust 404/privacy error handling)
 app.get('/api/avatar/:jid', async (req, res) => {
-    if (!isReady || !globalSock) return res.status(503).json({ error: 'Not ready' });
+    if (!isReady || !globalSock) return res.status(503).json({ error: 'WhatsApp offline' });
     try {
         let targetJid = req.params.jid;
         if (!targetJid.includes('@') && /[a-zA-Z]/.test(targetJid)) {
             const inviteCode = targetJid.replace('https://chat.whatsapp.com/', '').trim();
-            const inviteInfo = await globalSock.groupGetInviteInfo(inviteCode);
-            if (inviteInfo?.id) targetJid = inviteInfo.id;
+            try {
+                const inviteInfo = await globalSock.groupGetInviteInfo(inviteCode);
+                if (inviteInfo?.id) targetJid = inviteInfo.id;
+            } catch {
+                return res.status(404).json({ error: 'Invite link not found' });
+            }
         } else {
             targetJid = targetJid.includes('@') ? targetJid : `${targetJid}@s.whatsapp.net`;
         }
-        const profilePicUrl = await globalSock.profilePictureUrl(targetJid, 'image');
-        if (!profilePicUrl) return res.status(404).json({ error: 'No pic' });
+
+        let profilePicUrl = null;
+        try {
+            profilePicUrl = await globalSock.profilePictureUrl(targetJid, 'image');
+        } catch (picErr) {
+            // Normal 404 when user has no photo or restricted privacy
+            return res.status(404).json({ error: 'No profile picture found' });
+        }
+
+        if (!profilePicUrl) return res.status(404).json({ error: 'No profile picture found' });
+
         const fetch  = (await import('node-fetch')).default;
         const resp   = await (global.fetch ? global.fetch(profilePicUrl) : fetch(profilePicUrl));
+        if (!resp.ok) return res.status(404).json({ error: 'CDN image unavailable' });
+
         const buffer = await resp.arrayBuffer();
         res.set('Content-Type', 'image/jpeg');
         res.set('Cache-Control', 'public, max-age=3600');
         res.send(Buffer.from(buffer));
-    } catch (e) { console.error(e); res.status(500).json({ error: 'Error fetching picture' }); }
+    } catch (e) {
+        console.error('[Avatar Error]', e.message);
+        res.status(500).json({ error: 'Error fetching picture' });
+    }
 });
 
-// WhatsApp catalog passthrough
+// WhatsApp catalog passthrough (with timeout safety)
 app.get('/api/catalog/:jid', async (req, res) => {
     if (!isReady || !globalSock) return res.status(503).json({ error: 'WhatsApp offline' });
     const { jid } = req.params;
     if (!jid) return res.status(400).json({ error: 'Missing JID' });
     const targetJid = jid.includes('@') ? jid : `${jid}@s.whatsapp.net`;
+
     try {
         let products = [];
-        if (typeof globalSock.getCatalog === 'function') {
-            const catalog = await globalSock.getCatalog({ jid: targetJid });
-            if (catalog?.products) products = catalog.products;
-        } else {
-            const result = await globalSock.query({
+        const catalogPromise = (typeof globalSock.getCatalog === 'function')
+            ? globalSock.getCatalog({ jid: targetJid })
+            : globalSock.query({
                 tag: 'iq', attrs: { to: 's.whatsapp.net', type: 'get', xmlns: 'w:biz:catalog' },
                 content: [{ tag: 'product_catalog', attrs: { jid: targetJid, allow_paged: 'true' } }]
             });
-            products = result?.content || [];
-        }
+
+        // 5s timeout guard
+        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Timed Out')), 5000));
+        const result = await Promise.race([catalogPromise, timeoutPromise]);
+
+        if (result?.products) products = result.products;
+        else if (result?.content) products = result.content;
+
         res.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
         res.json({ ok: true, products: JSON.parse(JSON.stringify(products)) });
     } catch (err) {
-        console.error('[Catalog] Error:', targetJid, err.message);
-        res.status(500).json({ error: 'Failed to fetch catalog', details: err.message });
+        console.warn('[Catalog] Notice for', targetJid, ':', err.message);
+        res.status(200).json({ ok: false, error: 'Catalog query timed out or empty', products: [] });
     }
 });
 
@@ -326,6 +375,7 @@ app.post('/api/dispatch', async (req, res) => {
                 isWholesale = false, isStoreSale = false, asesorName = '',
                 asesorSection = '', businessType = 'RETAIL', orderContext } = req.body;
 
+        if (!commerceId) return res.status(400).json({ error: 'commerceId is required' });
         if (!db) return res.status(500).json({ error: 'Database not available' });
 
         const doc = await db.collection('comercios').doc(commerceId).get();
@@ -340,9 +390,9 @@ app.post('/api/dispatch', async (req, res) => {
 
         // Resolve dispatch JID
         let rawJid, jidField;
-        if (isStoreSale)    { rawJid = commerceData.posJid      || commerceData.dispatchJid; jidField = 'posJid'; }
+        if (isStoreSale)      { rawJid = commerceData.posJid       || commerceData.dispatchJid; jidField = 'posJid'; }
         else if (isWholesale) { rawJid = commerceData.wholesaleJid || commerceData.dispatchJid; jidField = 'wholesaleJid'; }
-        else                  { rawJid = commerceData.retailJid   || commerceData.dispatchJid; jidField = 'retailJid'; }
+        else                  { rawJid = commerceData.retailJid    || commerceData.dispatchJid; jidField = 'retailJid'; }
 
         if (!rawJid) return res.status(400).json({ error: 'Este comercio no ha configurado su grupo de WhatsApp.' });
 
@@ -356,7 +406,7 @@ app.post('/api/dispatch', async (req, res) => {
         const pdfBuffer = await generateInlinePDF(orderPayload, facCode);
         await globalSock.sendMessage(dispatchJid, { document: pdfBuffer, mimetype: 'application/pdf', fileName: `${facCode}.pdf`, caption: msg });
 
-        // Async post-processing (don't block the response)
+        // Async post-processing
         setImmediate(async () => {
             if (isStoreSale) await deductInventory(commerceId, cart);
             if (commerceData.premiumMetrics === true) await savePremiumMetrics(commerceId, orderPayload);
@@ -369,11 +419,14 @@ app.post('/api/dispatch', async (req, res) => {
     }
 });
 
-// Daily report endpoint (triggered by external CRON or manually)
+// Daily report endpoint (Strictly protected by CRON_KEY)
 app.get('/api/report/daily', async (req, res) => {
+    const cronKey = process.env.CRON_KEY;
+    if (!cronKey || req.query.key !== cronKey) {
+        return res.status(401).json({ error: 'Unauthorized: Valid CRON_KEY is required' });
+    }
     if (!isReady || !globalSock) return res.status(503).json({ error: 'WhatsApp offline' });
     if (!db) return res.status(500).json({ error: 'DB not available' });
-    if (req.query.key !== (process.env.CRON_KEY || 'default_secret')) return res.status(401).json({ error: 'Unauthorized' });
 
     try {
         const todayStart = new Date(); todayStart.setHours(0,0,0,0);
@@ -432,23 +485,6 @@ app.get('/api/report/daily', async (req, res) => {
         console.error('[Report] Error:', err);
         res.status(500).json({ error: err.message });
     }
-});
-
-// Debug & admin endpoints
-app.get('/api/debug-catalog', async (req, res) => {
-    try {
-        if (!db) return res.status(500).json({ error: 'DB not available' });
-        const doc = await db.collection('comercios').doc(req.query.id || 'cc-bodega-mayorista').get();
-        res.json((doc.data()?.whatsappCatalog || []).slice(0, 3));
-    } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-app.get('/api/test-db', async (req, res) => {
-    try {
-        if (!db) return res.status(500).json({ status: 'error', message: 'DB not initialized' });
-        await db.collection('test_ping').doc('123').set({ ok: true, time: new Date().toISOString() });
-        res.json({ status: 'ok', message: 'Successfully wrote to Firestore!' });
-    } catch (e) { res.status(500).json({ status: 'error', message: e.toString() }); }
 });
 
 // ── Start server ──────────────────────────────────────────────────────────────

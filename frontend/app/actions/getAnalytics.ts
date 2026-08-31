@@ -1,50 +1,59 @@
 'use server';
 
-import admin from 'firebase-admin';
+import { db, admin } from '../../lib/firebaseAdmin';
 
-// Initialize Firebase once
-if (!admin.apps.length) {
-  try {
-    if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-      const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-      admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount)
-      });
-    }
-  } catch (e) {
-    console.error("Firebase Auth Error in Server Action");
+export async function getAnalyticsData(commerceId: string, token: string, days: number = 30) {
+  if (!db || !admin) return [];
+
+  // Security Input Validation
+  if (!commerceId || typeof commerceId !== 'string') {
+    throw new Error('Invalid commerceId');
   }
-}
 
-const db = admin.firestore?.();
+  if (!token || typeof token !== 'string') {
+    throw new Error('Unauthorized: metrics token is required');
+  }
 
-export async function getAnalyticsData(commerceId: string, days: number = 30) {
-    if (!db) return [];
-    
-    try {
-        const endDate = new Date();
-        const startDate = new Date();
-        startDate.setDate(endDate.getDate() - days);
-        
-        const startString = startDate.toLocaleString('en-CA', { timeZone: 'America/Bogota' }).split(',')[0];
-        const endString = endDate.toLocaleString('en-CA', { timeZone: 'America/Bogota' }).split(',')[0];
+  // Sanitize days range (between 1 and 365)
+  const safeDays = Math.max(1, Math.min(365, Number(days) || 30));
 
-        // Fetch rollups for the date range
-        // Since document IDs are 'YYYY-MM-DD', we can use >= and <= on FieldPath.documentId()
-        const snap = await db.collection('comercios').doc(commerceId).collection('estadisticas')
-            .where(admin.firestore.FieldPath.documentId(), '>=', startString)
-            .where(admin.firestore.FieldPath.documentId(), '<=', endString)
-            .get();
-
-        const data = snap.docs.map(doc => ({
-            date: doc.id,
-            ...doc.data()
-        }));
-
-        // Sort ascending by date
-        return data.sort((a, b) => a.date.localeCompare(b.date));
-    } catch (e) {
-        console.error("Error fetching analytics:", e);
-        return [];
+  try {
+    // 1. Verify token and permission against Commerce Document
+    const commerceDoc = await db.collection('comercios').doc(commerceId).get();
+    if (!commerceDoc.exists) {
+      throw new Error('Commerce not found');
     }
+
+    const commerceData = commerceDoc.data() || {};
+    if (!commerceData.premiumMetrics || commerceData.metricsToken !== token) {
+      throw new Error('Unauthorized: Invalid metrics token or metrics not enabled');
+    }
+
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(endDate.getDate() - safeDays);
+
+    const startString = startDate.toLocaleString('en-CA', { timeZone: 'America/Bogota' }).split(',')[0];
+    const endString = endDate.toLocaleString('en-CA', { timeZone: 'America/Bogota' }).split(',')[0];
+
+    // Fetch rollups for the date range
+    const snap = await db
+      .collection('comercios')
+      .doc(commerceId)
+      .collection('estadisticas')
+      .where(admin.firestore.FieldPath.documentId(), '>=', startString)
+      .where(admin.firestore.FieldPath.documentId(), '<=', endString)
+      .get();
+
+    const data = snap.docs.map((doc) => ({
+      date: doc.id,
+      ...doc.data(),
+    }));
+
+    // Sort ascending by date
+    return data.sort((a, b) => a.date.localeCompare(b.date));
+  } catch (e: any) {
+    console.error('[Analytics Action] Error:', e.message);
+    return [];
+  }
 }

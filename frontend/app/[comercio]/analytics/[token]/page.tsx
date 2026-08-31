@@ -32,7 +32,7 @@ export default async function AnalyticsPage({ params }: { params: { comercio: st
 
   return (
     <main className="min-h-screen bg-[#0a0a0a] text-white">
-      <DashboardClient commerceId={comercio} businessName={businessName} themeHex={themeHex} />
+      <DashboardClient commerceId={comercio} authToken={token} businessName={businessName} themeHex={themeHex} />
     </main>
   );
 }

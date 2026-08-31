@@ -89,7 +89,7 @@ const SectionLabel = ({
 );
 
 /* ─── Main Component ─────────────────────────────────────────────────── */
-export default function ClientPage({ commerceId, data, themeHex, RENDER_API }: any) {
+export default function ClientPage({ commerceId, data, themeHex, RENDER_API = '' }: any) {
   let { businessName, avatarJid, promoJid, buttons = [], promos = [] } = data;
 
   const [searchQuery, setSearchQuery] = useState('');

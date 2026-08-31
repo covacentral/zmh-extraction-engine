@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation';
 import ClientPage from './ClientPage';
 import { db } from '../../lib/firebaseAdmin';
 
-const RENDER_API = 'https://zmh-extraction-engine.onrender.com';
+const RENDER_API = process.env.NEXT_PUBLIC_RENDER_API || '';
 
 // Cache re-validation interval (ISR). Refreshes data automatically from Firestore every 30 seconds
 export const revalidate = 30; 

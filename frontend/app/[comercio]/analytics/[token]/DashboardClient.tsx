@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { getAnalyticsData } from '../../../actions/getAnalytics';
 
-export default function DashboardClient({ commerceId, businessName, themeHex }: { commerceId: string, businessName: string, themeHex: string }) {
+export default function DashboardClient({ commerceId, authToken = '', businessName, themeHex }: { commerceId: string, authToken?: string, businessName: string, themeHex: string }) {
     const [days, setDays] = useState<number>(30);
     const [loading, setLoading] = useState<boolean>(true);
     const [statsList, setStatsList] = useState<any[]>([]);
@@ -20,7 +20,7 @@ export default function DashboardClient({ commerceId, businessName, themeHex }: 
     useEffect(() => {
         let isMounted = true;
         setLoading(true);
-        getAnalyticsData(commerceId, days).then(data => {
+        getAnalyticsData(commerceId, authToken, days).then(data => {
             if (isMounted) {
                 setStatsList(data);
                 setLoading(false);

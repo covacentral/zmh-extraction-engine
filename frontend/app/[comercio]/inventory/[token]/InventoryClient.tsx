@@ -229,7 +229,7 @@ export default function InventoryClient({ commerceId, businessName, themeHex, sc
             const uploadedVars = await Promise.all(draft.variations.map(async (v: any) => {
                 let publicUrl = v.imageWebp;
                 if (publicUrl && !publicUrl.startsWith('http')) {
-                    publicUrl = await uploadProductImage(commerceId, publicUrl);
+                    publicUrl = await uploadProductImage(commerceId, publicUrl, authToken);
                 }
                 return { ...v, imageWebp: publicUrl };
             }));
