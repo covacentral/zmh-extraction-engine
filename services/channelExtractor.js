@@ -33,7 +33,8 @@ function parsePrice(text, type = 'normal') {
 function cleanPriceValue(val) {
   let cleaned = val.trim().toLowerCase();
   let isK = cleaned.endsWith('k');
-  if (isK) cleaned = cleaned.slice(0, -1);
+  let isM = cleaned.endsWith('m');
+  if (isK || isM) cleaned = cleaned.slice(0, -1);
 
   // Remove dots, commas, apostrophes
   cleaned = cleaned.replace(/[^\d]/g, '');
@@ -41,8 +42,9 @@ function cleanPriceValue(val) {
   if (isNaN(num)) return 0;
 
   if (isK) num = num * 1000;
-  // If price is written in thousands shorthand (e.g., 45 -> 45000)
-  if (num > 0 && num < 1000) num = num * 1000;
+  if (isM) num = num * 1000000;
+  // If price is written in shorthand thousands (e.g., 40 -> 40000)
+  if (num > 0 && num < 1000 && !isM) num = num * 1000;
 
   return num;
 }
@@ -145,13 +147,9 @@ function extractProductFromMessage(msgObj, channelName = 'Canal Oficial') {
 
   const name = extractBestTitle(caption);
 
-  // Prices (in pesos colombianos)
-  const normalPriceAmount = parsePrice(caption, 'normal');
-  const wholesalePriceAmount = parsePrice(caption, 'wholesale') || normalPriceAmount;
-
-  // Divide by 1000 for standard format used in PIMS (e.g. 50.000 -> 50)
-  const normalPrice = normalPriceAmount / 1000 || 0;
-  const wholesalePrice = wholesalePriceAmount / 1000 || normalPrice;
+  // Prices (in full pesos colombianos, e.g. 40.000 COP -> 40000)
+  const normalPrice = parsePrice(caption, 'normal');
+  const wholesalePrice = parsePrice(caption, 'wholesale') || normalPrice;
 
   const reference = extractRef(caption);
   const brand = extractBrand(caption);
@@ -164,8 +162,8 @@ function extractProductFromMessage(msgObj, channelName = 'Canal Oficial') {
     description: caption,
     normalPrice,
     wholesalePrice,
-    price: normalPriceAmount,
-    priceAmount1000: normalPriceAmount,
+    price: normalPrice,
+    priceAmount1000: normalPrice,
     reference,
     brand,
     category: primaryCategory,

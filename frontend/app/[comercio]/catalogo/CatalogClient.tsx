@@ -23,21 +23,27 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
   const unifiedCatalog = useMemo(() => {
      let mappedCompiled: any[] = [];
      if (compiledCatalog && compiledCatalog.length > 0) {
-         mappedCompiled = compiledCatalog
-             .filter((p: any) => p.status === 'active' || !p.status)
-             .map((p: any) => ({
-             id: p.id,
-             name: p.name,
-             price: p.normalPrice ? p.normalPrice * 1000 : (p.priceAmount1000 || p.price || 0),
-             priceAmount1000: p.normalPrice ? p.normalPrice * 1000 : (p.priceAmount1000 || p.price || 0),
-             description: `${p.description || ''}\nReferencia: ${p.reference || ''}\nMarca: ${p.brand || ''}\nMayorista: $${p.wholesalePrice || p.normalPrice || ''}`,
-             imageUrls: p.imageUrl || p.imageUrls || p.image || p.imageWebp || (p.variations && p.variations[0]?.imageWebp),
-             sectionName: p.area || p.sectionName || 'Catálogo',
-             category: p.category || '',
-             categoryIcon: p.categoryIcon || '',
-             brand: p.brand || '',
-             variations: p.variations
-         }));
+          mappedCompiled = compiledCatalog
+              .filter((p: any) => p.status === 'active' || !p.status)
+              .map((p: any) => {
+                const normP = p.normalPrice || p.price || p.priceAmount1000 || 0;
+                const wholP = p.wholesalePrice || p.normalPrice || p.price || 0;
+                return {
+                  id: p.id,
+                  name: p.name,
+                  normalPrice: normP,
+                  wholesalePrice: wholP,
+                  price: normP,
+                  priceAmount1000: normP,
+                  description: `${p.description || ''}\nReferencia: ${p.reference || ''}\nMarca: ${p.brand || ''}\nMayorista: $${wholP.toLocaleString('es-CO')}`,
+                  imageUrls: p.imageUrl || p.imageUrls || p.image || p.imageWebp || (p.variations && p.variations[0]?.imageWebp),
+                  sectionName: p.area || p.sectionName || 'Catálogo',
+                  category: p.category || '',
+                  categoryIcon: p.categoryIcon || '',
+                  brand: p.brand || '',
+                  variations: p.variations
+                };
+              });
      }
      return [...whatsappCatalog, ...mappedCompiled];
   }, [whatsappCatalog, compiledCatalog]);
@@ -113,12 +119,31 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
   }, [searchParams, commerceId]);
 
   const getProductPrice = (product: any, wholesale: boolean) => {
-      let rawPrice = product.priceAmount1000 !== undefined ? product.priceAmount1000 : product.price;
-      let regularPrice = (rawPrice || 0) / 1000;
+      if (!product) return 0;
+      let rawPrice = product.normalPrice !== undefined ? product.normalPrice : (product.priceAmount1000 !== undefined ? product.priceAmount1000 : product.price);
+      let regularPrice = Number(rawPrice) || 0;
+      if (regularPrice >= 10000000) regularPrice = regularPrice / 1000;
+      else if (regularPrice > 0 && regularPrice < 1000) regularPrice = regularPrice * 1000;
+
       if (!wholesale) return regularPrice;
+
+      let rawWholesale = product.wholesalePrice;
+      if (rawWholesale !== undefined && rawWholesale !== null && rawWholesale !== '') {
+          let whol = Number(rawWholesale) || 0;
+          if (whol >= 10000000) whol = whol / 1000;
+          else if (whol > 0 && whol < 1000) whol = whol * 1000;
+          if (whol > 0) return whol;
+      }
+
       const desc = product.description || '';
-      const match = desc.match(/mayorista:\s*\$?(\d+(\.\d+)?)/i);
-      if (match && match[1]) return parseFloat(match[1]);
+      const match = desc.match(/mayorista:\s*\$?([\d\.,’']+)/i);
+      if (match && match[1]) {
+          const cleaned = parseInt(match[1].replace(/[^\d]/g, ''), 10);
+          if (!isNaN(cleaned) && cleaned > 0) {
+              if (cleaned < 1000) return cleaned * 1000;
+              return cleaned;
+          }
+      }
       return regularPrice;
   };
 

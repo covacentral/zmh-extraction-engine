@@ -11,18 +11,24 @@ export default function ProductClient({ commerceId, productId, data, themeHex, R
   const unifiedCatalog = useMemo(() => {
      let mappedCompiled: any[] = [];
      if (compiledCatalog && compiledCatalog.length > 0) {
-         mappedCompiled = compiledCatalog
-             .filter((p: any) => p.status === 'active')
-             .map((p: any) => ({
-             id: p.id,
-             name: p.name,
-             price: p.normalPrice * 1000,
-             priceAmount1000: p.normalPrice * 1000,
-             description: `${p.description || ''}\nReferencia: ${p.reference || ''}\nMarca: ${p.brand || ''}\nMayorista: $${p.wholesalePrice || p.normalPrice}`,
-             imageUrls: p.imageUrl,
-             sectionName: p.area || 'Catálogo',
-             variations: p.variations
-         }));
+          mappedCompiled = compiledCatalog
+              .filter((p: any) => p.status === 'active' || !p.status)
+              .map((p: any) => {
+                const normP = p.normalPrice || p.price || p.priceAmount1000 || 0;
+                const wholP = p.wholesalePrice || p.normalPrice || p.price || 0;
+                return {
+                  id: p.id,
+                  name: p.name,
+                  normalPrice: normP,
+                  wholesalePrice: wholP,
+                  price: normP,
+                  priceAmount1000: normP,
+                  description: `${p.description || ''}\nReferencia: ${p.reference || ''}\nMarca: ${p.brand || ''}\nMayorista: $${wholP.toLocaleString('es-CO')}`,
+                  imageUrls: p.imageUrl || p.imageUrls || p.image,
+                  sectionName: p.area || p.sectionName || 'Catálogo',
+                  variations: p.variations
+                };
+              });
      }
      return [...whatsappCatalog, ...mappedCompiled];
   }, [whatsappCatalog, compiledCatalog]);
@@ -52,8 +58,12 @@ export default function ProductClient({ commerceId, productId, data, themeHex, R
   }
 
   const getProductPrice = (prod: any) => {
-      let rawPrice = prod.priceAmount1000 !== undefined ? prod.priceAmount1000 : prod.price;
-      return (rawPrice || 0) / 1000;
+      if (!prod) return 0;
+      let rawPrice = prod.normalPrice !== undefined ? prod.normalPrice : (prod.priceAmount1000 !== undefined ? prod.priceAmount1000 : prod.price);
+      let regularPrice = Number(rawPrice) || 0;
+      if (regularPrice >= 10000000) regularPrice = regularPrice / 1000;
+      else if (regularPrice > 0 && regularPrice < 1000) regularPrice = regularPrice * 1000;
+      return regularPrice;
   };
 
   const reliableTestImages = [
