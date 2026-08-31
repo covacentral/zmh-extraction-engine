@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation';
 import { db } from '../../../../lib/firebaseAdmin';
+import { resolveCommerce } from '../../../../lib/commerceResolver';
 import CajaClient from './CajaClient';
 import React from 'react';
 
@@ -10,11 +11,11 @@ export default async function CajaPage({ params }: { params: { comercio: string,
 
   if (!comercio || !token) return notFound();
 
-  // Validate Token against Commerce Document
-  const doc = await db!.collection('comercios').doc(comercio).get();
-  if (!doc.exists) return notFound();
+  // Validate Token against Commerce Document (slug or alias)
+  const resolved = await resolveCommerce(comercio);
+  if (!resolved) return notFound();
 
-  const data = doc.data() || {};
+  const { commerceId, data } = resolved;
   
   // Check Master Token
   let scope = null;
@@ -22,7 +23,7 @@ export default async function CajaPage({ params }: { params: { comercio: string,
       scope = 'MASTER';
   } else {
       // Check in 'areas' subcollection
-      const areasSnap = await db!.collection('comercios').doc(comercio).collection('areas').where('token', '==', token).get();
+      const areasSnap = await db!.collection('comercios').doc(commerceId).collection('areas').where('token', '==', token).get();
       if (!areasSnap.empty) {
           scope = areasSnap.docs[0].id;
       }
@@ -36,7 +37,7 @@ export default async function CajaPage({ params }: { params: { comercio: string,
   return (
     <div style={{ '--theme': themeHex } as React.CSSProperties} className="min-h-screen bg-[#050505] font-sans antialiased text-white">
       <CajaClient 
-        commerceId={comercio} 
+        commerceId={commerceId} 
         businessName={businessName} 
         themeHex={themeHex} 
         scope={scope} 

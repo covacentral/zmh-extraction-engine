@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db, admin } from '../../../lib/firebaseAdmin';
+import { resolveCommerce } from '../../../lib/commerceResolver';
 import PDFDocument from 'pdfkit';
 
 export const dynamic = 'force-dynamic';
@@ -262,18 +263,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: false, error: 'Database service unavailable' }, { status: 500 });
     }
 
-    const doc = await db.collection('comercios').doc(commerceId).get();
-    if (!doc.exists) {
+    const resolved = await resolveCommerce(commerceId);
+    if (!resolved) {
       return NextResponse.json({ ok: false, error: 'Commerce not found' }, { status: 404 });
     }
 
-    const commerceData = doc.data() || {};
+    const actualCommerceId = resolved.commerceId;
+    const commerceData = resolved.data || {};
 
     // POS Security check: if it's a store sale, optionally verify token
     if (isStoreSale && token) {
       const isMaster = commerceData.inventoryToken === token;
       if (!isMaster) {
-        const areaSnap = await db.collection('comercios').doc(commerceId).collection('areas').where('token', '==', token).get();
+        const areaSnap = await db.collection('comercios').doc(actualCommerceId).collection('areas').where('token', '==', token).get();
         if (areaSnap.empty) {
           return NextResponse.json({ ok: false, error: 'Unauthorized POS token' }, { status: 401 });
         }

@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
 import ClientPage from './ClientPage';
 import { db } from '../../lib/firebaseAdmin';
+import { resolveCommerce } from '../../lib/commerceResolver';
 
 const RENDER_API = process.env.NEXT_PUBLIC_RENDER_API || '';
 
@@ -11,13 +12,12 @@ export default async function ComercioServerPage({ params }: { params: { comerci
   try {
     if (!db) return <div>DB Missing</div>;
 
-    const doc = await db.collection('comercios').doc(params.comercio).get();
-    
-    if (!doc.exists) {
+    const resolved = await resolveCommerce(params.comercio);
+    if (!resolved) {
       notFound();
     }
 
-    const data = doc.data();
+    const { commerceId, data } = resolved;
 
     // Prevent maps from throwing map is not a function
     let safeButtons = data?.buttons;
@@ -44,7 +44,7 @@ export default async function ComercioServerPage({ params }: { params: { comerci
 
     const safeData = { ...data, buttons: enhancedButtons };
 
-    return <ClientPage commerceId={params.comercio} data={safeData} themeHex={data?.themeHex || '#4F46E5'} RENDER_API={RENDER_API} />;
+    return <ClientPage commerceId={commerceId} data={safeData} themeHex={data?.themeHex || '#4F46E5'} RENDER_API={RENDER_API} />;
   } catch (error: any) {
     return (
       <div className="p-10 text-white text-center flex flex-col items-center justify-center min-h-screen bg-black">

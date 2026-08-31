@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation';
 import { db } from '../../../../lib/firebaseAdmin';
+import { resolveCommerce } from '../../../../lib/commerceResolver';
 import InventoryClient from './InventoryClient';
 
 export const revalidate = 0; // Dynamic route
@@ -9,11 +10,11 @@ export default async function InventoryPage({ params }: { params: { comercio: st
 
   if (!comercio || !token) return notFound();
 
-  // Validate Token against Commerce Document
-  const doc = await db!.collection('comercios').doc(comercio).get();
-  if (!doc.exists) return notFound();
+  // Validate Token against Commerce Document (slug or alias)
+  const resolved = await resolveCommerce(comercio);
+  if (!resolved) return notFound();
 
-  const data = doc.data() || {};
+  const { commerceId, data } = resolved;
   
   // Check Master Token
   let scope = null;
@@ -21,7 +22,7 @@ export default async function InventoryPage({ params }: { params: { comercio: st
       scope = 'MASTER';
   } else {
       // Check in 'areas' subcollection
-      const areasSnap = await db!.collection('comercios').doc(comercio).collection('areas').where('token', '==', token).get();
+      const areasSnap = await db!.collection('comercios').doc(commerceId).collection('areas').where('token', '==', token).get();
       if (!areasSnap.empty) {
           scope = areasSnap.docs[0].id;
       }
@@ -33,12 +34,12 @@ export default async function InventoryPage({ params }: { params: { comercio: st
   const businessName = data.businessName || 'PIMS Inventario';
   
   // Get Materialized Cache from the new location
-  const sysDoc = await db!.collection('comercios').doc(comercio).collection('_system').doc('catalog').get();
+  const sysDoc = await db!.collection('comercios').doc(commerceId).collection('_system').doc('catalog').get();
   const compiledCatalog = sysDoc.exists ? sysDoc.data()?.compiledCatalog || [] : [];
   
   // Get all registered areas and providers for datalists
-  const areasListSnap = await db!.collection('comercios').doc(comercio).collection('areas').get();
-  const providersSnap = await db!.collection('comercios').doc(comercio).collection('providers').get();
+  const areasListSnap = await db!.collection('comercios').doc(commerceId).collection('areas').get();
+  const providersSnap = await db!.collection('comercios').doc(commerceId).collection('providers').get();
   
   const areasList = areasListSnap.docs.map(d => ({
       name: d.id,
@@ -49,7 +50,7 @@ export default async function InventoryPage({ params }: { params: { comercio: st
   return (
     <main className="min-h-screen bg-[#0a0a0a] text-white">
       <InventoryClient 
-        commerceId={comercio} 
+        commerceId={commerceId} 
         businessName={businessName} 
         themeHex={themeHex} 
         scope={scope} 

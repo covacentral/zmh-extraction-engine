@@ -49,6 +49,15 @@ export async function saveCommerceConfig(masterToken: string, commerceId: string
   const cleanData = { ...data };
   delete cleanData.id;
 
+  // Sanitize and enforce maximum 5 URL aliases/masks
+  if (Array.isArray(cleanData.aliases)) {
+    cleanData.aliases = Array.from(new Set(
+      cleanData.aliases
+        .map((a: any) => String(a || '').toLowerCase().trim().replace(/[^a-z0-9\-_]/g, ''))
+        .filter((a: string) => a.length > 0 && a !== commerceId.toLowerCase())
+    )).slice(0, 5);
+  }
+
   await ref.set(cleanData, { merge: true });
   return { success: true };
 }
@@ -81,6 +90,7 @@ export async function createCommerce(masterToken: string, newCommerceData: any) 
     dispatchJid: newCommerceData.dispatchJid || '',
     premiumMetrics: false,
     channelSync: true,
+    aliases: Array.isArray(newCommerceData.aliases) ? newCommerceData.aliases.slice(0, 5) : [],
     createdAt: new Date().toISOString(),
     links: [],
     vipClients: [],

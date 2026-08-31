@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
 import CatalogClient from './CatalogClient';
 import { db } from '../../../lib/firebaseAdmin';
+import { resolveCommerce } from '../../../lib/commerceResolver';
 import { Suspense } from 'react';
 
 export const revalidate = 60; // 1 minute ISR Edge Cache
@@ -11,15 +12,13 @@ export default async function CatalogoPage({ params }: { params: { comercio: str
   if (!comercio) return notFound();
   if (!db) return notFound();
 
-  // Fast direct Firestore fetch in parallel (<30ms)
-  const [doc, sysDoc] = await Promise.all([
-    db.collection('comercios').doc(comercio).get(),
-    db.collection('comercios').doc(comercio).collection('_system').doc('catalog').get()
-  ]);
+  const resolved = await resolveCommerce(comercio);
+  if (!resolved) return notFound();
 
-  if (!doc.exists) return notFound();
+  const { commerceId, data } = resolved;
 
-  const data = doc.data() || {};
+  // Fast direct Firestore fetch for catalog
+  const sysDoc = await db.collection('comercios').doc(commerceId).collection('_system').doc('catalog').get();
   const compiledCatalog = sysDoc.exists ? sysDoc.data()?.compiledCatalog || [] : [];
   data.compiledCatalog = compiledCatalog;
 
@@ -73,7 +72,7 @@ export default async function CatalogoPage({ params }: { params: { comercio: str
 
   return (
     <Suspense fallback={<div className="h-screen w-full flex items-center justify-center bg-black"><div className="animate-spin h-8 w-8 text-white"><svg viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg></div></div>}>
-        <CatalogClient commerceId={comercio} data={data} themeHex={themeHex} RENDER_API={RENDER_API} vipClient={null} asesorData={null} />
+        <CatalogClient commerceId={commerceId} data={data} themeHex={themeHex} RENDER_API={RENDER_API} vipClient={null} asesorData={null} />
     </Suspense>
   );
 }

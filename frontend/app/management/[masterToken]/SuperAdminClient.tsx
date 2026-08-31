@@ -41,6 +41,10 @@ export default function SuperAdminClient({ masterToken, initialComercios }: Supe
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedProductEdit, setSelectedProductEdit] = useState<any>(null);
 
+  // URL Masks state
+  const [newMaskInput, setNewMaskInput] = useState('');
+  const [copiedAlias, setCopiedAlias] = useState<string | null>(null);
+
   // Load commerce data when selectedCommerceId changes
   useEffect(() => {
     if (!selectedCommerceId) return;
@@ -145,6 +149,47 @@ export default function SuperAdminClient({ masterToken, initialComercios }: Supe
       (p.category && p.category.toLowerCase().includes(term))
     );
   });
+
+  const handleAddMask = () => {
+    const clean = newMaskInput.toLowerCase().trim().replace(/[^a-z0-9\-_]/g, '');
+    if (!clean) return;
+    const current = Array.isArray(commerceData?.aliases) ? commerceData.aliases : [];
+    if (current.includes(clean)) {
+      setMessage({ type: 'error', text: `La máscara "/${clean}" ya está en la lista.` });
+      return;
+    }
+    if (clean === selectedCommerceId.toLowerCase()) {
+      setMessage({ type: 'error', text: `La máscara "/${clean}" coincide con el slug principal del comercio.` });
+      return;
+    }
+    if (current.length >= 5) {
+      setMessage({ type: 'error', text: 'Puedes configurar un máximo de 5 máscaras de URL por comercio.' });
+      return;
+    }
+    setCommerceData({
+      ...commerceData,
+      aliases: [...current, clean]
+    });
+    setNewMaskInput('');
+    setMessage({ type: 'info', text: `Máscara "/${clean}" agregada. Haz clic en "Guardar Configuración" para aplicar.` });
+  };
+
+  const handleRemoveMask = (maskToRemove: string) => {
+    const current = Array.isArray(commerceData?.aliases) ? commerceData.aliases : [];
+    setCommerceData({
+      ...commerceData,
+      aliases: current.filter((m: string) => m !== maskToRemove)
+    });
+    setMessage({ type: 'info', text: `Máscara "/${maskToRemove}" eliminada. Recuerda guardar cambios.` });
+  };
+
+  const handleCopyUrl = (url: string, label: string) => {
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(url);
+      setCopiedAlias(label);
+      setTimeout(() => setCopiedAlias(null), 2000);
+    }
+  };
 
   const themeHex = commerceData?.themeHex || '#e11d48';
 
@@ -367,6 +412,129 @@ export default function SuperAdminClient({ masterToken, initialComercios }: Supe
                       className="w-full bg-black/60 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-rose-500"
                       placeholder="Breve presentación del comercio para el enlace de inicio..."
                     />
+                  </div>
+
+                  {/* ── SECCIÓN: MÁSCARAS & ENLACES CORTOS DE URL (0 a 5) ── */}
+                  <div className="bg-gradient-to-br from-zinc-900 via-black to-zinc-950 border border-white/15 rounded-2xl p-5 flex flex-col gap-4 shadow-xl mt-2">
+                    <div className="flex items-center justify-between border-b border-white/10 pb-3 flex-wrap gap-2">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-base font-black text-white flex items-center gap-2">
+                            <span>🎭</span> Máscaras de URL & Enlaces Cortos
+                          </h3>
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                            {(commerceData.aliases || []).length} / 5 Máscaras
+                          </span>
+                        </div>
+                        <p className="text-xs text-zinc-400 mt-1">
+                          Configura hasta 5 rutas cortas alternativas para que tus clientes accedan directamente al mismo concentrador (ej. <span className="text-rose-400 font-mono font-bold">1-a.store/ccbm</span> o <span className="text-rose-400 font-mono font-bold">1-a.store/bodega</span>).
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* URL Principal */}
+                    <div className="flex flex-col gap-1.5 bg-black/40 border border-white/10 rounded-xl p-3.5">
+                      <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">URL Principal del Documento:</span>
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <span className="font-mono text-sm font-bold text-emerald-400 truncate">
+                          https://www.1-a.store/{selectedCommerceId}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleCopyUrl(`https://www.1-a.store/${selectedCommerceId}`, 'principal')}
+                            className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-lg text-xs font-bold transition-all flex items-center gap-1.5"
+                          >
+                            {copiedAlias === 'principal' ? '✓ Copiado' : '📋 Copiar'}
+                          </button>
+                          <a
+                            href={`https://www.1-a.store/${selectedCommerceId}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-3 py-1.5 bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-300 border border-emerald-500/30 rounded-lg text-xs font-bold transition-all flex items-center gap-1"
+                          >
+                            🌐 Abrir
+                          </a>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Lista de Máscaras Configuras */}
+                    <div className="flex flex-col gap-2.5">
+                      <span className="text-xs font-bold text-zinc-300">Máscaras de Acceso Rápido Asignadas:</span>
+                      {(!commerceData.aliases || commerceData.aliases.length === 0) ? (
+                        <div className="p-4 rounded-xl border border-dashed border-white/15 bg-black/20 text-center text-xs text-zinc-500">
+                          No hay máscaras adicionales configuradas. Agrega una abajo para tener enlaces más cortos y fáciles de compartir.
+                        </div>
+                      ) : (
+                        <div className="flex flex-col gap-2">
+                          {commerceData.aliases.map((mask: string, idx: number) => (
+                            <div key={idx} className="flex items-center justify-between gap-3 bg-black/60 border border-white/10 rounded-xl p-3 hover:border-white/20 transition-all">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className="text-xs text-zinc-500 font-mono">#{idx + 1}</span>
+                                <span className="font-mono text-sm font-bold text-white truncate">
+                                  https://www.1-a.store/<span className="text-rose-400 font-black">{mask}</span>
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => handleCopyUrl(`https://www.1-a.store/${mask}`, mask)}
+                                  className="px-2.5 py-1 bg-white/10 hover:bg-white/20 text-white rounded-lg text-[11px] font-bold transition-all"
+                                >
+                                  {copiedAlias === mask ? '✓ Copiado' : '📋 Copiar'}
+                                </button>
+                                <a
+                                  href={`https://www.1-a.store/${mask}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="px-2.5 py-1 bg-rose-600/20 hover:bg-rose-600/40 text-rose-300 border border-rose-500/30 rounded-lg text-[11px] font-bold transition-all"
+                                >
+                                  🌐 Probar
+                                </a>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveMask(mask)}
+                                  className="p-1.5 text-zinc-400 hover:text-red-400 transition-colors"
+                                  title="Eliminar máscara"
+                                >
+                                  🗑️
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Formulario para agregar nueva máscara (si < 5) */}
+                    {(commerceData.aliases || []).length < 5 ? (
+                      <div className="pt-2 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                        <div className="flex-1 flex items-center bg-black/80 border border-white/15 rounded-xl px-3 py-2 focus-within:border-rose-500">
+                          <span className="text-xs text-zinc-500 font-mono select-none">1-a.store/</span>
+                          <input
+                            type="text"
+                            value={newMaskInput}
+                            onChange={(e) => setNewMaskInput(e.target.value.toLowerCase().replace(/[^a-z0-9\-_]/g, ''))}
+                            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddMask(); } }}
+                            placeholder="ej. ccbm o bodega"
+                            className="flex-1 bg-transparent text-sm font-mono font-bold text-white outline-none px-1"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleAddMask}
+                          disabled={!newMaskInput.trim()}
+                          className="px-5 py-2.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all disabled:opacity-40 shrink-0 shadow-lg shadow-rose-600/20"
+                        >
+                          ➕ Agregar Máscara
+                        </button>
+                      </div>
+                    ) : (
+                      <p className="text-[11px] text-amber-400 font-bold">
+                        Has alcanzado el límite máximo de 5 máscaras de URL para este comercio. Elimina una si deseas crear otra.
+                      </p>
+                    )}
                   </div>
                 </div>
               )}
@@ -617,6 +785,129 @@ export default function SuperAdminClient({ masterToken, initialComercios }: Supe
                       className="w-full bg-black/60 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-rose-500"
                       placeholder="Ej. @bodegamayorista"
                     />
+                  </div>
+
+                  {/* ── SECCIÓN: MÁSCARAS & ENLACES CORTOS DE URL (0 a 5) ── */}
+                  <div className="bg-gradient-to-br from-zinc-900 via-black to-zinc-950 border border-white/15 rounded-2xl p-5 flex flex-col gap-4 shadow-xl mt-2">
+                    <div className="flex items-center justify-between border-b border-white/10 pb-3 flex-wrap gap-2">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-base font-black text-white flex items-center gap-2">
+                            <span>🎭</span> Máscaras de URL & Enlaces Cortos
+                          </h3>
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                            {(commerceData.aliases || []).length} / 5 Máscaras
+                          </span>
+                        </div>
+                        <p className="text-xs text-zinc-400 mt-1">
+                          Configura hasta 5 rutas cortas alternativas para que tus clientes accedan directamente al mismo concentrador (ej. <span className="text-rose-400 font-mono font-bold">1-a.store/ccbm</span> o <span className="text-rose-400 font-mono font-bold">1-a.store/bodega</span>).
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* URL Principal */}
+                    <div className="flex flex-col gap-1.5 bg-black/40 border border-white/10 rounded-xl p-3.5">
+                      <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">URL Principal del Documento:</span>
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <span className="font-mono text-sm font-bold text-emerald-400 truncate">
+                          https://www.1-a.store/{selectedCommerceId}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleCopyUrl(`https://www.1-a.store/${selectedCommerceId}`, 'principal')}
+                            className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-lg text-xs font-bold transition-all flex items-center gap-1.5"
+                          >
+                            {copiedAlias === 'principal' ? '✓ Copiado' : '📋 Copiar'}
+                          </button>
+                          <a
+                            href={`https://www.1-a.store/${selectedCommerceId}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-3 py-1.5 bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-300 border border-emerald-500/30 rounded-lg text-xs font-bold transition-all flex items-center gap-1"
+                          >
+                            🌐 Abrir
+                          </a>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Lista de Máscaras Configuras */}
+                    <div className="flex flex-col gap-2.5">
+                      <span className="text-xs font-bold text-zinc-300">Máscaras de Acceso Rápido Asignadas:</span>
+                      {(!commerceData.aliases || commerceData.aliases.length === 0) ? (
+                        <div className="p-4 rounded-xl border border-dashed border-white/15 bg-black/20 text-center text-xs text-zinc-500">
+                          No hay máscaras adicionales configuradas. Agrega una abajo para tener enlaces más cortos y fáciles de compartir.
+                        </div>
+                      ) : (
+                        <div className="flex flex-col gap-2">
+                          {commerceData.aliases.map((mask: string, idx: number) => (
+                            <div key={idx} className="flex items-center justify-between gap-3 bg-black/60 border border-white/10 rounded-xl p-3 hover:border-white/20 transition-all">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className="text-xs text-zinc-500 font-mono">#{idx + 1}</span>
+                                <span className="font-mono text-sm font-bold text-white truncate">
+                                  https://www.1-a.store/<span className="text-rose-400 font-black">{mask}</span>
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => handleCopyUrl(`https://www.1-a.store/${mask}`, mask)}
+                                  className="px-2.5 py-1 bg-white/10 hover:bg-white/20 text-white rounded-lg text-[11px] font-bold transition-all"
+                                >
+                                  {copiedAlias === mask ? '✓ Copiado' : '📋 Copiar'}
+                                </button>
+                                <a
+                                  href={`https://www.1-a.store/${mask}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="px-2.5 py-1 bg-rose-600/20 hover:bg-rose-600/40 text-rose-300 border border-rose-500/30 rounded-lg text-[11px] font-bold transition-all"
+                                >
+                                  🌐 Probar
+                                </a>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveMask(mask)}
+                                  className="p-1.5 text-zinc-400 hover:text-red-400 transition-colors"
+                                  title="Eliminar máscara"
+                                >
+                                  🗑️
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Formulario para agregar nueva máscara (si < 5) */}
+                    {(commerceData.aliases || []).length < 5 ? (
+                      <div className="pt-2 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                        <div className="flex-1 flex items-center bg-black/80 border border-white/15 rounded-xl px-3 py-2 focus-within:border-rose-500">
+                          <span className="text-xs text-zinc-500 font-mono select-none">1-a.store/</span>
+                          <input
+                            type="text"
+                            value={newMaskInput}
+                            onChange={(e) => setNewMaskInput(e.target.value.toLowerCase().replace(/[^a-z0-9\-_]/g, ''))}
+                            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddMask(); } }}
+                            placeholder="ej. ccbm o bodega"
+                            className="flex-1 bg-transparent text-sm font-mono font-bold text-white outline-none px-1"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleAddMask}
+                          disabled={!newMaskInput.trim()}
+                          className="px-5 py-2.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all disabled:opacity-40 shrink-0 shadow-lg shadow-rose-600/20"
+                        >
+                          ➕ Agregar Máscara
+                        </button>
+                      </div>
+                    ) : (
+                      <p className="text-[11px] text-amber-400 font-bold">
+                        Has alcanzado el límite máximo de 5 máscaras de URL para este comercio. Elimina una si deseas crear otra.
+                      </p>
+                    )}
                   </div>
                 </div>
               )}
