@@ -175,7 +175,10 @@ async function startWhatsApp() {
     }
 }
 
-startWhatsApp();
+// Launch WhatsApp non-blocking so HTTP server binds immediately
+setImmediate(() => {
+    startWhatsApp();
+});
 
 // ── Helper: resolve JID from invite link ─────────────────────────────────────
 async function resolveJid(rawJid, commerceDoc, field) {
@@ -692,5 +695,6 @@ app.post('/api/channel/extract', async (req, res) => {
 });
 
 // ── Start server ──────────────────────────────────────────────────────────────
-app.listen(port, () => console.log(`[Server] API listening on port ${port}`));
+app.listen(port, '0.0.0.0', () => console.log(`[Server] API listening on port ${port}`));
+
 
