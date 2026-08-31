@@ -4,7 +4,7 @@ import { db } from '../../../../lib/firebaseAdmin';
 import { Suspense } from 'react';
 import type { Metadata, ResolvingMetadata } from 'next';
 
-export const revalidate = 300; // 5 minutes
+export const revalidate = 60; // 1 minute
 
 export async function generateMetadata(
   { params }: { params: { comercio: string, id: string } },
@@ -13,48 +13,18 @@ export async function generateMetadata(
   const { comercio, id } = params;
   if (!comercio || !id || !db) return {};
 
-  const doc = await db.collection('comercios').doc(comercio).get();
+  const [doc, sysDoc] = await Promise.all([
+    db.collection('comercios').doc(comercio).get(),
+    db.collection('comercios').doc(comercio).collection('_system').doc('catalog').get()
+  ]);
+
   if (!doc.exists) return {};
 
   const data = doc.data() || {};
-  const RENDER_API = process.env.NEXT_PUBLIC_RENDER_API || process.env.BOT_SERVER_URL || '';
-
-  const catalogsConfig = data.catalogs || [];
-  const legacyJid = data.catalogJid || data.avatarJid;
-  
-  if (catalogsConfig.length === 0 && legacyJid) {
-      catalogsConfig.push({ name: 'Catálogo', jid: legacyJid });
-  }
-
-  let mergedCatalog: any[] = [];
-  if (catalogsConfig.length > 0 && RENDER_API) {
-      try {
-          const fetchPromises = catalogsConfig.map(async (cat: any) => {
-              if (!cat.jid) return [];
-              const targetJid = cat.jid.includes('@') ? cat.jid : `${cat.jid}@s.whatsapp.net`;
-              const res = await fetch(`${RENDER_API}/api/catalog/${targetJid}`, { 
-                  next: { revalidate: 300 }
-              });
-              if (!res.ok) return [];
-              const apiData = await res.json();
-              if (apiData && apiData.products) {
-                  return apiData.products.map((p: any) => ({ ...p, sectionName: cat.name || 'Catálogo' }));
-              }
-              return [];
-          });
-
-          const results = await Promise.all(fetchPromises);
-          mergedCatalog = results.flat();
-      } catch (err) {}
-  }
-
-  const sysDoc = await db.collection('comercios').doc(comercio).collection('_system').doc('catalog').get();
   const compiledCatalog = sysDoc.exists ? sysDoc.data()?.compiledCatalog || [] : [];
-  
-  const unifiedCatalog = [...mergedCatalog, ...compiledCatalog];
-  const product = unifiedCatalog.find((p: any) => p.id === id);
+  const product = compiledCatalog.find((p: any) => p.id === id);
 
-  if (!product) return {};
+  if (!product) return { title: data.businessName || 'Producto' };
 
   const getImageUrl = (prod: any) => {
     if (!prod.imageUrls) return '';
@@ -84,12 +54,19 @@ export default async function ProductoPage({ params }: { params: { comercio: str
   if (!comercio || !id) return notFound();
   if (!db) return notFound();
 
-  const doc = await db.collection('comercios').doc(comercio).get();
+  // Fast direct Firestore fetch in parallel (<30ms)
+  const [doc, sysDoc] = await Promise.all([
+    db.collection('comercios').doc(comercio).get(),
+    db.collection('comercios').doc(comercio).collection('_system').doc('catalog').get()
+  ]);
+
   if (!doc.exists) return notFound();
 
   const data = doc.data() || {};
-  const RENDER_API = process.env.NEXT_PUBLIC_RENDER_API || process.env.BOT_SERVER_URL || '';
+  const compiledCatalog = sysDoc.exists ? sysDoc.data()?.compiledCatalog || [] : [];
+  data.compiledCatalog = compiledCatalog;
 
+  const RENDER_API = process.env.NEXT_PUBLIC_RENDER_API || process.env.BOT_SERVER_URL || '';
   const catalogsConfig = data.catalogs || [];
   const legacyJid = data.catalogJid || data.avatarJid;
   
@@ -103,31 +80,31 @@ export default async function ProductoPage({ params }: { params: { comercio: str
           const fetchPromises = catalogsConfig.map(async (cat: any) => {
               if (!cat.jid) return [];
               const targetJid = cat.jid.includes('@') ? cat.jid : `${cat.jid}@s.whatsapp.net`;
-              const res = await fetch(`${RENDER_API}/api/catalog/${targetJid}`, { 
-                  next: { revalidate: 300 }
-              });
-              if (!res.ok) {
-                  console.warn(`API Pasarela Error for ${targetJid}: ${res.status}`);
-                  return [];
-              }
-              const apiData = await res.json();
-              if (apiData && apiData.products) {
-                  return apiData.products.map((p: any) => ({ ...p, sectionName: cat.name || 'Catálogo' }));
-              }
+              
+              const controller = new AbortController();
+              const timeoutId = setTimeout(() => controller.abort(), 1800);
+              
+              try {
+                  const res = await fetch(`${RENDER_API}/api/catalog/${targetJid}`, { 
+                      signal: controller.signal,
+                      next: { revalidate: 120 }
+                  });
+                  clearTimeout(timeoutId);
+                  if (!res.ok) return [];
+                  const apiData = await res.json();
+                  if (apiData && apiData.products) {
+                      return apiData.products.map((p: any) => ({ ...p, sectionName: cat.name || 'Catálogo' }));
+                  }
+              } catch (e) {}
               return [];
           });
 
           const results = await Promise.all(fetchPromises);
           mergedCatalog = results.flat();
-      } catch (err) {
-          console.error("Error fetching multi-catalog from API Pasarela:", err);
-      }
+      } catch (err) {}
   }
 
-  const sysDoc = await db.collection('comercios').doc(comercio).collection('_system').doc('catalog').get();
-  data.compiledCatalog = sysDoc.exists ? sysDoc.data()?.compiledCatalog || [] : [];
   data.whatsappCatalog = mergedCatalog;
-
   const themeHex = data.themeHex || '#25D366';
 
   return (

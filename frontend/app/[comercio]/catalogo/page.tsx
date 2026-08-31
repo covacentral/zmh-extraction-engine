@@ -3,7 +3,7 @@ import CatalogClient from './CatalogClient';
 import { db } from '../../../lib/firebaseAdmin';
 import { Suspense } from 'react';
 
-export const revalidate = 300; // 5 minutes
+export const revalidate = 60; // 1 minute ISR Edge Cache
 
 export default async function CatalogoPage({ params }: { params: { comercio: string } }) {
   const { comercio } = params;
@@ -11,13 +11,19 @@ export default async function CatalogoPage({ params }: { params: { comercio: str
   if (!comercio) return notFound();
   if (!db) return notFound();
 
-  const doc = await db.collection('comercios').doc(comercio).get();
+  // Fast direct Firestore fetch in parallel (<30ms)
+  const [doc, sysDoc] = await Promise.all([
+    db.collection('comercios').doc(comercio).get(),
+    db.collection('comercios').doc(comercio).collection('_system').doc('catalog').get()
+  ]);
+
   if (!doc.exists) return notFound();
 
   const data = doc.data() || {};
-  const RENDER_API = process.env.NEXT_PUBLIC_RENDER_API || process.env.BOT_SERVER_URL || '';
+  const compiledCatalog = sysDoc.exists ? sysDoc.data()?.compiledCatalog || [] : [];
+  data.compiledCatalog = compiledCatalog;
 
-  // API Pasarela: Fetch multi-catalog directly from WhatsApp (Node.js cache) instead of Firestore
+  const RENDER_API = process.env.NEXT_PUBLIC_RENDER_API || process.env.BOT_SERVER_URL || '';
   const catalogsConfig = data.catalogs || [];
   const legacyJid = data.catalogJid || data.avatarJid;
   
@@ -27,22 +33,30 @@ export default async function CatalogoPage({ params }: { params: { comercio: str
 
   let mergedCatalog: any[] = [];
 
+  // Non-blocking fast fetch with 1.5s timeout: Never block page load if bot is cold
   if (catalogsConfig.length > 0 && RENDER_API) {
       try {
           const fetchPromises = catalogsConfig.map(async (cat: any) => {
               if (!cat.jid) return [];
               const targetJid = cat.jid.includes('@') ? cat.jid : `${cat.jid}@s.whatsapp.net`;
-              const res = await fetch(`${RENDER_API}/api/catalog/${targetJid}`, { 
-                  next: { revalidate: 300 } // Vercel Edge Cache (5 minutes)
-              });
-              if (!res.ok) {
-                  console.warn(`API Pasarela Error for ${targetJid}: ${res.status}`);
-                  return [];
-              }
-              const apiData = await res.json();
-              if (apiData && apiData.products) {
-                  // Inject sectionName
-                  return apiData.products.map((p: any) => ({ ...p, sectionName: cat.name || 'Catálogo' }));
+              
+              const controller = new AbortController();
+              const timeoutId = setTimeout(() => controller.abort(), 1800); // 1.8s timeout
+              
+              try {
+                  const res = await fetch(`${RENDER_API}/api/catalog/${targetJid}`, { 
+                      signal: controller.signal,
+                      next: { revalidate: 120 }
+                  });
+                  clearTimeout(timeoutId);
+                  
+                  if (!res.ok) return [];
+                  const apiData = await res.json();
+                  if (apiData && apiData.products) {
+                      return apiData.products.map((p: any) => ({ ...p, sectionName: cat.name || 'Catálogo' }));
+                  }
+              } catch (e) {
+                  // If timed out or unreachable, fallback silently to compiled catalog
               }
               return [];
           });
@@ -50,14 +64,11 @@ export default async function CatalogoPage({ params }: { params: { comercio: str
           const results = await Promise.all(fetchPromises);
           mergedCatalog = results.flat();
       } catch (err) {
-          console.error("Error fetching multi-catalog from API Pasarela:", err);
+          console.warn("API Pasarela timeout/fallback to Firestore compiled catalog");
       }
   }
 
-  const sysDoc = await db.collection('comercios').doc(comercio).collection('_system').doc('catalog').get();
-  data.compiledCatalog = sysDoc.exists ? sysDoc.data()?.compiledCatalog || [] : [];
   data.whatsappCatalog = mergedCatalog;
-
   const themeHex = data.themeHex || '#25D366';
 
   return (

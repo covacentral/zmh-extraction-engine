@@ -488,7 +488,7 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
               filteredProducts={filteredProducts}
               isStoreMode={isStoreMode}
               themeHex={themeHex}
-              renderProductCard={(prod: any, forceList: boolean = false) => {
+              renderProductCard={(prod: any, forceList: boolean = false, isPriority: boolean = false) => {
                 const price = getProductPrice(prod, isWholesale);
                 const refCode = getProductRef(prod);
                 const vIdx = selectedVariations[prod.id] || 0;
@@ -509,7 +509,19 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
                     return (
                        <div key={prod.id} onClick={() => router.push(`/${commerceId}/producto/${prod.id}`)} className={`bg-white/5 hover:bg-white/10 rounded-2xl overflow-hidden flex flex-col border border-white/5 transition-all duration-300 cursor-pointer shadow-lg hover:shadow-[0_10px_30px_rgba(0,0,0,0.5)] hover:-translate-y-1 ${isOut ? 'opacity-70' : ''}`}>
                           <div className={`w-full pt-[100%] bg-zinc-900/50 relative border-b border-white/5 overflow-hidden block ${isOut ? 'grayscale opacity-75' : ''}`}>
-                             {imageUrl ? <img src={imageUrl} alt={prod.name} className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 hover:scale-110" /> : <div className="absolute inset-0 w-full h-full flex items-center justify-center text-white/20"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg></div>}
+                             {imageUrl ? (
+                                <img 
+                                   src={imageUrl} 
+                                   alt={prod.name} 
+                                   loading={isPriority ? "eager" : "lazy"} 
+                                   decoding="async"
+                                   className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 hover:scale-110" 
+                                />
+                             ) : (
+                                <div className="absolute inset-0 w-full h-full flex items-center justify-center text-white/20">
+                                   <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+                                </div>
+                             )}
                              {isOut && (
                                 <div className="absolute inset-0 bg-black/60 flex items-center justify-center backdrop-blur-sm">
                                    <span className="text-white text-[12px] font-black tracking-widest uppercase bg-red-600/90 px-3 py-1.5 rounded-lg border-2 border-red-500 shadow-2xl rotate-[-15deg]">Agotado</span>
@@ -577,7 +589,19 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
                    <div key={prod.id} onClick={() => setSelectedProduct(prod)} className={`bg-white/5 hover:bg-white/10 rounded-3xl p-2.5 flex gap-4 items-center border border-white/5 transition-colors cursor-pointer ${isOut ? 'opacity-70' : ''}`}>
                       {/* Thumbnail */}
                       <div className={`w-20 h-20 shrink-0 bg-zinc-900 rounded-2xl overflow-hidden relative border border-white/5 ${isOut ? 'grayscale opacity-75' : ''}`}>
-                         {imageUrl ? <img src={imageUrl} alt={prod.name} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-white/20"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg></div>}
+                         {imageUrl ? (
+                            <img 
+                               src={imageUrl} 
+                               alt={prod.name} 
+                               loading={isPriority ? "eager" : "lazy"}
+                               decoding="async"
+                               className="w-full h-full object-cover" 
+                            />
+                         ) : (
+                            <div className="w-full h-full flex items-center justify-center text-white/20">
+                               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+                            </div>
+                         )}
                          {isOut && (
                             <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
                                <span className="text-white text-[10px] font-black tracking-widest uppercase bg-red-600/90 px-1.5 py-0.5 rounded border border-red-500 shadow-lg rotate-[-15deg]">Agotado</span>
