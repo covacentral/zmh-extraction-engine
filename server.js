@@ -14,7 +14,7 @@
 const express = require('express');
 const cors    = require('cors');
 
-const { default: makeWASocket, fetchLatestBaileysVersion, initAuthCreds, BufferJSON } = require('@whiskeysockets/baileys');
+const { default: makeWASocket, fetchLatestBaileysVersion, initAuthCreds, BufferJSON, proto, getBinaryNodeChild, getAllBinaryNodeChildren } = require('@whiskeysockets/baileys');
 const PDFDocument = require('pdfkit');
 
 const { db, admin }            = require('./services/firebase');
@@ -541,16 +541,20 @@ async function upsertChannelProduct(commerceId, product) {
     await catRef.set({ compiledCatalog: catalog }, { merge: true });
 }
 
-async function extractChannelProducts(sock, channelJidOrInvite, count = 5, commerceId = '') {
+async function extractChannelProducts(sock, channelJidOrInvite, count = 5, commerceId = '', areaName = '') {
     if (!sock) throw new Error('WhatsApp bot no está conectado');
     let targetJid = channelJidOrInvite.trim();
+    let channelMetaName = '';
 
-    if (targetJid.includes('whatsapp.com/channel/')) {
-        const inviteCode = targetJid.replace('https://whatsapp.com/channel/', '').replace('https://chat.whatsapp.com/', '').split('/')[0].trim();
+    if (targetJid.includes('whatsapp.com/channel/') || targetJid.includes('chat.whatsapp.com/')) {
+        const inviteCode = targetJid.replace('https://whatsapp.com/channel/', '').replace('https://chat.whatsapp.com/', '').split('/')[0].split('?')[0].trim();
         try {
             if (typeof sock.newsletterMetadata === 'function') {
                 const metadata = await sock.newsletterMetadata('invite', inviteCode);
-                if (metadata?.id) targetJid = metadata.id;
+                if (metadata?.id) {
+                    targetJid = metadata.id;
+                    channelMetaName = metadata.name || '';
+                }
             }
         } catch (invErr) {
             console.warn('[WA Channel] Invite resolve fallback:', invErr.message);
@@ -561,20 +565,58 @@ async function extractChannelProducts(sock, channelJidOrInvite, count = 5, comme
         targetJid = `${targetJid}@newsletter`;
     }
 
-    let messages = [];
+    // Auto-follow channel if not already followed
     try {
-        if (typeof sock.newsletterFetchMessages === 'function') {
-            messages = await sock.newsletterFetchMessages(targetJid, count);
+        if (typeof sock.newsletterFollow === 'function') {
+            await sock.newsletterFollow(targetJid);
         }
-    } catch (fetchErr) {
-        console.warn('[WA Channel Fetch Warning]', fetchErr.message);
+    } catch (fErr) {
+        // Normal if already followed
     }
 
-    if (!messages || !Array.isArray(messages)) messages = [];
+    const finalArea = (areaName && areaName.trim()) ? areaName.trim() : (channelMetaName || 'Canal');
+
+    let rawMessages = [];
+    try {
+        if (typeof sock.newsletterFetchMessages === 'function') {
+            const resNode = await sock.newsletterFetchMessages(targetJid, Number(count) || 5);
+            
+            if (Array.isArray(resNode)) {
+                rawMessages = resNode;
+            } else if (resNode && typeof resNode === 'object') {
+                const messageUpdatesNode = getBinaryNodeChild(resNode, 'message_updates') || getBinaryNodeChild(resNode, 'messages') || resNode;
+                const messageNodes = getAllBinaryNodeChildren(messageUpdatesNode, 'message');
+                
+                for (const mNode of messageNodes) {
+                    let msgProto = null;
+                    const plaintext = getBinaryNodeChild(mNode, 'plaintext');
+                    if (plaintext && plaintext.content) {
+                        try {
+                            const buf = Buffer.isBuffer(plaintext.content) ? plaintext.content : Buffer.from(plaintext.content);
+                            msgProto = proto.Message.decode(buf);
+                        } catch (decodeErr) {
+                            console.warn('[Channel Proto Decode]', decodeErr.message);
+                        }
+                    }
+                    rawMessages.push({
+                        key: {
+                            id: mNode.attrs?.id || mNode.attrs?.server_id || `post_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+                            remoteJid: targetJid
+                        },
+                        messageTimestamp: Number(mNode.attrs?.t || Date.now() / 1000),
+                        message: msgProto || {}
+                    });
+                }
+            }
+        }
+    } catch (fetchErr) {
+        console.warn('[WA Channel Fetch Error]', fetchErr.message);
+        throw new Error(`Error al leer canal: ${fetchErr.message}`);
+    }
 
     const extractedProducts = [];
-    for (const msg of messages) {
-        const prod = extractProductFromMessage(msg);
+    for (const msg of rawMessages) {
+        const prod = extractProductFromMessage(msg, finalArea);
         if (prod && prod.name) {
             extractedProducts.push(prod);
             if (commerceId) {
@@ -583,9 +625,22 @@ async function extractChannelProducts(sock, channelJidOrInvite, count = 5, comme
         }
     }
 
+    if (commerceId && db) {
+        try {
+            await db.collection('comercios').doc(commerceId).set({
+                channelJid: targetJid,
+                channelName: finalArea,
+                channelSync: true
+            }, { merge: true });
+        } catch (dbErr) {
+            console.warn('[Channel DB Update Warning]', dbErr.message);
+        }
+    }
+
     return {
         channelJid: targetJid,
-        totalFetched: messages.length,
+        area: finalArea,
+        totalFetched: rawMessages.length,
         extractedCount: extractedProducts.length,
         products: extractedProducts
     };
@@ -595,10 +650,10 @@ async function extractChannelProducts(sock, channelJidOrInvite, count = 5, comme
 app.post('/api/channel/extract', async (req, res) => {
     if (!isReady || !globalSock) return res.status(503).json({ error: 'WhatsApp offline' });
     try {
-        const { commerceId, channelJid, count = 5 } = req.body;
+        const { commerceId, channelJid, count = 5, areaName = '' } = req.body;
         if (!channelJid) return res.status(400).json({ error: 'channelJid is required' });
 
-        const result = await extractChannelProducts(globalSock, channelJid, Number(count) || 5, commerceId);
+        const result = await extractChannelProducts(globalSock, channelJid, Number(count) || 5, commerceId, areaName);
         res.json({ ok: true, ...result });
     } catch (e) {
         console.error('[Channel Extract Route Error]', e);

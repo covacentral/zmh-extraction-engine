@@ -130,11 +130,17 @@ export default function SuperAdminClient({ masterToken, initialComercios }: Supe
     setMessage({ type: 'info', text: `Conectando con el bot de WhatsApp para extraer ${extractCount} publicaciones...` });
 
     try {
-      const res = await triggerChannelExtraction(masterToken, selectedCommerceId, commerceData.channelJid, extractCount);
+      const res = await triggerChannelExtraction(
+        masterToken,
+        selectedCommerceId,
+        commerceData.channelJid,
+        extractCount,
+        commerceData.channelName || ''
+      );
       setExtractedResult(res.data);
       setMessage({
         type: 'success',
-        text: `¡Extracción exitosa! Se extrajeron ${res.data?.extractedCount || 0} productos y se guardaron en el catálogo.`
+        text: `¡Extracción exitosa! Se extrajeron ${res.data?.extractedCount || 0} productos categorizados en el área "${res.data?.area || commerceData.channelName || 'Canal'}".`
       });
       // Refresh catalog
       await loadCommerceDetails(selectedCommerceId);
@@ -434,14 +440,15 @@ export default function SuperAdminClient({ masterToken, initialComercios }: Supe
                       </div>
 
                       <div>
-                        <label className="text-xs font-bold text-zinc-400 block mb-1">Nombre de la Sección en Catálogo</label>
+                        <label className="text-xs font-bold text-zinc-400 block mb-1">Nombre de la Sección / Área en Catálogo</label>
                         <input
                           type="text"
                           value={commerceData.channelName || ''}
                           onChange={(e) => setCommerceData({ ...commerceData, channelName: e.target.value })}
-                          className="w-full bg-black/60 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-rose-500"
-                          placeholder="Ej. Promociones de Canal"
+                          className="w-full bg-black/60 border border-white/10 rounded-xl px-4 py-2.5 text-sm font-bold text-white outline-none focus:border-rose-500"
+                          placeholder="Ej. CACHARROS, ROPA, TECNOLOGÍA..."
                         />
+                        <p className="text-[11px] text-zinc-500 mt-1">Todos los productos extraídos de este canal se categorizarán automáticamente en esta área.</p>
                       </div>
                     </div>
 

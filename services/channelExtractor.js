@@ -110,7 +110,7 @@ function extractProductFromMessage(msgObj, channelName = 'Canal Oficial') {
   const reference = extractRef(caption);
   const brand = extractBrand(caption);
   const categories = extractCategories(caption);
-  const primaryCategory = categories[0] || 'Canal';
+  const primaryCategory = categories.length > 0 ? categories[0] : (channelName || 'General');
 
   // Direct WhatsApp CDN image URL (avoids storing in Firebase Storage)
   let imageUrl = msg.imageMessage?.url || '';
@@ -134,8 +134,8 @@ function extractProductFromMessage(msgObj, channelName = 'Canal Oficial') {
     reference,
     brand,
     category: primaryCategory,
-    area: channelName,
-    sectionName: channelName,
+    area: channelName || 'Catálogo',
+    sectionName: channelName || 'Catálogo',
     imageUrl: imageUrl || '',
     imageUrls: imageUrl || '',
     source: 'whatsapp_channel',

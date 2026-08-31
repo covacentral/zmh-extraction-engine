@@ -110,7 +110,8 @@ export async function triggerChannelExtraction(
   masterToken: string,
   commerceId: string,
   channelJid: string,
-  count: number = 5
+  count: number = 5,
+  areaName: string = ''
 ) {
   checkAuth(masterToken);
   if (!channelJid) throw new Error('Se requiere el JID o Link del canal.');
@@ -124,7 +125,8 @@ export async function triggerChannelExtraction(
       body: JSON.stringify({
         commerceId,
         channelJid,
-        count
+        count,
+        areaName
       }),
       signal: AbortSignal.timeout(25000)
     });
