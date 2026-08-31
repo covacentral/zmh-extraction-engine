@@ -601,50 +601,97 @@ function findNodesByTag(node, tag) {
 }
 
     let rawMessages = [];
-    try {
-        let resNode = null;
-        if (typeof sock.newsletterFetchMessages === 'function') {
-            const fetchPromise = sock.newsletterFetchMessages(targetJid, Number(count) || 5);
-            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Fetch timeout')), 8000));
-            resNode = await Promise.race([fetchPromise, timeoutPromise]).catch(e => {
-                console.warn('[WA Channel Fetch Race Notice]', e.message);
-                return null;
-            });
-        }
+    const fetchCount = Number(count) || 5;
 
-        if (Array.isArray(resNode)) {
-            rawMessages = resNode;
-        } else if (resNode && typeof resNode === 'object') {
-            const messageNodes = findNodesByTag(resNode, 'message');
-            
-            for (const mNode of messageNodes) {
-                let msgProto = null;
-                const plaintextNodes = findNodesByTag(mNode, 'plaintext');
-                for (const pt of plaintextNodes) {
-                    if (pt && pt.content) {
-                        try {
-                            const buf = Buffer.isBuffer(pt.content) ? pt.content : Buffer.from(pt.content);
-                            msgProto = proto.Message.decode(buf);
-                        } catch (decodeErr) {
-                            console.warn('[Channel Proto Decode]', decodeErr.message);
-                        }
-                    }
-                }
-
-                rawMessages.push({
-                    key: {
-                        id: mNode.attrs?.id || mNode.attrs?.server_id || `post_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-                        remoteJid: targetJid
-                    },
-                    messageTimestamp: Number(mNode.attrs?.t || Date.now() / 1000),
-                    message: msgProto || mNode,
-                    attrs: mNode.attrs || {},
-                    content: mNode.content || []
+    // Multi-strategy message fetcher to support all WhatsApp Newsletter server protocols
+    const strategies = [
+        // Strategy 1: newsletterFetchMessages with since: 0
+        async () => {
+            if (typeof sock.newsletterFetchMessages === 'function') {
+                return await sock.newsletterFetchMessages(targetJid, fetchCount, 0);
+            }
+            return null;
+        },
+        // Strategy 2: newsletterFetchMessages standard
+        async () => {
+            if (typeof sock.newsletterFetchMessages === 'function') {
+                return await sock.newsletterFetchMessages(targetJid, fetchCount);
+            }
+            return null;
+        },
+        // Strategy 3: Direct IQ query with <message_updates since="0">
+        async () => {
+            if (typeof sock.query === 'function') {
+                const tag = (typeof sock.generateMessageTag === 'function') ? sock.generateMessageTag() : `iq_${Date.now()}`;
+                return await sock.query({
+                    tag: 'iq',
+                    attrs: { id: tag, type: 'get', xmlns: 'newsletter', to: targetJid },
+                    content: [{ tag: 'message_updates', attrs: { count: String(fetchCount), since: '0' } }]
                 });
             }
+            return null;
+        },
+        // Strategy 4: Direct IQ query with <messages count="N">
+        async () => {
+            if (typeof sock.query === 'function') {
+                const tag = (typeof sock.generateMessageTag === 'function') ? sock.generateMessageTag() : `iq_${Date.now()}`;
+                return await sock.query({
+                    tag: 'iq',
+                    attrs: { id: tag, type: 'get', xmlns: 'newsletter', to: targetJid },
+                    content: [{ tag: 'messages', attrs: { count: String(fetchCount) } }]
+                });
+            }
+            return null;
         }
-    } catch (fetchErr) {
-        console.warn('[WA Channel Fetch Handled]', fetchErr.message);
+    ];
+
+    for (let i = 0; i < strategies.length; i++) {
+        try {
+            const stratFn = strategies[i];
+            const fetchPromise = stratFn();
+            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error(`Strategy ${i+1} timeout`)), 6000));
+            const resNode = await Promise.race([fetchPromise, timeoutPromise]);
+
+            let candidateMessages = [];
+            if (Array.isArray(resNode)) {
+                candidateMessages = resNode;
+            } else if (resNode && typeof resNode === 'object') {
+                const messageNodes = findNodesByTag(resNode, 'message');
+                for (const mNode of messageNodes) {
+                    let msgProto = null;
+                    const plaintextNodes = findNodesByTag(mNode, 'plaintext');
+                    for (const pt of plaintextNodes) {
+                        if (pt && pt.content) {
+                            try {
+                                const buf = Buffer.isBuffer(pt.content) ? pt.content : Buffer.from(pt.content);
+                                msgProto = proto.Message.decode(buf);
+                            } catch (decodeErr) {
+                                console.warn('[Channel Proto Decode]', decodeErr.message);
+                            }
+                        }
+                    }
+
+                    candidateMessages.push({
+                        key: {
+                            id: mNode.attrs?.id || mNode.attrs?.server_id || `post_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+                            remoteJid: targetJid
+                        },
+                        messageTimestamp: Number(mNode.attrs?.t || Date.now() / 1000),
+                        message: msgProto || mNode,
+                        attrs: mNode.attrs || {},
+                        content: mNode.content || []
+                    });
+                }
+            }
+
+            if (candidateMessages.length > 0) {
+                rawMessages = candidateMessages;
+                console.log(`[WA Channel] Strategy ${i+1} succeeded with ${candidateMessages.length} messages.`);
+                break;
+            }
+        } catch (stratErr) {
+            console.warn(`[WA Channel Strategy ${i+1} Warning]`, stratErr.message);
+        }
     }
 
     const extractedProducts = [];
