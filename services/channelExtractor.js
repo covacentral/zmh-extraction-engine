@@ -147,17 +147,6 @@ function extractProductFromMessage(msgObj, channelName = 'Canal Oficial') {
   const categories = extractCategories(caption);
   const primaryCategory = categories.length > 0 ? categories[0] : (channelName || 'General');
 
-  // Direct WhatsApp CDN image URL (avoids storing in Firebase Storage)
-  let imageUrl = msg.imageMessage?.url || '';
-  if (!imageUrl && msg.imageMessage?.directPath) {
-    imageUrl = `https://mmg.whatsapp.net${msg.imageMessage.directPath}`;
-  }
-
-  const postId = msgObj?.key?.id || `ch_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-  const timestamp = msgObj?.messageTimestamp 
-    ? (typeof msgObj.messageTimestamp === 'number' ? msgObj.messageTimestamp * 1000 : Number(msgObj.messageTimestamp) * 1000)
-    : Date.now();
-
   return {
     id: `post_${postId}`,
     name,
@@ -176,6 +165,8 @@ function extractProductFromMessage(msgObj, channelName = 'Canal Oficial') {
     source: 'whatsapp_channel',
     channelPostId: postId,
     createdAt: timestamp,
+    updatedAt: timestamp,
+    active: true,
     status: 'active',
     stock: 999
   };
