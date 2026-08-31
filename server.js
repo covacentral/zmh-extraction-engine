@@ -574,6 +574,15 @@ async function extractChannelProducts(sock, channelJidOrInvite, count = 5, comme
         // Normal if already followed
     }
 
+    // Subscribe to live updates so WhatsApp delivers new channel messages in real time
+    try {
+        if (typeof sock.subscribeNewsletterUpdates === 'function') {
+            await sock.subscribeNewsletterUpdates(targetJid);
+        }
+    } catch (sErr) {
+        console.warn('[WA Channel Subscribe Warning]', sErr.message);
+    }
+
     const finalArea = (areaName && areaName.trim()) ? areaName.trim() : (channelMetaName || 'Canal');
 
 function findNodesByTag(node, tag) {
@@ -592,7 +601,12 @@ function findNodesByTag(node, tag) {
     try {
         let resNode = null;
         if (typeof sock.newsletterFetchMessages === 'function') {
-            resNode = await sock.newsletterFetchMessages(targetJid, Number(count) || 5);
+            const fetchPromise = sock.newsletterFetchMessages(targetJid, Number(count) || 5);
+            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Fetch timeout')), 8000));
+            resNode = await Promise.race([fetchPromise, timeoutPromise]).catch(e => {
+                console.warn('[WA Channel Fetch Race Notice]', e.message);
+                return null;
+            });
         }
 
         if (Array.isArray(resNode)) {
@@ -627,8 +641,7 @@ function findNodesByTag(node, tag) {
             }
         }
     } catch (fetchErr) {
-        console.warn('[WA Channel Fetch Error]', fetchErr.message);
-        throw new Error(`Error al leer canal: ${fetchErr.message}`);
+        console.warn('[WA Channel Fetch Handled]', fetchErr.message);
     }
 
     const extractedProducts = [];
