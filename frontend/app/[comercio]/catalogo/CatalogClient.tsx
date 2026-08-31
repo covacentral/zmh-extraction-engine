@@ -136,27 +136,58 @@ export default function CatalogClient({ commerceId, data, themeHex, RENDER_API }
       return null;
   };
 
+  const reliableTestImages = [
+    'https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=600&q=80', // Nike Red
+    'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=600&q=80', // Watch
+    'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=600&q=80', // Headphones
+    'https://images.unsplash.com/photo-1583394838336-acd977736f90?auto=format&fit=crop&w=600&q=80', // Tech
+    'https://images.unsplash.com/photo-1560343090-f0409e92791a?auto=format&fit=crop&w=600&q=80', // Shoes
+    'https://images.unsplash.com/photo-1572635196237-14b3f281503f?auto=format&fit=crop&w=600&q=80', // Sunglasses
+    'https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?auto=format&fit=crop&w=600&q=80', // Camera
+    'https://images.unsplash.com/photo-1546868871-7041f2a55e12?auto=format&fit=crop&w=600&q=80', // Smartwatch
+    'https://images.unsplash.com/photo-1585386959984-a4155224a1ad?auto=format&fit=crop&w=600&q=80', // Perfume
+    'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=600&q=80', // Smartphone
+    'https://images.unsplash.com/photo-1576566588028-4147f3842f27?auto=format&fit=crop&w=600&q=80', // Shirt
+    'https://images.unsplash.com/photo-1578932750294-f5075e85f44a?auto=format&fit=crop&w=600&q=80', // Backpack
+    'https://images.unsplash.com/photo-1608231387042-66d1773070a5?auto=format&fit=crop&w=600&q=80', // Puma
+    'https://images.unsplash.com/photo-1584917865442-de89df76afd3?auto=format&fit=crop&w=600&q=80', // Handbag
+    'https://images.unsplash.com/photo-1527864550417-7fd91fc51a46?auto=format&fit=crop&w=600&q=80', // Mouse
+    'https://images.unsplash.com/photo-1507764923504-cd90bf7da772?auto=format&fit=crop&w=600&q=80', // Laptop
+  ];
+
   // Fallback for image URLs based on standard Baileys Product structure or Firebase Storage
   const getImageUrl = (prod: any) => {
     if (!prod) return '';
     const raw = prod.imageUrls || prod.imageUrl || prod.image || prod.imageWebp || (prod.variations && prod.variations[0]?.imageWebp);
     if (!raw) return '';
-    if (typeof raw === 'string') return raw;
-    if (raw.requested) return raw.requested;
-    if (raw.original) return raw.original;
-    if (Array.isArray(raw)) return raw[0] || '';
-    return '';
+    let url = '';
+    if (typeof raw === 'string') url = raw;
+    else if (raw.requested) url = raw.requested;
+    else if (raw.original) url = raw.original;
+    else if (Array.isArray(raw)) url = raw[0] || '';
+
+    if (url.includes('picsum.photos')) {
+      const hash = (prod.id || prod.name || '').split('').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0);
+      return reliableTestImages[hash % reliableTestImages.length];
+    }
+    return url;
   };
 
   const getHighResImageUrl = (prod: any) => {
     if (!prod) return '';
     const raw = prod.imageUrls || prod.imageUrl || prod.image || prod.imageWebp || (prod.variations && prod.variations[0]?.imageWebp);
     if (!raw) return '';
-    if (typeof raw === 'string') return raw;
-    if (raw.original) return raw.original;
-    if (raw.requested) return raw.requested;
-    if (Array.isArray(raw)) return raw[0] || '';
-    return '';
+    let url = '';
+    if (typeof raw === 'string') url = raw;
+    else if (raw.original) url = raw.original;
+    else if (raw.requested) url = raw.requested;
+    else if (Array.isArray(raw)) url = raw[0] || '';
+
+    if (url.includes('picsum.photos')) {
+      const hash = (prod.id || prod.name || '').split('').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0);
+      return reliableTestImages[hash % reliableTestImages.length];
+    }
+    return url;
   };
 
   // Extract categories (from object or legacy hashtags)
