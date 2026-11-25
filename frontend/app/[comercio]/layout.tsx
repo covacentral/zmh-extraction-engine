@@ -20,15 +20,19 @@ function getVersionToken(avatarJid: string, updatedAt: any): string {
   for (let i = 0; i < raw.length; i++) {
     hash = ((hash << 5) - hash + raw.charCodeAt(i)) | 0;
   }
-  return `b2-${Math.abs(hash).toString(36)}`;
+  return `b3-${Math.abs(hash).toString(36)}`;
 }
 
-function buildCommerceIconUrl(data: any): string {
+function buildCommerceIconUrls(data: any): { circleIconUrl: string; rasterIconUrl: string } {
   const avatarJid = typeof data?.avatarJid === 'string' ? data.avatarJid.trim() : '';
   const fallbackName = typeof data?.businessName === 'string' ? data.businessName.trim() : 'store';
   const target = avatarJid || fallbackName;
   const version = getVersionToken(target, data?.avatarUpdatedAt || data?.updatedAt);
-  return `${RENDER_API}/api/avatar/${encodeURIComponent(target)}?v=${version}`;
+  const base = `${RENDER_API}/api/avatar/${encodeURIComponent(target)}`;
+  return {
+    circleIconUrl: `${base}?shape=circle&v=${version}`,
+    rasterIconUrl: `${base}?v=${version}`,
+  };
 }
 
 export async function generateMetadata({
@@ -45,7 +49,7 @@ export async function generateMetadata({
   const description = city
     ? `${businessName} - ${city}. Canales oficiales, asesores y enlaces directos.`
     : `${businessName}. Canales oficiales, asesores y enlaces directos.`;
-  const iconUrl = buildCommerceIconUrl(data);
+  const { circleIconUrl, rasterIconUrl } = buildCommerceIconUrls(data);
 
   return {
     title: {
@@ -54,20 +58,20 @@ export async function generateMetadata({
     },
     description,
     icons: {
-      icon: [{ url: iconUrl }],
-      shortcut: [iconUrl],
-      apple: [{ url: iconUrl }],
+      icon: [{ url: circleIconUrl, type: 'image/svg+xml' }],
+      shortcut: [{ url: circleIconUrl, type: 'image/svg+xml' }],
+      apple: [{ url: rasterIconUrl }],
     },
     openGraph: {
       title: businessName,
       description,
-      images: [{ url: iconUrl, alt: businessName }],
+      images: [{ url: rasterIconUrl, alt: businessName }],
     },
     twitter: {
       card: 'summary',
       title: businessName,
       description,
-      images: [iconUrl],
+      images: [rasterIconUrl],
     },
   };
 }
@@ -81,12 +85,16 @@ export default async function CommerceLayout({
 }) {
   const resolved = await resolveCommerce(params.comercio);
   const businessName = (resolved?.data?.businessName || '').trim();
-  const iconUrl = resolved ? buildCommerceIconUrl(resolved.data) : '';
+  const icons = resolved ? buildCommerceIconUrls(resolved.data) : null;
 
   return (
     <>
-      {resolved && (
-        <CommerceHeadSync businessName={businessName} iconUrl={iconUrl} />
+      {resolved && icons && (
+        <CommerceHeadSync
+          businessName={businessName}
+          iconUrl={icons.circleIconUrl}
+          appleIconUrl={icons.rasterIconUrl}
+        />
       )}
       {children}
     </>

@@ -51,11 +51,40 @@ function generateFallbackSvg(text: string): string {
   </svg>`;
 }
 
+function buildAvatarResponse(
+  buffer: ArrayBuffer,
+  contentType: string,
+  cacheControl: string,
+  isCircle: boolean
+): NextResponse {
+  const safeMime = (contentType || 'image/jpeg').split(';')[0].trim();
+  if (isCircle && !safeMime.includes('svg')) {
+    const base64 = Buffer.from(buffer).toString('base64');
+    const circleSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200"><defs><clipPath id="c"><circle cx="100" cy="100" r="100"/></clipPath></defs><image href="data:${safeMime};base64,${base64}" width="200" height="200" preserveAspectRatio="xMidYMid slice" clip-path="url(#c)"/></svg>`;
+    return new NextResponse(circleSvg, {
+      status: 200,
+      headers: {
+        'Content-Type': 'image/svg+xml',
+        'Cache-Control': cacheControl,
+      },
+    });
+  }
+
+  return new NextResponse(buffer, {
+    status: 200,
+    headers: {
+      'Content-Type': contentType || 'image/jpeg',
+      'Cache-Control': cacheControl,
+    },
+  });
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: { jid: string } }
 ) {
   const { jid } = params;
+  const isCircle = request.nextUrl.searchParams.get('shape') === 'circle';
 
   if (!jid || typeof jid !== 'string') {
     const svg = generateFallbackSvg('?');
@@ -77,13 +106,12 @@ export async function GET(
       if (resp.ok) {
         const buffer = await resp.arrayBuffer();
         const contentType = resp.headers.get('content-type') || 'image/jpeg';
-        return new NextResponse(buffer, {
-          status: 200,
-          headers: {
-            'Content-Type': contentType,
-            'Cache-Control': 'public, max-age=86400, stale-while-revalidate=604800',
-          },
-        });
+        return buildAvatarResponse(
+          buffer,
+          contentType,
+          'public, max-age=86400, stale-while-revalidate=604800',
+          isCircle
+        );
       }
     } catch {
       // Fallback
@@ -101,13 +129,12 @@ export async function GET(
           if (resp.ok) {
             const buffer = await resp.arrayBuffer();
             const contentType = resp.headers.get('content-type') || 'image/jpeg';
-            return new NextResponse(buffer, {
-              status: 200,
-              headers: {
-                'Content-Type': contentType,
-                'Cache-Control': 'public, max-age=14400, stale-while-revalidate=86400',
-              },
-            });
+            return buildAvatarResponse(
+              buffer,
+              contentType,
+              'public, max-age=14400, stale-while-revalidate=86400',
+              isCircle
+            );
           }
         }
       }
@@ -132,13 +159,12 @@ export async function GET(
     if (resp.ok) {
       const buffer = await resp.arrayBuffer();
       const contentType = resp.headers.get('content-type') || 'image/jpeg';
-      return new NextResponse(buffer, {
-        status: 200,
-        headers: {
-          'Content-Type': contentType,
-          'Cache-Control': 'public, max-age=14400, stale-while-revalidate=86400',
-        },
-      });
+      return buildAvatarResponse(
+        buffer,
+        contentType,
+        'public, max-age=14400, stale-while-revalidate=86400',
+        isCircle
+      );
     }
   } catch {
     // Bot unavailable or timed out, gracefully continue to SVG fallback
