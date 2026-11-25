@@ -32,15 +32,57 @@ export interface GeminiClient {
 }
 
 const DEFAULT_MODEL_CHAIN = [
-  'gemini-2.5-flash-lite',
-  'gemini-2.5-flash',
-  'gemini-2.0-flash',
+  'gemini-flash-lite-latest',
+  'gemini-3.5-flash-lite',
+  'gemini-3.1-flash-lite',
+  'gemini-flash-latest',
 ];
+
+const MODELS_LIST_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models';
+let discoveredModelCache: string | null = null;
 
 function buildGeminiEndpoint(model: string): string {
   return `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
     model
   )}:generateContent`;
+}
+
+async function discoverFlashModel(
+  apiKey: string,
+  signal: AbortSignal,
+  fetchFn: typeof fetch
+): Promise<string | null> {
+  if (discoveredModelCache) return discoveredModelCache;
+  try {
+    const resp = await fetchFn(
+      `${MODELS_LIST_ENDPOINT}?key=${encodeURIComponent(apiKey)}`,
+      { method: 'GET', signal, headers: { Accept: 'application/json' } }
+    );
+    if (!resp.ok) return null;
+    const data = (await resp.json()) as {
+      models?: Array<{ name?: string; supportedGenerationMethods?: string[] }>;
+    };
+    const candidates = (data.models || [])
+      .filter(
+        (m) =>
+          typeof m.name === 'string' &&
+          Array.isArray(m.supportedGenerationMethods) &&
+          m.supportedGenerationMethods.includes('generateContent')
+      )
+      .map((m) => (m.name as string).replace(/^models\//, ''));
+
+    const preferred =
+      candidates.find((n) => /flash-lite/i.test(n) && !/tts|audio|live|embedding/i.test(n)) ||
+      candidates.find((n) => /flash/i.test(n) && !/tts|audio|live|embedding/i.test(n)) ||
+      null;
+
+    if (preferred) {
+      discoveredModelCache = preferred;
+    }
+    return preferred;
+  } catch {
+    return null;
+  }
 }
 
 const ANALYZE_PROMPT = [
@@ -87,69 +129,91 @@ export function createHttpGeminiClient(
     ? [preferredModel.trim(), ...DEFAULT_MODEL_CHAIN.filter((m) => m !== preferredModel.trim())]
     : DEFAULT_MODEL_CHAIN;
 
+  const invokeModel = async (
+    model: string,
+    parts: Array<Record<string, unknown>>,
+    signal: AbortSignal
+  ): Promise<{ notFound: boolean; data?: unknown }> => {
+    const generationConfig: Record<string, unknown> = {
+      temperature: 0.1,
+      maxOutputTokens: 400,
+      responseMimeType: 'application/json',
+    };
+
+    const resp = await fetchFn(
+      `${buildGeminiEndpoint(model)}?key=${encodeURIComponent(apiKey)}`,
+      {
+        method: 'POST',
+        signal,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ role: 'user', parts }],
+          generationConfig,
+        }),
+      }
+    );
+
+    if (resp.status === 429) {
+      throw new GeminiQuotaError();
+    }
+    if (resp.status === 404) {
+      return { notFound: true };
+    }
+    if (!resp.ok) {
+      let detailCode = `GEMINI_HTTP_${resp.status}`;
+      try {
+        const errJson = (await resp.json()) as { error?: { status?: string; message?: string } };
+        if (errJson?.error?.status) {
+          detailCode = `GEMINI_HTTP_${resp.status}_${errJson.error.status}`;
+        }
+      } catch {
+        // Ignore non-JSON error body
+      }
+      throw new Error(detailCode);
+    }
+
+    const payload = await resp.json();
+    const text = extractTextFromGeminiPayload(payload);
+    if (!text) {
+      throw new GeminiInvalidOutputError();
+    }
+
+    try {
+      return { notFound: false, data: parseJsonSafe(text) };
+    } catch {
+      throw new GeminiInvalidOutputError();
+    }
+  };
+
   const callGemini = async (
     parts: Array<Record<string, unknown>>,
     signal: AbortSignal
   ): Promise<unknown> => {
-    let lastError: Error | null = null;
+    const candidateModels = discoveredModelCache
+      ? [discoveredModelCache, ...models.filter((m) => m !== discoveredModelCache)]
+      : models;
 
-    for (const model of models) {
-      const generationConfig: Record<string, unknown> = {
-        temperature: 0.1,
-        maxOutputTokens: 400,
-        responseMimeType: 'application/json',
-      };
-      if (model.startsWith('gemini-2.5-')) {
-        generationConfig.thinkingConfig = { thinkingBudget: 0 };
-      }
-
-      const resp = await fetchFn(
-        `${buildGeminiEndpoint(model)}?key=${encodeURIComponent(apiKey)}`,
-        {
-          method: 'POST',
-          signal,
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ role: 'user', parts }],
-            generationConfig,
-          }),
-        }
-      );
-
-      if (resp.status === 429) {
-        throw new GeminiQuotaError();
-      }
-      if (resp.status === 404) {
-        lastError = new Error(`GEMINI_HTTP_404_${model}`);
-        continue;
-      }
-      if (!resp.ok) {
-        let detailCode = `GEMINI_HTTP_${resp.status}`;
-        try {
-          const errJson = (await resp.json()) as { error?: { status?: string; message?: string } };
-          if (errJson?.error?.status) {
-            detailCode = `GEMINI_HTTP_${resp.status}_${errJson.error.status}`;
-          }
-        } catch {
-          // Ignore non-JSON error body
-        }
-        throw new Error(detailCode);
-      }
-
-      const payload = await resp.json();
-      const text = extractTextFromGeminiPayload(payload);
-      if (!text) {
-        throw new GeminiInvalidOutputError();
-      }
-
-      try {
-        return parseJsonSafe(text);
-      } catch {
-        throw new GeminiInvalidOutputError();
+    let lastModel = candidateModels[0] || 'unknown';
+    for (const model of candidateModels) {
+      lastModel = model;
+      const result = await invokeModel(model, parts, signal);
+      if (!result.notFound) {
+        discoveredModelCache = model;
+        return result.data;
       }
     }
 
-    throw lastError || new Error('GEMINI_NO_AVAILABLE_MODEL');
+    // Auto-discover active Flash-Lite / Flash model if all static aliases returned 404
+    const discovered = await discoverFlashModel(apiKey, signal, fetchFn);
+    if (discovered && !candidateModels.includes(discovered)) {
+      lastModel = discovered;
+      const retry = await invokeModel(discovered, parts, signal);
+      if (!retry.notFound) {
+        return retry.data;
+      }
+    }
+
+    throw new Error(`GEMINI_HTTP_404_${lastModel}`);
   };
 
   return {
