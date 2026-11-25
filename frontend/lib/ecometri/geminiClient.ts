@@ -160,7 +160,7 @@ export function createHttpGeminiClient(
     if (resp.status === 429) {
       throw new GeminiQuotaError();
     }
-    if (resp.status === 404) {
+    if (resp.status === 404 || resp.status === 503) {
       return { notFound: true };
     }
     if (!resp.ok) {
