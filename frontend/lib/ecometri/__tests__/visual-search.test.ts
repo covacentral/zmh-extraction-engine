@@ -10,6 +10,7 @@ import {
   parseRerankResult,
   parseVisualAnalysis,
   planQueries,
+  prioritizeCandidatesForRerank,
   validateJpegBase64,
 } from '../visualSearch';
 import {
@@ -148,7 +149,7 @@ test('handler rejects oversized payload (413) and non-JPEG mime/magic bytes (400
   assert.equal(badMagic.status, 400);
 });
 
-test('rate limiter scopes quota per device (5 per 5 min) so devices on the same Wi-Fi IP do not block each other', async () => {
+test('rate limiter scopes quota per device (10 per 5 min) so devices on the same Wi-Fi IP do not block each other', async () => {
   let now = 1_000_000;
   const limiter = createVisualRateLimiter({ nowFn: () => now });
 
@@ -178,27 +179,27 @@ test('rate limiter scopes quota per device (5 per 5 min) so devices on the same 
     fetchFn: async () => new Response(JSON.stringify([]), { status: 200 }),
   });
 
-  // Device A uses all 5 attempts on shared Wi-Fi IP 9.9.9.9
-  for (let i = 0; i < 5; i++) {
+  // Device A uses all 10 attempts on shared Wi-Fi IP 9.9.9.9
+  for (let i = 0; i < 10; i++) {
     const ok = await handler({
       rawBody: { commerceId: 'bmm', imageBase64: VALID_JPEG_B64, mimeType: 'image/jpeg' },
       clientIp: '9.9.9.9',
       deviceId: 'device_alpha_1234',
     });
     assert.equal(ok.status, 200);
-    assert.equal((ok.body as any).quota.remaining, 4 - i);
-    assert.equal((ok.body as any).quota.limit, 5);
+    assert.equal((ok.body as any).quota.remaining, 9 - i);
+    assert.equal((ok.body as any).quota.limit, 10);
   }
 
-  // 6th attempt for Device A -> 429 with quota & Retry-After
-  const sixth = await handler({
+  // 11th attempt for Device A -> 429 with quota & Retry-After
+  const eleventh = await handler({
     rawBody: { commerceId: 'bmm', imageBase64: VALID_JPEG_B64, mimeType: 'image/jpeg' },
     clientIp: '9.9.9.9',
     deviceId: 'device_alpha_1234',
   });
-  assert.equal(sixth.status, 429);
-  assert.ok(sixth.headers?.['Retry-After']);
-  assert.equal((sixth.body as any).quota.remaining, 0);
+  assert.equal(eleventh.status, 429);
+  assert.ok(eleventh.headers?.['Retry-After']);
+  assert.equal((eleventh.body as any).quota.remaining, 0);
 
   // Device B on the EXACT SAME Wi-Fi IP 9.9.9.9 is NOT blocked!
   const devB = await handler({
@@ -207,7 +208,7 @@ test('rate limiter scopes quota per device (5 per 5 min) so devices on the same 
     deviceId: 'device_beta_5678',
   });
   assert.equal(devB.status, 200);
-  assert.equal((devB.body as any).quota.remaining, 4);
+  assert.equal((devB.body as any).quota.remaining, 9);
 
   // Advance clock past 5 minutes -> Device A is allowed again
   now += 5 * 60_000 + 1000;
@@ -217,7 +218,29 @@ test('rate limiter scopes quota per device (5 per 5 min) so devices on the same 
     deviceId: 'device_alpha_1234',
   });
   assert.equal(afterWindow.status, 200);
-  assert.equal((afterWindow.body as any).quota.remaining, 4);
+  assert.equal((afterWindow.body as any).quota.remaining, 9);
+});
+
+test('prioritizeCandidatesForRerank keeps standalone mouses ahead of pads and combos', () => {
+  const mk = (id: string, title: string): ProductDTO => ({
+    id,
+    slug: id,
+    title,
+    sku: null,
+    priceCop: 20000,
+    inStock: true,
+    imageUrl: null,
+    description: null,
+    productUrl: `https://x.com/${id}/`,
+  });
+  const list = [
+    mk('p1', 'Pad mouse gamer'),
+    mk('c1', 'Combo mouse + teclado'),
+    mk('m1', 'Mouse inalambrico'),
+    mk('m2', 'Mouse recargable'),
+  ];
+  const ordered = prioritizeCandidatesForRerank(list, 'Mouse inalambrico', 2);
+  assert.deepEqual(ordered.map((x) => x.id), ['m1', 'm2']);
 });
 
 test('Gemini 429 opens circuit breaker and next request returns 503 without calling Gemini', async () => {

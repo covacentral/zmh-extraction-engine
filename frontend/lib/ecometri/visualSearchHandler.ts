@@ -22,17 +22,18 @@ import {
   MAX_RESULT_ITEMS,
   mergeCandidates,
   planQueries,
+  prioritizeCandidatesForRerank,
   validateJpegBase64,
   type CircuitBreaker,
   type VisualRateLimiter,
 } from './visualSearch';
 
-export const TOTAL_BUDGET_MS = 12000;
+export const TOTAL_BUDGET_MS = 13500;
 export const STAGE1_TIMEOUT_MS = 5000;
 export const ECOMETRI_QUERY_TIMEOUT_MS = 2500;
-export const THUMBNAIL_TIMEOUT_MS = 1500;
-export const STAGE2_TIMEOUT_MS = 4500;
-export const MAX_RERANK_CANDIDATES = 8;
+export const THUMBNAIL_TIMEOUT_MS = 2200;
+export const STAGE2_TIMEOUT_MS = 5500;
+export const MAX_RERANK_CANDIDATES = 12;
 export const MAX_THUMBNAIL_BYTES = 200 * 1024;
 
 export interface VisualSearchHandlerInput {
@@ -88,7 +89,7 @@ function toSmallThumbnailUrl(imageUrl: string, allowedHost: string): string | nu
     ) {
       return null;
     }
-    const shrunk = parsed.pathname.replace(/\/fit-in\/\d+x\d+\//, '/fit-in/256x256/');
+    const shrunk = parsed.pathname.replace(/\/fit-in\/\d+x\d+\//, '/fit-in/160x160/');
     return `${parsed.origin}${shrunk}`;
   } catch {
     return null;
@@ -237,8 +238,24 @@ export function createVisualSearchHandler({
       };
     }
 
-    // 5. Rate limit (per-device + shared Wi-Fi ceiling) + Circuit Breaker
-    const limitCheck = rateLimiter.consume(input.clientIp || 'unknown', input.deviceId);
+    // 5. Circuit Breaker check FIRST (never burn device quota if Gemini is paused!)
+    if (!geminiClient || circuitBreaker.isOpen()) {
+      const retrySec = circuitBreaker.getRetryAfterSec();
+      return {
+        status: 503,
+        body: {
+          items: [],
+          detected: { label: '', chips: [] },
+          degraded: 'paused',
+          error: 'Buscador por foto en pausa temporal por cuota de IA, usa la busqueda por texto.',
+        },
+        headers: retrySec > 0 ? { 'Retry-After': String(retrySec) } : undefined,
+      };
+    }
+
+    // 6. Rate limit (per-device 10/5min + shared Wi-Fi ceiling 50/5min)
+    const clientIp = input.clientIp || 'unknown';
+    const limitCheck = rateLimiter.consume(clientIp, input.deviceId);
     const quota = {
       remaining: limitCheck.remaining,
       limit: limitCheck.limit,
@@ -270,20 +287,6 @@ export function createVisualSearchHandler({
       };
     }
 
-    if (!geminiClient || circuitBreaker.isOpen()) {
-      const retrySec = circuitBreaker.getRetryAfterSec();
-      return {
-        status: 503,
-        body: {
-          items: [],
-          detected: { label: '', chips: [] },
-          degraded: 'paused',
-          error: 'Buscador por foto en pausa temporal, usa la busqueda por texto.',
-        },
-        headers: retrySec > 0 ? { 'Retry-After': String(retrySec) } : undefined,
-      };
-    }
-
     const startedAt = nowFn();
     const rootController = new AbortController();
     const rootTimer = setTimeout(() => rootController.abort(), totalBudgetMs);
@@ -308,6 +311,7 @@ export function createVisualSearchHandler({
         } catch (err: unknown) {
           scoped.cleanup();
           if (err instanceof GeminiQuotaError) {
+            rateLimiter.refund(clientIp, input.deviceId);
             circuitBreaker.trip();
             return {
               status: 503,
@@ -315,7 +319,7 @@ export function createVisualSearchHandler({
                 items: [],
                 detected: { label: '', chips: [] },
                 degraded: 'paused',
-                error: 'Buscador por foto en pausa temporal, usa la busqueda por texto.',
+                error: 'Buscador por foto en pausa temporal por cuota de IA, usa la busqueda por texto.',
               },
               headers: { 'Retry-After': String(circuitBreaker.getRetryAfterSec()) },
             };
@@ -323,6 +327,7 @@ export function createVisualSearchHandler({
           if (err instanceof GeminiInvalidOutputError && attempt === 0) {
             continue;
           }
+          rateLimiter.refund(clientIp, input.deviceId);
           if (rootController.signal.aborted) {
             return {
               status: 504,
@@ -409,8 +414,13 @@ export function createVisualSearchHandler({
         Math.min(STAGE2_TIMEOUT_MS, remainingBeforeStage2)
       );
       try {
-        const enrichedCandidates = await fetchCandidateThumbnails(
+        const rerankWindow = prioritizeCandidatesForRerank(
           candidates,
+          analysis.label,
+          MAX_RERANK_CANDIDATES
+        );
+        const enrichedCandidates = await fetchCandidateThumbnails(
+          rerankWindow,
           cfg.allowedImageHost,
           stage2Scoped.signal,
           fetchFn

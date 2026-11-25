@@ -317,6 +317,35 @@ export function validateJpegBase64(imageBase64: unknown): JpegValidationResult {
   return { ok: true, byteLength: buf.length };
 }
 
+const BUNDLE_OR_ACCESSORY_RE = /\b(pad|combo|set|teclado\s+y|kit)\b/i;
+
+/**
+ * Selects up to `maxCount` candidates for Stage 2 visual comparison.
+ * When the photographed object is NOT itself a bundle/pad/combo, standalone products
+ * are prioritized ahead of bundles/pads so all real matching items enter the visual window.
+ */
+export function prioritizeCandidatesForRerank(
+  candidates: ProductDTO[],
+  detectedLabel: string,
+  maxCount: number
+): ProductDTO[] {
+  const labelIsBundle = BUNDLE_OR_ACCESSORY_RE.test(detectedLabel || '');
+  if (labelIsBundle || candidates.length <= maxCount) {
+    return candidates.slice(0, maxCount);
+  }
+
+  const standalone: ProductDTO[] = [];
+  const bundles: ProductDTO[] = [];
+  for (const item of candidates) {
+    if (BUNDLE_OR_ACCESSORY_RE.test(item.title)) {
+      bundles.push(item);
+    } else {
+      standalone.push(item);
+    }
+  }
+  return [...standalone, ...bundles].slice(0, maxCount);
+}
+
 export interface VisualRateLimitResult {
   allowed: boolean;
   remaining: number;
@@ -329,6 +358,7 @@ export interface VisualRateLimitResult {
 
 export interface VisualRateLimiter {
   consume(ip: string, deviceId?: string | null): VisualRateLimitResult;
+  refund(ip: string, deviceId?: string | null): void;
 }
 
 const SAFE_DEVICE_ID_RE = /^[a-zA-Z0-9_-]{8,64}$/;
@@ -348,11 +378,11 @@ export function createVisualRateLimiter(options?: {
   instanceWindowMs?: number;
   nowFn?: () => number;
 }): VisualRateLimiter {
-  const maxPerDevice = options?.maxPerDevice ?? 5;
+  const maxPerDevice = options?.maxPerDevice ?? 10;
   const deviceWindowMs = options?.deviceWindowMs ?? 5 * 60_000;
-  const maxPerIp = options?.maxPerIp ?? 30;
+  const maxPerIp = options?.maxPerIp ?? 50;
   const ipWindowMs = options?.ipWindowMs ?? 5 * 60_000;
-  const maxPerInstance = options?.maxPerInstance ?? 60;
+  const maxPerInstance = options?.maxPerInstance ?? 90;
   const instanceWindowMs = options?.instanceWindowMs ?? 60_000;
   const nowFn = options?.nowFn ?? (() => Date.now());
 
@@ -439,6 +469,25 @@ export function createVisualRateLimiter(options?: {
         retryAfterSec: 0,
         scope: 'device',
       };
+    },
+    refund(ip: string, deviceId?: string | null): void {
+      const ipKey = (ip || 'unknown').trim() || 'unknown';
+      const cleanDevice = sanitizeDeviceId(deviceId);
+      const deviceKey = cleanDevice ? `dev:${cleanDevice}` : `ip:${ipKey}`;
+
+      const devArr = deviceTimestamps.get(deviceKey);
+      if (devArr && devArr.length > 0) {
+        devArr.pop();
+        deviceTimestamps.set(deviceKey, devArr);
+      }
+      const ipArr = ipTimestamps.get(ipKey);
+      if (ipArr && ipArr.length > 0) {
+        ipArr.pop();
+        ipTimestamps.set(ipKey, ipArr);
+      }
+      if (instanceTimestamps.length > 0) {
+        instanceTimestamps.pop();
+      }
     },
   };
 }
