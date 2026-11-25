@@ -2,6 +2,11 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
+
+const EcometriResults = dynamic(() => import('./EcometriResults'), {
+  ssr: false,
+});
 
 /* ─── Icons ──────────────────────────────────────────────────────────── */
 const WhatsappIcon = ({ size = 20 }: { size?: number }) => (
@@ -226,6 +231,11 @@ export default function ClientPage({ commerceId, data, themeHex, RENDER_API = ''
             </button>
           )}
         </div>
+
+        {/* ── ECOMETRI LIVE CATALOG SEARCH (opt-in per commerce) ── */}
+        {data?.ecometri?.enabled && (
+          <EcometriResults commerceId={commerceId} searchQuery={searchQuery} />
+        )}
 
         {/* ── CATALOG CTA ── */}
         {showCatalogButton && (() => {

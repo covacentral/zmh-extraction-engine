@@ -1,8 +1,17 @@
 import { db } from './firebaseAdmin';
+import type { EcometriConfig } from './ecometri/types';
+
+export interface CommerceDocument {
+  businessName?: string;
+  avatarJid?: string;
+  themeHex?: string;
+  ecometri?: EcometriConfig;
+  [key: string]: any;
+}
 
 export interface ResolvedCommerce {
   commerceId: string;
-  data: any;
+  data: CommerceDocument;
   isAlias: boolean;
 }
 

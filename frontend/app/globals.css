@@ -98,3 +98,18 @@ body {
     display: none;
   }
 }
+
+dialog.product-quickview[open] {
+  display: flex;
+}
+
+dialog.product-quickview:modal {
+  overscroll-behavior: contain;
+}
+
+dialog.product-quickview::backdrop {
+  background-color: rgba(0, 0, 0, 0.78);
+  backdrop-filter: blur(8px);
+  overflow: hidden;
+  overscroll-behavior: contain;
+}

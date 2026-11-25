@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import ClientPage from './ClientPage';
 import { db } from '../../lib/firebaseAdmin';
 import { resolveCommerce } from '../../lib/commerceResolver';
+import { toClientEcometriConfig } from '../../lib/ecometri/normalize';
 
 const RENDER_API = process.env.NEXT_PUBLIC_RENDER_API || '';
 
@@ -54,7 +55,11 @@ export default async function ComercioServerPage({ params }: { params: { comerci
     return { ...btn, scrapedImage };
   }));
 
-  const safeData = { ...data, buttons: enhancedButtons };
+  const safeData = {
+    ...data,
+    buttons: enhancedButtons,
+    ecometri: toClientEcometriConfig(data?.ecometri),
+  };
 
   return <ClientPage commerceId={commerceId} data={safeData} themeHex={data?.themeHex || '#4F46E5'} RENDER_API={RENDER_API} />;
 }
