@@ -2,7 +2,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
-import { getContrastYIQ } from '../../utils/color';
 
 /* ─── Icons ──────────────────────────────────────────────────────────── */
 const WhatsappIcon = ({ size = 20 }: { size?: number }) => (
@@ -233,24 +232,32 @@ export default function ClientPage({ commerceId, data, themeHex, RENDER_API = ''
           const btnUrl = formatUrl(data?.catalogButtonUrl || `/${commerceId}/catalogo`);
           const isExt = /^https?:\/\//i.test(btnUrl);
           const label = data?.catalogButtonText || (data?.businessType === 'restaurante' ? 'Menu & Pedidos' : 'Catalogo & Agendamiento');
-          const fg = getContrastYIQ(themeHex);
+          const subtitle = data?.businessType === 'restaurante' ? 'Ver menu y pedir ahora' : 'Explorar productos y precios';
           const inner = (
             <div
-              className="w-full flex items-center justify-between px-4 py-3.5 rounded-2xl cursor-pointer hover:scale-[1.01] active:scale-[0.99] transition-transform shadow-[0_8px_30px_rgba(0,0,0,0.5)] border border-white/20"
-              style={{ backgroundColor: 'var(--theme)', color: fg }}
+              className="catalog-cta-btn group w-full flex items-center justify-between gap-3 px-4 py-3.5 rounded-2xl cursor-pointer hover:scale-[1.015] active:scale-[0.985] transition-all duration-200"
             >
-              <div className="flex items-center gap-2.5" style={{ color: fg }}>
-                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-                <span className="text-sm font-bold" style={{ color: fg }}>{label}</span>
+              <div className="relative z-10 flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-xl bg-white/15 border border-white/25 backdrop-blur-sm flex items-center justify-center shrink-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.3)] group-hover:scale-105 transition-transform duration-200">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-white">
+                    <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" />
+                    <line x1="3" y1="6" x2="21" y2="6" />
+                    <path d="M16 10a4 4 0 0 1-8 0" />
+                  </svg>
+                </div>
+                <div className="flex flex-col min-w-0">
+                  <span className="text-[14px] font-extrabold tracking-wide text-white leading-tight break-words">{label}</span>
+                  <span className="text-[11px] font-medium text-white/80 leading-tight mt-0.5">{subtitle}</span>
+                </div>
               </div>
-              <div className="w-7 h-7 rounded-full flex items-center justify-center" style={{ backgroundColor: fg === 'black' ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.2)', color: fg }}>
+              <div className="relative z-10 w-8 h-8 rounded-full bg-white/20 border border-white/30 flex items-center justify-center shrink-0 text-white group-hover:bg-white group-hover:text-black group-hover:translate-x-0.5 transition-all duration-200">
                 <ChevronRightIcon />
               </div>
             </div>
           );
           return (
             <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }} className="w-full">
-              {isExt ? <a href={btnUrl} target="_blank" rel="noopener noreferrer">{inner}</a> : <Link href={btnUrl}>{inner}</Link>}
+              {isExt ? <a href={btnUrl} target="_blank" rel="noopener noreferrer" className="block">{inner}</a> : <Link href={btnUrl} className="block">{inner}</Link>}
             </motion.div>
           );
         })()}

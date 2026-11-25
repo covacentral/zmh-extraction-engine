@@ -9,8 +9,92 @@
   }
 }
 
+:root {
+  --in-oklab: ;
+}
+
+@supports (background: linear-gradient(in oklab, white, black)) {
+  :root {
+    --in-oklab: in oklab;
+  }
+}
+
 body {
   color: hsl(var(--foreground));
   background-color: hsl(var(--background));
   @apply antialiased min-h-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-zinc-900 via-background to-background;
+}
+
+.catalog-cta-btn {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  color: #ffffff;
+  background-color: var(--theme);
+  background-image: linear-gradient(
+    135deg var(--in-oklab),
+    color-mix(in oklab, var(--theme) 76%, #09090b) 0%,
+    color-mix(in oklab, var(--theme) 50%, #09090b) 100%
+  );
+  border: 1px solid color-mix(in oklab, var(--theme) 55%, rgba(255, 255, 255, 0.55));
+  box-shadow:
+    0 12px 32px -8px color-mix(in oklab, var(--theme) 60%, transparent),
+    0 4px 14px -2px rgba(0, 0, 0, 0.65),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.35),
+    inset 0 -1px 0 0 rgba(0, 0, 0, 0.3);
+  text-shadow: 0 1px 2px rgb(0 0 0 / 0.45);
+}
+
+.catalog-cta-btn:hover {
+  box-shadow:
+    0 16px 38px -6px color-mix(in oklab, var(--theme) 72%, transparent),
+    0 6px 16px -2px rgba(0, 0, 0, 0.7),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.45),
+    inset 0 -1px 0 0 rgba(0, 0, 0, 0.25);
+}
+
+.catalog-cta-btn::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    120% 90% at 15% 0%,
+    rgba(255, 255, 255, 0.24) 0%,
+    transparent 55%
+  );
+  pointer-events: none;
+  z-index: 0;
+}
+
+.catalog-cta-btn::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 55%;
+  background: linear-gradient(
+    105deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.24) 50%,
+    transparent 100%
+  );
+  transform: translateX(-160%) skewX(-18deg);
+  animation: catalog-shimmer 3.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+
+@keyframes catalog-shimmer {
+  0%, 55% {
+    transform: translateX(-160%) skewX(-18deg);
+  }
+  100% {
+    transform: translateX(340%) skewX(-18deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .catalog-cta-btn::after {
+    animation: none;
+    display: none;
+  }
 }
