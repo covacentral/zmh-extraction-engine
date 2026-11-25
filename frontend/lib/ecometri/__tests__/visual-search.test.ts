@@ -3,20 +3,31 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import {
-  applyRerank,
-  createCircuitBreaker,
-  createVisualRateLimiter,
-  mergeCandidates,
-  parseRerankResult,
-  parseVisualAnalysis,
-  planQueries,
-  prioritizeCandidatesForRerank,
-  validateJpegBase64,
-} from '../visualSearch';
+  createCatalogIndexStore,
+  rankSimilar,
+} from '../catalogIndex';
 import {
+  mergeVisualQuota,
+  readLocalVisualQuota,
+  recordLocalVisualSuccess,
+  type StorageLike,
+} from '../clientQuota';
+import {
+  createHttpGeminiClient,
   GeminiQuotaError,
   type GeminiClient,
 } from '../geminiClient';
+import {
+  createCircuitBreaker,
+  createVisualRateLimiter,
+  mergeCandidates,
+  parseStage2Output,
+  parseVisualAnalysis,
+  planQueries,
+  prioritizeCandidatesForRerank,
+  resolveFinalVisualItems,
+  validateJpegBase64,
+} from '../visualSearch';
 import { createVisualSearchHandler } from '../visualSearchHandler';
 import type { EcometriConfig, ProductDTO } from '../types';
 
@@ -28,15 +39,35 @@ const SAMPLE_CFG: EcometriConfig = {
   allowedImageHost: 'd1b50uin55dq3m.cloudfront.net',
 };
 
-// Minimal valid JPEG magic bytes (FF D8 FF E0 ...)
-const VALID_JPEG_B64 = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46]).toString('base64');
-// PNG header (89 50 4E 47)
-const PNG_B64 = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).toString('base64');
-// > 350 KB JPEG
+const VALID_JPEG_B64 = Buffer.from([
+  0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46,
+]).toString('base64');
+const PNG_B64 = Buffer.from([
+  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+]).toString('base64');
 const OVERSIZED_JPEG_B64 = Buffer.concat([
   Buffer.from([0xff, 0xd8, 0xff, 0xe0]),
   Buffer.alloc(360 * 1024, 0x11),
 ]).toString('base64');
+
+function mkProduct(
+  id: string,
+  title: string,
+  inStock = true,
+  sku: string | null = null
+): ProductDTO {
+  return {
+    id,
+    slug: id,
+    title,
+    sku,
+    priceCop: 25000,
+    inStock,
+    imageUrl: `https://d1b50uin55dq3m.cloudfront.net/fit-in/600x600/${id}.jpg`,
+    description: null,
+    productUrl: `https://bodegamayoristamtr.ecometri.shop/3217535900/${id}/`,
+  };
+}
 
 test('validateJpegBase64 enforces JPEG magic bytes, no data URI prefix, and <= 350 KB', () => {
   assert.equal(validateJpegBase64(VALID_JPEG_B64).ok, true);
@@ -45,327 +76,397 @@ test('validateJpegBase64 enforces JPEG magic bytes, no data URI prefix, and <= 3
   assert.equal(validateJpegBase64(OVERSIZED_JPEG_B64).status, 413);
 });
 
-test('parseVisualAnalysis, planQueries, mergeCandidates and parseRerankResult enforce contracts', () => {
-  const analysis = parseVisualAnalysis({
-    label: 'Termo licuadora\u0007',
-    exactTerms: ['termo licuadora', 'ab', 'Termo Licuadora'],
-    functionalTerms: ['licuadora portatil', 'vaso recargable'],
-    broadRoots: ['termo', 'licua'],
-  });
-  assert.ok(analysis);
-  assert.equal(analysis.label, 'Termo licuadora');
-  assert.deepEqual(analysis.exactTerms, ['termo licuadora']);
-
-  const r1 = planQueries(analysis, 1);
-  const r2 = planQueries(analysis, 2);
-  assert.equal(r1.length <= 3, true);
-  assert.equal(r2.length <= 2, true);
-  assert.equal(r2.includes('termo licuadora'), false);
-
-  const candidates: ProductDTO[] = [
-    { id: 'a', slug: 'a', title: 'Agotado', sku: null, priceCop: 10000, inStock: false, imageUrl: null, description: null, productUrl: 'https://x.com/a/' },
-    { id: 'b', slug: 'b', title: 'Disp 1', sku: null, priceCop: 20000, inStock: true, imageUrl: null, description: null, productUrl: 'https://x.com/b/' },
-    { id: 'c', slug: 'c', title: 'Disp 2', sku: null, priceCop: 30000, inStock: true, imageUrl: null, description: null, productUrl: 'https://x.com/c/' },
+test('parseStage2Output discards hallucinated IDs and resolveFinalVisualItems labels exact vs similar', () => {
+  const catalog = [
+    mkProduct('m1', 'Mouse inalambrico', true, '100001'),
+    mkProduct('m2', 'Mouse gamer luz', true, '100002'),
+    mkProduct('m3', 'Teclado mecanico', true, '100003'),
   ];
 
-  const merged = mergeCandidates([[candidates[0], candidates[1]], [candidates[1], candidates[2]]]);
-  assert.deepEqual(merged.map((x) => x.id), ['b', 'c', 'a']);
+  // Model hallucinates 'ghost-999' -> discarded
+  const s2 = parseStage2Output(
+    { exactIds: ['ghost-999', 'm2'], similarIds: ['m2', 'm1', 'fake-2'] },
+    ['m1', 'm2', 'm3']
+  );
+  assert.ok(s2);
+  assert.deepEqual(s2.exactIds, ['m2']);
+  assert.deepEqual(s2.similarIds, ['m1']); // deduplicated against exactIds
 
-  // Model hallucinates 'ghost-id' -> must be discarded
-  const rerankedIds = parseRerankResult({ orderedIds: ['ghost-id', 'c', 'b', 'a'] }, ['a', 'b', 'c']);
-  assert.deepEqual(rerankedIds, ['c', 'b', 'a']);
+  const withExact = resolveFinalVisualItems(catalog, s2, catalog, 5);
+  assert.equal(withExact.hasExactMatch, true);
+  assert.equal(withExact.items[0].id, 'm2');
+  assert.equal(withExact.items[0].matchType, 'exact');
+  assert.equal(withExact.items[1].id, 'm1');
+  assert.equal(withExact.items[1].matchType, 'similar');
 
-  const finalList = applyRerank(merged, rerankedIds);
-  assert.deepEqual(finalList.map((x) => x.id), ['c', 'b', 'a']);
+  // When exactIds is empty, never returns 0 items: recommends similar items labeled 'similar'
+  const emptyExact = parseStage2Output({ exactIds: [], similarIds: [] }, ['m1', 'm2', 'm3']);
+  const recommended = resolveFinalVisualItems(catalog, emptyExact, catalog, 5);
+  assert.equal(recommended.hasExactMatch, false);
+  assert.equal(recommended.items.length, 3);
+  assert.equal(recommended.items.every((i) => i.matchType === 'similar'), true);
 });
 
-test('handler returns 404 without calling Gemini or fetch when visualSearchEnabled is false', async () => {
-  let geminiCalled = false;
-  let fetchCalled = false;
+test('rankSimilar is 100% deterministic across runs, typo-tolerant, and never empty on non-empty catalog', () => {
+  const index: ProductDTO[] = [
+    mkProduct('id-3', 'Olla a presion 5L', true, '300003'),
+    mkProduct('id-2', 'Tensiometro digital brazo', true, '200002'),
+    mkProduct('id-1', 'Tensiometro manual', false, '200001'),
+    mkProduct('id-4', 'Termometro infrarrojo', true, '200004'),
+  ];
 
-  const mockGemini: GeminiClient = {
-    async analyze() {
-      geminiCalled = true;
-      throw new Error('Should not be called');
-    },
-    async rerank() {
-      geminiCalled = true;
-      return null;
-    },
-  };
+  const typoAnalysis = parseVisualAnalysis({
+    label: 'Tensionetro de brazo',
+    exactTerms: ['tensionetro'],
+    functionalTerms: ['salud'],
+    broadRoots: ['tensi'],
+  })!;
 
-  const handler = createVisualSearchHandler({
-    resolveCommerceFn: async () => ({
-      commerceId: 'bmm',
-      isAlias: true,
-      data: { ecometri: { ...SAMPLE_CFG, visualSearchEnabled: false } },
-    }),
-    geminiClient: mockGemini,
+  const runA = rankSimilar(typoAnalysis, index, 5);
+  const runB = rankSimilar(typoAnalysis, index, 5);
+  assert.deepEqual(runA, runB);
+  assert.equal(runA[0].item.id, 'id-2'); // Typo 'tensionetro' still matches 'Tensiometro' #1!
+
+  // Non-existent item (e.g. 'bicicleta') still returns deterministic fallback items (never 0)
+  const missingAnalysis = parseVisualAnalysis({
+    label: 'Bicicleta montanera',
+    exactTerms: ['bicicleta'],
+    functionalTerms: [],
+    broadRoots: [],
+  })!;
+  const fallbackRun = rankSimilar(missingAnalysis, index, 3);
+  assert.equal(fallbackRun.length, 3);
+  // Deterministic tie-break: inStock true first, then id asc
+  assert.deepEqual(
+    fallbackRun.map((x) => x.item.id),
+    ['id-2', 'id-3', 'id-4']
+  );
+});
+
+test('createCatalogIndexStore enforces 5-min TTL, single-flight, and 1500-item deterministic cap', async () => {
+  let now = 5_000_000;
+  let fetchCount = 0;
+
+  const rawProducts = Array.from({ length: 1600 }, (_, i) => ({
+    id: `p-${String(i).padStart(4, '0')}`,
+    name: `Producto ${i}`,
+    slug: `producto-${i}`,
+    sku: String(100000 + i),
+    price: 10000,
+    quantity_available: i % 2 === 0 ? 5 : 0,
+  }));
+
+  const store = createCatalogIndexStore({
+    nowFn: () => now,
+    ttlMs: 300_000,
+    maxItems: 1500,
     fetchFn: async () => {
-      fetchCalled = true;
-      throw new Error('Should not be called');
-    },
-  });
-
-  const res = await handler({
-    rawBody: { commerceId: 'bmm', imageBase64: VALID_JPEG_B64, mimeType: 'image/jpeg' },
-    clientIp: '1.2.3.4',
-  });
-
-  assert.equal(res.status, 404);
-  assert.equal(geminiCalled, false);
-  assert.equal(fetchCalled, false);
-});
-
-test('handler rejects oversized payload (413) and non-JPEG mime/magic bytes (400)', async () => {
-  const handler = createVisualSearchHandler({
-    resolveCommerceFn: async () => ({
-      commerceId: 'bmm',
-      isAlias: false,
-      data: { ecometri: SAMPLE_CFG },
-    }),
-    geminiClient: null,
-  });
-
-  const cl413 = await handler({
-    contentLengthHeader: String(500 * 1024),
-    rawBody: { commerceId: 'bmm', imageBase64: VALID_JPEG_B64, mimeType: 'image/jpeg' },
-  });
-  assert.equal(cl413.status, 413);
-
-  const img413 = await handler({
-    rawBody: { commerceId: 'bmm', imageBase64: OVERSIZED_JPEG_B64, mimeType: 'image/jpeg' },
-  });
-  assert.equal(img413.status, 413);
-
-  const badMime = await handler({
-    rawBody: { commerceId: 'bmm', imageBase64: VALID_JPEG_B64, mimeType: 'image/png' },
-  });
-  assert.equal(badMime.status, 400);
-
-  const badMagic = await handler({
-    rawBody: { commerceId: 'bmm', imageBase64: PNG_B64, mimeType: 'image/jpeg' },
-  });
-  assert.equal(badMagic.status, 400);
-});
-
-test('rate limiter scopes quota per device (10 per 5 min) so devices on the same Wi-Fi IP do not block each other', async () => {
-  let now = 1_000_000;
-  const limiter = createVisualRateLimiter({ nowFn: () => now });
-
-  const mockGemini: GeminiClient = {
-    async analyze() {
-      return {
-        label: 'Termo',
-        exactTerms: ['termo'],
-        functionalTerms: [],
-        broadRoots: [],
-      };
-    },
-    async rerank() {
-      return [];
-    },
-  };
-
-  const handler = createVisualSearchHandler({
-    resolveCommerceFn: async () => ({
-      commerceId: 'bmm',
-      isAlias: false,
-      data: { ecometri: SAMPLE_CFG },
-    }),
-    geminiClient: mockGemini,
-    rateLimiter: limiter,
-    nowFn: () => now,
-    fetchFn: async () => new Response(JSON.stringify([]), { status: 200 }),
-  });
-
-  // Device A uses all 10 attempts on shared Wi-Fi IP 9.9.9.9
-  for (let i = 0; i < 10; i++) {
-    const ok = await handler({
-      rawBody: { commerceId: 'bmm', imageBase64: VALID_JPEG_B64, mimeType: 'image/jpeg' },
-      clientIp: '9.9.9.9',
-      deviceId: 'device_alpha_1234',
-    });
-    assert.equal(ok.status, 200);
-    assert.equal((ok.body as any).quota.remaining, 9 - i);
-    assert.equal((ok.body as any).quota.limit, 10);
-  }
-
-  // 11th attempt for Device A -> 429 with quota & Retry-After
-  const eleventh = await handler({
-    rawBody: { commerceId: 'bmm', imageBase64: VALID_JPEG_B64, mimeType: 'image/jpeg' },
-    clientIp: '9.9.9.9',
-    deviceId: 'device_alpha_1234',
-  });
-  assert.equal(eleventh.status, 429);
-  assert.ok(eleventh.headers?.['Retry-After']);
-  assert.equal((eleventh.body as any).quota.remaining, 0);
-
-  // Device B on the EXACT SAME Wi-Fi IP 9.9.9.9 is NOT blocked!
-  const devB = await handler({
-    rawBody: { commerceId: 'bmm', imageBase64: VALID_JPEG_B64, mimeType: 'image/jpeg' },
-    clientIp: '9.9.9.9',
-    deviceId: 'device_beta_5678',
-  });
-  assert.equal(devB.status, 200);
-  assert.equal((devB.body as any).quota.remaining, 9);
-
-  // Advance clock past 5 minutes -> Device A is allowed again
-  now += 5 * 60_000 + 1000;
-  const afterWindow = await handler({
-    rawBody: { commerceId: 'bmm', imageBase64: VALID_JPEG_B64, mimeType: 'image/jpeg' },
-    clientIp: '9.9.9.9',
-    deviceId: 'device_alpha_1234',
-  });
-  assert.equal(afterWindow.status, 200);
-  assert.equal((afterWindow.body as any).quota.remaining, 9);
-});
-
-test('prioritizeCandidatesForRerank keeps standalone mouses ahead of pads and combos', () => {
-  const mk = (id: string, title: string): ProductDTO => ({
-    id,
-    slug: id,
-    title,
-    sku: null,
-    priceCop: 20000,
-    inStock: true,
-    imageUrl: null,
-    description: null,
-    productUrl: `https://x.com/${id}/`,
-  });
-  const list = [
-    mk('p1', 'Pad mouse gamer'),
-    mk('c1', 'Combo mouse + teclado'),
-    mk('m1', 'Mouse inalambrico'),
-    mk('m2', 'Mouse recargable'),
-  ];
-  const ordered = prioritizeCandidatesForRerank(list, 'Mouse inalambrico', 2);
-  assert.deepEqual(ordered.map((x) => x.id), ['m1', 'm2']);
-});
-
-test('Gemini 429 opens circuit breaker and next request returns 503 without calling Gemini', async () => {
-  let now = 2_000_000;
-  let analyzeCalls = 0;
-  const breaker = createCircuitBreaker({ nowFn: () => now });
-
-  const mockGemini: GeminiClient = {
-    async analyze() {
-      analyzeCalls += 1;
-      throw new GeminiQuotaError();
-    },
-    async rerank() {
-      return null;
-    },
-  };
-
-  const handler = createVisualSearchHandler({
-    resolveCommerceFn: async () => ({
-      commerceId: 'bmm',
-      isAlias: false,
-      data: { ecometri: SAMPLE_CFG },
-    }),
-    geminiClient: mockGemini,
-    circuitBreaker: breaker,
-    rateLimiter: createVisualRateLimiter({ maxPerIp: 10, nowFn: () => now }),
-    nowFn: () => now,
-  });
-
-  const first = await handler({
-    rawBody: { commerceId: 'bmm', imageBase64: VALID_JPEG_B64, mimeType: 'image/jpeg' },
-    clientIp: '5.5.5.5',
-  });
-  assert.equal(first.status, 503);
-  assert.equal((first.body as any).degraded, 'paused');
-  assert.equal(analyzeCalls, 1);
-
-  const second = await handler({
-    rawBody: { commerceId: 'bmm', imageBase64: VALID_JPEG_B64, mimeType: 'image/jpeg' },
-    clientIp: '5.5.5.5',
-  });
-  assert.equal(second.status, 503);
-  assert.equal((second.body as any).degraded, 'paused');
-  assert.equal(analyzeCalls, 1); // Did NOT call Gemini while breaker is open
-});
-
-test('Stage 2 rerank failure degrades cleanly to 200 rerank_skipped with Stage 1 items', async () => {
-  const ecometriFixture = [
-    { id: '1', name: 'Termo A', picture_url: 'a.jpg', url: 'termo-a', price: 20000 },
-    { id: '2', name: 'Termo B', picture_url: 'b.jpg', url: 'termo-b', price: 25000 },
-    { id: '3', name: 'Termo C', picture_url: 'c.jpg', url: 'termo-c', price: 30000 },
-  ];
-
-  const mockGemini: GeminiClient = {
-    async analyze() {
-      return {
-        label: 'Termo',
-        exactTerms: ['termo'],
-        functionalTerms: [],
-        broadRoots: [],
-      };
-    },
-    async rerank() {
-      throw new Error('Stage 2 timeout');
-    },
-  };
-
-  const handler = createVisualSearchHandler({
-    resolveCommerceFn: async () => ({
-      commerceId: 'bmm',
-      isAlias: false,
-      data: { ecometri: SAMPLE_CFG },
-    }),
-    geminiClient: mockGemini,
-    fetchFn: async (url) => {
-      if (String(url).includes('apiv2.ecometri.shop')) {
-        return new Response(JSON.stringify(ecometriFixture), { status: 200 });
-      }
-      return new Response(Buffer.from([0xff, 0xd8, 0xff, 0xe0]), {
+      fetchCount += 1;
+      return new Response(JSON.stringify({ products: rawProducts }), {
         status: 200,
-        headers: { 'Content-Type': 'image/jpeg' },
+        headers: { 'Content-Type': 'application/json' },
       });
     },
   });
 
-  const res = await handler({
-    rawBody: { commerceId: 'bmm', imageBase64: VALID_JPEG_B64, mimeType: 'image/jpeg' },
-    clientIp: '7.7.7.7',
-  });
+  const ctrl = new AbortController();
+  const [first, concurrent] = await Promise.all([
+    store.getOrFetch('bmm', SAMPLE_CFG, ctrl.signal),
+    store.getOrFetch('bmm', SAMPLE_CFG, ctrl.signal),
+  ]);
+  assert.equal(fetchCount, 1); // Single-flight deduplication!
+  assert.ok(first);
+  assert.equal(first.length, 1500);
+  assert.equal(first, concurrent);
+  assert.equal(first[0].inStock, true); // In-stock items kept first before truncation
 
-  assert.equal(res.status, 200);
-  const body = res.body as any;
-  assert.equal(body.degraded, 'rerank_skipped');
-  assert.equal(body.items.length, 3);
-  assert.equal(JSON.stringify(body).includes(SAMPLE_CFG.storeId), false);
+  // Within 5-min TTL -> cached
+  now += 120_000;
+  await store.getOrFetch('bmm', SAMPLE_CFG, ctrl.signal);
+  assert.equal(fetchCount, 1);
+
+  // Past 5-min TTL -> refreshes
+  now += 200_000;
+  await store.getOrFetch('bmm', SAMPLE_CFG, ctrl.signal);
+  assert.equal(fetchCount, 2);
 });
 
-test('planQueries blocks ambiguous modifiers (presion), derives typo-resilient 5-char stem (tensi), and empty rerank rejects unrelated items', () => {
+test('createHttpGeminiClient fails over once on 429 to alternate model without throwing GeminiQuotaError', async () => {
+  const calledModels: string[] = [];
+  const client = createHttpGeminiClient('fake-key', async (input) => {
+    const url = String(input);
+    calledModels.push(url);
+    if (calledModels.length === 1) {
+      return new Response('Rate limited', {
+        status: 429,
+        headers: { 'Retry-After': '20' },
+      });
+    }
+    return new Response(
+      JSON.stringify({
+        candidates: [
+          {
+            content: {
+              parts: [
+                {
+                  text: JSON.stringify({
+                    label: 'Mouse inalambrico',
+                    exactTerms: ['mouse'],
+                    functionalTerms: ['raton'],
+                    broadRoots: ['mouse'],
+                  }),
+                },
+              ],
+            },
+          },
+        ],
+      }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } }
+    );
+  });
+
+  const analysis = await client.analyze(VALID_JPEG_B64, new AbortController().signal);
+  assert.equal(calledModels.length, 2);
+  assert.equal(analysis.label, 'Mouse inalambrico');
+
+  // Double 429 on both models throws GeminiQuotaError
+  const double429Client = createHttpGeminiClient('fake-key', async () => {
+    return new Response('Rate limited', {
+      status: 429,
+      headers: { 'Retry-After': '25' },
+    });
+  });
+  await assert.rejects(
+    () => double429Client.analyze(VALID_JPEG_B64, new AbortController().signal),
+    GeminiQuotaError
+  );
+});
+
+test('handler emits quota on 200, 400/413, 429, and 503/504, and breaker stays bounded in 15s..60s', async () => {
+  let now = 2_000_000;
+  let analyzeCalls = 0;
+  const breaker = createCircuitBreaker({ nowFn: () => now, jitterMs: 0 });
+  const limiter = createVisualRateLimiter({ maxPerDevice: 2, nowFn: () => now });
+
+  const indexStore = {
+    async getOrFetch() {
+      return [mkProduct('m1', 'Mouse inalambrico', true, '500111')];
+    },
+  };
+
+  let shouldFail429 = false;
+  const mockGemini: GeminiClient = {
+    async analyze() {
+      analyzeCalls += 1;
+      if (shouldFail429) {
+        throw new GeminiQuotaError('GEMINI_RATE_LIMITED', 120); // 120s clamped to 60s max!
+      }
+      return {
+        label: 'Teclado bluetooth',
+        exactTerms: ['teclado'],
+        functionalTerms: ['mouse'],
+        broadRoots: [],
+      };
+    },
+    async rerank() {
+      return { exactIds: [], similarIds: [] };
+    },
+  };
+
+  const handler = createVisualSearchHandler({
+    resolveCommerceFn: async () => ({
+      commerceId: 'bmm',
+      isAlias: false,
+      data: { ecometri: SAMPLE_CFG },
+    }),
+    geminiClient: mockGemini,
+    catalogIndexStore: indexStore,
+    circuitBreaker: breaker,
+    rateLimiter: limiter,
+    nowFn: () => now,
+    fetchFn: async () =>
+      new Response(Buffer.from([0xff, 0xd8, 0xff, 0xe0]), {
+        status: 200,
+        headers: { 'Content-Type': 'image/jpeg' },
+      }),
+  });
+
+  // 1) 413 includes quota
+  const r413 = await handler({
+    contentLengthHeader: String(600 * 1024),
+    rawBody: {},
+    deviceId: 'dev_test_quota_1',
+  });
+  assert.equal(r413.status, 413);
+  assert.ok((r413.body as any).quota);
+
+  // 2) 400 includes quota
+  const r400 = await handler({
+    rawBody: { commerceId: 'bmm', imageBase64: PNG_B64, mimeType: 'image/jpeg' },
+    deviceId: 'dev_test_quota_1',
+  });
+  assert.equal(r400.status, 400);
+  assert.ok((r400.body as any).quota);
+
+  // 3) 200 with exactIds=[] still recommends similar items (never 0) and includes quota
+  const r200a = await handler({
+    rawBody: { commerceId: 'bmm', imageBase64: VALID_JPEG_B64, mimeType: 'image/jpeg' },
+    deviceId: 'dev_test_quota_1',
+  });
+  assert.equal(r200a.status, 200);
+  assert.equal((r200a.body as any).items.length, 1);
+  assert.equal((r200a.body as any).items[0].matchType, 'similar');
+  assert.equal((r200a.body as any).hasExactMatch, false);
+  assert.equal((r200a.body as any).quota.remaining, 1);
+
+  // 4) Second 200 consumes last slot (remaining: 0), third returns 429 with quota
+  await handler({
+    rawBody: { commerceId: 'bmm', imageBase64: VALID_JPEG_B64, mimeType: 'image/jpeg' },
+    deviceId: 'dev_test_quota_1',
+  });
+  const r429 = await handler({
+    rawBody: { commerceId: 'bmm', imageBase64: VALID_JPEG_B64, mimeType: 'image/jpeg' },
+    deviceId: 'dev_test_quota_1',
+  });
+  assert.equal(r429.status, 429);
+  assert.equal((r429.body as any).quota.remaining, 0);
+
+  // 5) Different device hits Gemini 429 -> 503 includes quota (refunded!) & breaker clamped <= 60s
+  shouldFail429 = true;
+  const r503 = await handler({
+    rawBody: { commerceId: 'bmm', imageBase64: VALID_JPEG_B64, mimeType: 'image/jpeg' },
+    deviceId: 'dev_test_quota_2',
+  });
+  assert.equal(r503.status, 503);
+  assert.equal((r503.body as any).quota.remaining, 2); // Refunded!
+  assert.equal(breaker.getRetryAfterSec(), 60); // Clamped to max 60s!
+
+  const callsBeforeOpen = analyzeCalls;
+  const whileOpen = await handler({
+    rawBody: { commerceId: 'bmm', imageBase64: VALID_JPEG_B64, mimeType: 'image/jpeg' },
+    deviceId: 'dev_test_quota_2',
+  });
+  assert.equal(whileOpen.status, 503);
+  assert.equal(analyzeCalls, callsBeforeOpen); // Did not call Gemini while breaker open
+  assert.ok((whileOpen.body as any).quota);
+});
+
+test('mergeVisualQuota prevents serverless bounce while respecting server 0', () => {
+  const mem = new Map<string, string>();
+  const storage: StorageLike = {
+    getItem: (k) => mem.get(k) ?? null,
+    setItem: (k, v) => {
+      mem.set(k, v);
+    },
+  };
+
+  let now = 10_000_000;
+  recordLocalVisualSuccess('bmm', now, storage);
+  recordLocalVisualSuccess('bmm', now + 1000, storage);
+  const local = readLocalVisualQuota('bmm', now + 2000, storage);
+  assert.equal(local.remaining, 8);
+
+  // Cold serverless instance thinks remaining is 9 -> UI shows min(9, 8) = 8 (no bounce!)
+  const mergedCold = mergeVisualQuota(
+    { remaining: 9, limit: 10, resetInSec: 300, resetAt: now + 300_000 },
+    local
+  );
+  assert.equal(mergedCold.remaining, 8);
+
+  // Server enforces 429 (remaining: 0) -> UI shows 0 immediately
+  const merged429 = mergeVisualQuota(
+    { remaining: 0, limit: 10, resetInSec: 180, resetAt: now + 180_000 },
+    local
+  );
+  assert.equal(merged429.remaining, 0);
+});
+
+test('handler returns 404 without calling Gemini/fetch when disabled, and 504 timeout still emits quota', async () => {
+  let geminiCalled = false;
+  let fetchCalled = false;
+
+  const disabledHandler = createVisualSearchHandler({
+    resolveCommerceFn: async () => ({
+      commerceId: 'bmm',
+      isAlias: false,
+      data: { ecometri: { ...SAMPLE_CFG, visualSearchEnabled: false } },
+    }),
+    geminiClient: {
+      async analyze() {
+        geminiCalled = true;
+        throw new Error('Should not run');
+      },
+      async rerank() {
+        geminiCalled = true;
+        return null;
+      },
+    },
+    fetchFn: async () => {
+      fetchCalled = true;
+      throw new Error('Should not run');
+    },
+  });
+
+  const r404 = await disabledHandler({
+    rawBody: { commerceId: 'bmm', imageBase64: VALID_JPEG_B64, mimeType: 'image/jpeg' },
+    deviceId: 'dev_404_check',
+  });
+  assert.equal(r404.status, 404);
+  assert.equal(geminiCalled, false);
+  assert.equal(fetchCalled, false);
+  assert.ok((r404.body as any).quota);
+
+  const timeoutHandler = createVisualSearchHandler({
+    totalBudgetMs: 25,
+    resolveCommerceFn: async () => ({
+      commerceId: 'bmm',
+      isAlias: false,
+      data: { ecometri: SAMPLE_CFG },
+    }),
+    geminiClient: {
+      analyze(_img, signal) {
+        return new Promise((_resolve, reject) => {
+          signal.addEventListener('abort', () => {
+            const err = new Error('Aborted');
+            err.name = 'AbortError';
+            reject(err);
+          });
+        });
+      },
+      async rerank() {
+        return null;
+      },
+    },
+  });
+
+  const r504 = await timeoutHandler({
+    rawBody: { commerceId: 'bmm', imageBase64: VALID_JPEG_B64, mimeType: 'image/jpeg' },
+    deviceId: 'dev_504_check',
+  });
+  assert.equal(r504.status, 504);
+  assert.equal((r504.body as any).quota.remaining, 10); // Refunded on timeout!
+});
+
+test('planQueries, mergeCandidates, prioritizeCandidatesForRerank and zero-emoji UI invariants', () => {
   const analysis = parseVisualAnalysis({
     label: 'Tensiometro digital',
     exactTerms: ['tensionetro', 'presion', 'digital'],
     functionalTerms: [],
     broadRoots: [],
-  });
-  assert.ok(analysis);
+  })!;
+  assert.deepEqual(planQueries(analysis, 1), ['tensionetro']);
+  assert.equal(planQueries(analysis, 2).includes('tensi'), true);
 
-  const r1 = planQueries(analysis, 1);
-  assert.equal(r1.includes('presion'), false);
-  assert.equal(r1.includes('digital'), false);
-  assert.deepEqual(r1, ['tensionetro']);
+  const merged = mergeCandidates([[mkProduct('1', 'A', false), mkProduct('2', 'B', true)]]);
+  assert.equal(merged[0].id, '2');
 
-  const r2 = planQueries(analysis, 2);
-  assert.equal(r2.includes('tensi'), true);
+  const prio = prioritizeCandidatesForRerank(
+    [mkProduct('p1', 'Pad mouse'), mkProduct('m1', 'Mouse inalambrico')],
+    'Mouse inalambrico',
+    1
+  );
+  assert.equal(prio[0].id, 'm1');
 
-  // Explicit empty orderedIds [] means Gemini rejected all unrelated candidates (e.g. Olla a presion)
-  const rejected = parseRerankResult({ orderedIds: [] }, ['olla-1', 'olla-2']);
-  assert.deepEqual(rejected, []);
-
-  const candidates: ProductDTO[] = [
-    { id: 'olla-1', slug: 'olla-1', title: 'Olla a presion', sku: null, priceCop: 95000, inStock: true, imageUrl: null, description: null, productUrl: 'https://x.com/olla-1/' },
-  ];
-  assert.deepEqual(applyRerank(candidates, rejected), []);
-});
-
-test('FASE_3 UI components contain zero emojis', () => {
   const EMOJI_RE = /\p{Extended_Pictographic}/u;
   const root = path.resolve(process.cwd());
   const triggerSrc = fs.readFileSync(path.join(root, 'app', '[comercio]', 'VisualSearchTrigger.tsx'), 'utf8');

@@ -1,4 +1,4 @@
-import type { ProductDTO, VisualAnalysis } from './types';
+import type { ProductDTO, Stage2Output, VisualAnalysis } from './types';
 
 export const MAX_IMAGE_BYTES = 350 * 1024;
 export const MAX_BODY_BYTES = 480 * 1024;
@@ -211,37 +211,126 @@ export function mergeCandidates(rounds: ProductDTO[][]): ProductDTO[] {
 }
 
 /**
- * Parses untrusted Gemini Stage 2 rerank output and discards any hallucinated IDs.
- * IMPORTANT: An explicit valid empty array `{"orderedIds": []}` returns `[]`
- * (meaning NONE of the candidates match the photographed product), whereas `null`
- * indicates a malformed/unparseable response.
+ * Parses untrusted Gemini Stage 2 output ({ exactIds, similarIds } or legacy { orderedIds }),
+ * intersecting strictly against known candidateIds and deduplicating.
  */
+export function parseStage2Output(
+  raw: unknown,
+  candidateIds: string[]
+): Stage2Output | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const obj = raw as Record<string, unknown>;
+
+  const hasNewShape = Array.isArray(obj.exactIds) || Array.isArray(obj.similarIds);
+  const hasLegacyShape = Array.isArray(obj.orderedIds) || Array.isArray(obj.ids);
+  if (!hasNewShape && !hasLegacyShape) return null;
+
+  const validSet = new Set(candidateIds);
+  const seen = new Set<string>();
+
+  const filterList = (input: unknown): string[] => {
+    if (!Array.isArray(input)) return [];
+    const out: string[] = [];
+    for (const entry of input) {
+      if (typeof entry !== 'string') continue;
+      if (!validSet.has(entry) || seen.has(entry)) continue;
+      seen.add(entry);
+      out.push(entry);
+    }
+    return out;
+  };
+
+  if (hasNewShape) {
+    const exactIds = filterList(obj.exactIds);
+    const similarIds = filterList(obj.similarIds);
+    return { exactIds, similarIds };
+  }
+
+  const exactIds = filterList(obj.orderedIds ?? obj.ids);
+  return { exactIds, similarIds: [] };
+}
+
 export function parseRerankResult(
   raw: unknown,
   candidateIds: string[]
 ): string[] | null {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
-  const obj = raw as Record<string, unknown>;
-  const rawOrder = Array.isArray(obj.orderedIds)
-    ? obj.orderedIds
-    : Array.isArray(obj.ids)
-      ? obj.ids
-      : null;
+  const parsed = parseStage2Output(raw, candidateIds);
+  if (!parsed) return null;
+  return [...parsed.exactIds, ...parsed.similarIds];
+}
 
-  if (!rawOrder) return null;
+/**
+ * Combines Stage 2 { exactIds, similarIds } with deterministic lexical fallback so:
+ * 1. Exact visual matches always appear first labeled `matchType: 'exact'`.
+ * 2. When no exact match exists (or Stage 2 is skipped), closest catalog items are
+ *    recommended labeled `matchType: 'similar'` (never 0 items if catalog is non-empty).
+ */
+export function resolveFinalVisualItems(
+  candidates: ProductDTO[],
+  stage2: Stage2Output | null,
+  fallbackSimilar: ProductDTO[],
+  maxItems: number = MAX_RESULT_ITEMS
+): { items: ProductDTO[]; hasExactMatch: boolean } {
+  const byId = new Map<string, ProductDTO>();
+  for (const item of fallbackSimilar) byId.set(item.id, item);
+  for (const item of candidates) byId.set(item.id, item);
 
-  const validSet = new Set(candidateIds);
-  const seen = new Set<string>();
-  const filtered: string[] = [];
+  const used = new Set<string>();
+  const exactItems: ProductDTO[] = [];
+  const similarItems: ProductDTO[] = [];
 
-  for (const entry of rawOrder) {
-    if (typeof entry !== 'string') continue;
-    if (!validSet.has(entry) || seen.has(entry)) continue;
-    seen.add(entry);
-    filtered.push(entry);
+  if (stage2) {
+    for (const id of stage2.exactIds) {
+      const found = byId.get(id);
+      if (found && !used.has(id)) {
+        used.add(id);
+        exactItems.push({ ...found, matchType: 'exact' });
+      }
+    }
+    for (const id of stage2.similarIds) {
+      const found = byId.get(id);
+      if (found && !used.has(id)) {
+        used.add(id);
+        similarItems.push({ ...found, matchType: 'similar' });
+      }
+    }
   }
 
-  return filtered;
+  const sortStockPreservingOrder = (list: ProductDTO[]): ProductDTO[] => {
+    const inStock = list.filter((x) => x.inStock);
+    const outOfStock = list.filter((x) => !x.inStock);
+    return [...inStock, ...outOfStock];
+  };
+
+  if (exactItems.length > 0) {
+    const orderedExact = sortStockPreservingOrder(exactItems);
+    const orderedSim = sortStockPreservingOrder(similarItems);
+    return {
+      items: [...orderedExact, ...orderedSim].slice(0, maxItems),
+      hasExactMatch: true,
+    };
+  }
+
+  // No exact match found (or Stage 2 skipped): fill up to maxItems from similar + lexical fallback
+  for (const fb of fallbackSimilar) {
+    if (similarItems.length >= maxItems) break;
+    if (!used.has(fb.id)) {
+      used.add(fb.id);
+      similarItems.push({ ...fb, matchType: 'similar' });
+    }
+  }
+  for (const cand of candidates) {
+    if (similarItems.length >= maxItems) break;
+    if (!used.has(cand.id)) {
+      used.add(cand.id);
+      similarItems.push({ ...cand, matchType: 'similar' });
+    }
+  }
+
+  return {
+    items: sortStockPreservingOrder(similarItems).slice(0, maxItems),
+    hasExactMatch: false,
+  };
 }
 
 /**
@@ -357,6 +446,7 @@ export interface VisualRateLimitResult {
 }
 
 export interface VisualRateLimiter {
+  peek(ip: string, deviceId?: string | null): VisualRateLimitResult;
   consume(ip: string, deviceId?: string | null): VisualRateLimitResult;
   refund(ip: string, deviceId?: string | null): void;
 }
@@ -391,6 +481,43 @@ export function createVisualRateLimiter(options?: {
   let instanceTimestamps: number[] = [];
 
   return {
+    peek(ip: string, deviceId?: string | null): VisualRateLimitResult {
+      const now = nowFn();
+      const ipKey = (ip || 'unknown').trim() || 'unknown';
+      const cleanDevice = sanitizeDeviceId(deviceId);
+      const deviceKey = cleanDevice ? `dev:${cleanDevice}` : `ip:${ipKey}`;
+      const recentDev = (deviceTimestamps.get(deviceKey) || []).filter(
+        (t) => now - t < deviceWindowMs
+      );
+      deviceTimestamps.set(deviceKey, recentDev);
+
+      if (recentDev.length === 0) {
+        return {
+          allowed: true,
+          remaining: maxPerDevice,
+          limit: maxPerDevice,
+          resetInSec: 0,
+          resetAt: 0,
+          retryAfterSec: 0,
+          scope: 'device',
+        };
+      }
+
+      const oldest = recentDev[0];
+      const resetAt = oldest + deviceWindowMs;
+      const resetInSec = Math.max(1, Math.ceil((resetAt - now) / 1000));
+      const remaining = Math.max(0, maxPerDevice - recentDev.length);
+
+      return {
+        allowed: remaining > 0,
+        remaining,
+        limit: maxPerDevice,
+        resetInSec,
+        resetAt,
+        retryAfterSec: remaining > 0 ? 0 : resetInSec,
+        scope: 'device',
+      };
+    },
     consume(ip: string, deviceId?: string | null): VisualRateLimitResult {
       const now = nowFn();
 
@@ -494,7 +621,7 @@ export function createVisualRateLimiter(options?: {
 
 export interface CircuitBreaker {
   isOpen(): boolean;
-  trip(): void;
+  trip(retryAfterSec?: number): void;
   recordSuccess(): void;
   getRetryAfterSec(): number;
 }
@@ -502,10 +629,12 @@ export interface CircuitBreaker {
 export function createCircuitBreaker(options?: {
   baseOpenMs?: number;
   maxOpenMs?: number;
+  jitterMs?: number;
   nowFn?: () => number;
 }): CircuitBreaker {
-  const baseOpenMs = options?.baseOpenMs ?? 60_000;
-  const maxOpenMs = options?.maxOpenMs ?? 10 * 60_000;
+  const baseOpenMs = options?.baseOpenMs ?? 15_000;
+  const maxOpenMs = options?.maxOpenMs ?? 60_000;
+  const jitterMs = options?.jitterMs ?? 0;
   const nowFn = options?.nowFn ?? (() => Date.now());
 
   let openUntil = 0;
@@ -515,11 +644,15 @@ export function createCircuitBreaker(options?: {
     isOpen(): boolean {
       return nowFn() < openUntil;
     },
-    trip(): void {
+    trip(retryAfterSec?: number): void {
       const now = nowFn();
-      const duration = Math.min(maxOpenMs, baseOpenMs * Math.pow(2, consecutiveTrips));
+      let duration = Math.min(maxOpenMs, baseOpenMs * Math.pow(2, consecutiveTrips));
+      if (typeof retryAfterSec === 'number' && Number.isFinite(retryAfterSec) && retryAfterSec > 0) {
+        duration = Math.max(baseOpenMs, Math.min(maxOpenMs, retryAfterSec * 1000));
+      }
+      const jitter = jitterMs > 0 ? Math.floor(Math.random() * jitterMs) : 0;
       consecutiveTrips += 1;
-      openUntil = now + duration;
+      openUntil = now + Math.min(maxOpenMs, duration + jitter);
     },
     recordSuccess(): void {
       consecutiveTrips = 0;

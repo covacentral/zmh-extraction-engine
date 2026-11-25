@@ -21,6 +21,7 @@ const IDLE_VISUAL_STATE: VisualSearchUiState = {
   status: 'idle',
   previewDataUrl: null,
   items: [],
+  hasExactMatch: false,
   detectedLabel: '',
   chips: [],
   degraded: 'none',

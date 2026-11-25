@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { resolveCommerce } from '../../../lib/commerceResolver';
+import { createCatalogIndexStore } from '../../../lib/ecometri/catalogIndex';
 import { createHttpGeminiClient } from '../../../lib/ecometri/geminiClient';
 import {
   createCircuitBreaker,
@@ -9,9 +10,11 @@ import {
 import { createVisualSearchHandler } from '../../../lib/ecometri/visualSearchHandler';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 30;
 
 const sharedRateLimiter = createVisualRateLimiter();
 const sharedCircuitBreaker = createCircuitBreaker();
+const sharedCatalogIndex = createCatalogIndexStore();
 
 function getClientIp(request: NextRequest): string {
   const forwarded = request.headers.get('x-forwarded-for');
@@ -20,11 +23,27 @@ function getClientIp(request: NextRequest): string {
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
+  const clientIp = getClientIp(request);
+  const deviceId = request.headers.get('x-device-id');
   const contentLengthHeader = request.headers.get('content-length');
+
+  const peekQuota = () => {
+    const q = sharedRateLimiter.peek(clientIp, deviceId);
+    return {
+      remaining: q.remaining,
+      limit: q.limit,
+      resetInSec: q.resetInSec,
+      resetAt: q.resetAt,
+    };
+  };
+
   const declaredLen = Number(contentLengthHeader || '0');
   if (Number.isFinite(declaredLen) && declaredLen > MAX_BODY_BYTES) {
     return NextResponse.json(
-      { error: 'La solicitud supera el tamano maximo permitido.' },
+      {
+        error: 'La solicitud supera el tamano maximo permitido.',
+        quota: peekQuota(),
+      },
       { status: 413 }
     );
   }
@@ -33,7 +52,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
     rawBody = await request.json();
   } catch {
-    return NextResponse.json({ error: 'Cuerpo JSON invalido.' }, { status: 400 });
+    return NextResponse.json(
+      { error: 'Cuerpo JSON invalido.', quota: peekQuota() },
+      { status: 400 }
+    );
   }
 
   const apiKey = (process.env.GEMINI_API_KEY || '').trim();
@@ -43,6 +65,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     resolveCommerceFn: resolveCommerce,
     geminiClient,
     fetchFn: fetch,
+    catalogIndexStore: sharedCatalogIndex,
     rateLimiter: sharedRateLimiter,
     circuitBreaker: sharedCircuitBreaker,
   });
@@ -50,8 +73,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const result = await execute({
     contentLengthHeader,
     rawBody,
-    clientIp: getClientIp(request),
-    deviceId: request.headers.get('x-device-id'),
+    clientIp,
+    deviceId,
   });
 
   return NextResponse.json(result.body, {

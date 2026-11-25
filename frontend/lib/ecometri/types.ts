@@ -24,6 +24,8 @@ export interface EcometriClientConfig {
   advisorLines: EcometriAdvisorLine[];
 }
 
+export type VisualMatchType = 'exact' | 'similar';
+
 export interface ProductDTO {
   id: string;
   slug: string | null;
@@ -34,6 +36,12 @@ export interface ProductDTO {
   imageUrl: string | null;
   description: string | null;
   productUrl: string;
+  matchType?: VisualMatchType;
+}
+
+export interface Stage2Output {
+  exactIds: string[];
+  similarIds: string[];
 }
 
 export interface ProductDetailDTO {
@@ -73,11 +81,12 @@ export interface VisualSearchQuota {
 
 export interface VisualSearchResponse {
   items: ProductDTO[];
+  hasExactMatch?: boolean;
   detected: {
     label: string;
     chips: string[];
   };
   degraded: VisualSearchDegraded;
-  quota?: VisualSearchQuota;
+  quota: VisualSearchQuota;
   error?: string;
 }

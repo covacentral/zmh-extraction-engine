@@ -87,6 +87,8 @@ export default function VisualSearchPanel({
   if (state.status === 'idle') return null;
 
   const isLoading = state.status === 'identifying' || state.status === 'comparing';
+  const showSimilarNotice =
+    state.status === 'ok' && state.items.length > 0 && !state.hasExactMatch;
 
   return (
     <section
@@ -106,9 +108,11 @@ export default function VisualSearchPanel({
             {state.status === 'identifying' && 'Identificando producto...'}
             {state.status === 'comparing' && 'Comparando en el catalogo...'}
             {state.status === 'ok' &&
-              (state.detectedLabel
-                ? `Busqueda por foto: ${state.detectedLabel}`
-                : 'Resultados por foto')}
+              (state.hasExactMatch
+                ? `Coincidencia exacta: ${state.detectedLabel || 'encontrada'}`
+                : state.detectedLabel
+                  ? `Productos similares: ${state.detectedLabel}`
+                  : 'Productos similares')}
             {state.status === 'error' && 'Busqueda por foto'}
           </h2>
         </div>
@@ -145,7 +149,7 @@ export default function VisualSearchPanel({
         {state.status === 'error' && (
           <div className="px-2 py-3 text-center">
             <p className="text-xs text-white/65">
-              {state.error || 'Buscador por foto en pausa temporal, usa la busqueda por texto.'}
+              {state.error || 'Buscador por foto en pausa breve, intenta en unos segundos o busca por texto.'}
             </p>
           </div>
         )}
@@ -165,10 +169,18 @@ export default function VisualSearchPanel({
           </div>
         )}
 
+        {showSimilarNotice && (
+          <div className="rounded-xl border border-white/[0.08] bg-zinc-950/60 px-3 py-2">
+            <p className="text-[11px] leading-snug text-white/65">
+              No encontramos una coincidencia exacta en el catalogo; te sugerimos las opciones mas parecidas:
+            </p>
+          </div>
+        )}
+
         {state.status === 'ok' && state.items.length === 0 && (
           <div className="px-2 py-3 text-center">
             <p className="text-xs text-white/55">
-              No encontramos coincidencias exactas por foto. Toca una etiqueta arriba o busca por texto.
+              El catalogo de este comercio no devolvio productos disponibles en este momento.
             </p>
           </div>
         )}
@@ -177,6 +189,7 @@ export default function VisualSearchPanel({
           <div className="flex flex-col gap-1.5">
             {state.items.map((item) => {
               const showImg = Boolean(item.imageUrl && !failedImages[item.id]);
+              const isExact = item.matchType === 'exact';
               return (
                 <button
                   key={item.id}
@@ -184,7 +197,9 @@ export default function VisualSearchPanel({
                   onClick={() => setSelectedProduct(item)}
                   className={`group flex w-full items-center gap-3 rounded-xl border p-2.5 text-left transition-colors duration-150 ${
                     item.inStock
-                      ? 'border-white/[0.07] bg-zinc-950/70 hover:border-white/20 hover:bg-zinc-950'
+                      ? isExact
+                        ? 'border-white/20 bg-zinc-950/85 hover:border-white/35 hover:bg-zinc-950'
+                        : 'border-white/[0.07] bg-zinc-950/70 hover:border-white/20 hover:bg-zinc-950'
                       : 'border-white/[0.04] bg-zinc-950/40 opacity-60 hover:opacity-80'
                   }`}
                 >
@@ -205,9 +220,27 @@ export default function VisualSearchPanel({
                   </div>
 
                   <div className="flex min-w-0 flex-1 flex-col gap-1">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span
+                        className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${
+                          isExact
+                            ? 'border border-emerald-500/35 bg-emerald-500/15 text-emerald-300'
+                            : 'border border-white/10 bg-white/[0.05] text-white/55'
+                        }`}
+                      >
+                        {isExact ? 'Coincidencia exacta' : 'Producto similar'}
+                      </span>
+                      {item.sku && (
+                        <span className="font-mono text-[10px] font-semibold text-white/50">
+                          Ref: {item.sku}
+                        </span>
+                      )}
+                    </div>
+
                     <span className="line-clamp-2 text-[13px] font-semibold leading-snug text-white">
                       {item.title}
                     </span>
+
                     <div className="flex items-center gap-2.5">
                       <span className="text-sm font-bold tracking-tight text-white">
                         {formatCop(item.priceCop)}
@@ -233,13 +266,13 @@ export default function VisualSearchPanel({
         )}
 
         {state.quota && (
-          <div className="flex items-center justify-between gap-2 border-t border-white/[0.06] pt-2 px-1 text-[10px] font-medium text-white/45">
+          <div className="flex items-center justify-between gap-2 border-t border-white/[0.06] pt-2 px-1 text-[10px] font-medium text-white/50">
             <span>
-              {secondsLeft > 0
-                ? `Intentos en este dispositivo: ${state.quota.remaining} de ${state.quota.limit}`
-                : `Intentos restablecidos: ${state.quota.limit} de ${state.quota.limit}`}
+              {secondsLeft > 0 && state.quota.remaining < state.quota.limit
+                ? `Intentos disponibles: ${state.quota.remaining} de ${state.quota.limit}`
+                : `Intentos disponibles: ${state.quota.limit} de ${state.quota.limit}`}
             </span>
-            {secondsLeft > 0 && (
+            {secondsLeft > 0 && state.quota.remaining < state.quota.limit && (
               <span>Se restablece en {formatCountdown(secondsLeft)}</span>
             )}
           </div>

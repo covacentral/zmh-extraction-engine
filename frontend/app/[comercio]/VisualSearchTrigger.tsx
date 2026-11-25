@@ -1,6 +1,11 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import {
+  mergeVisualQuota,
+  readLocalVisualQuota,
+  recordLocalVisualSuccess,
+} from '../../lib/ecometri/clientQuota';
 import { compressImageToJpegBase64 } from '../../lib/ecometri/compressImage';
 import type {
   ProductDTO,
@@ -13,6 +18,7 @@ export interface VisualSearchUiState {
   status: 'idle' | 'identifying' | 'comparing' | 'ok' | 'error';
   previewDataUrl: string | null;
   items: ProductDTO[];
+  hasExactMatch: boolean;
   detectedLabel: string;
   chips: string[];
   degraded: VisualSearchDegraded;
@@ -45,8 +51,6 @@ interface VisualSearchTriggerProps {
   onStateChange: (state: VisualSearchUiState) => void;
 }
 
-const COOLDOWN_MS = 10_000;
-
 const CameraIcon = () => (
   <svg
     viewBox="0 0 24 24"
@@ -69,7 +73,6 @@ export default function VisualSearchTrigger({
 }: VisualSearchTriggerProps) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
-  const lastSubmitRef = useRef<number>(0);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -83,23 +86,9 @@ export default function VisualSearchTrigger({
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = '';
-    if (!file) return;
+    if (!file || busy) return;
 
-    const now = Date.now();
-    const elapsed = now - lastSubmitRef.current;
-    if (elapsed < COOLDOWN_MS) {
-      const waitSec = Math.ceil((COOLDOWN_MS - elapsed) / 1000);
-      onStateChange({
-        status: 'error',
-        previewDataUrl: null,
-        items: [],
-        detectedLabel: '',
-        chips: [],
-        degraded: 'none',
-        error: `Espera ${waitSec}s antes de subir otra foto.`,
-      });
-      return;
-    }
+    const currentLocalQuota = readLocalVisualQuota(commerceId);
 
     if (abortRef.current) {
       abortRef.current.abort();
@@ -109,18 +98,21 @@ export default function VisualSearchTrigger({
 
     setBusy(true);
     let stageTimer: ReturnType<typeof setTimeout> | null = null;
+    let capturedPreview: string | null = null;
 
     try {
       const { base64, previewDataUrl } = await compressImageToJpegBase64(file);
-      lastSubmitRef.current = Date.now();
+      capturedPreview = previewDataUrl;
 
       onStateChange({
         status: 'identifying',
         previewDataUrl,
         items: [],
+        hasExactMatch: false,
         detectedLabel: '',
         chips: [],
         degraded: 'none',
+        quota: currentLocalQuota,
       });
 
       stageTimer = setTimeout(() => {
@@ -129,9 +121,11 @@ export default function VisualSearchTrigger({
             status: 'comparing',
             previewDataUrl,
             items: [],
+            hasExactMatch: false,
             detectedLabel: '',
             chips: [],
             degraded: 'none',
+            quota: readLocalVisualQuota(commerceId),
           });
         }
       }, 1500);
@@ -162,29 +156,43 @@ export default function VisualSearchTrigger({
       if (controller.signal.aborted) return;
 
       if (!resp.ok) {
+        const syncedQuota = mergeVisualQuota(
+          payload?.quota,
+          readLocalVisualQuota(commerceId)
+        );
         onStateChange({
           status: 'error',
           previewDataUrl,
           items: [],
+          hasExactMatch: false,
           detectedLabel: '',
           chips: [],
           degraded: payload?.degraded || 'paused',
-          quota: payload?.quota,
+          quota: syncedQuota,
           error:
             payload?.error ||
-            'Buscador por foto en pausa temporal, usa la busqueda por texto.',
+            'Buscador por foto en pausa breve, intenta nuevamente en unos segundos o busca por texto.',
         });
         return;
       }
 
+      const updatedLocalQuota = recordLocalVisualSuccess(commerceId);
+      const syncedQuota = mergeVisualQuota(payload?.quota, updatedLocalQuota);
+      const returnedItems = Array.isArray(payload?.items) ? payload.items : [];
+      const hasExact =
+        typeof payload?.hasExactMatch === 'boolean'
+          ? payload.hasExactMatch
+          : returnedItems.some((i) => i.matchType === 'exact');
+
       onStateChange({
         status: 'ok',
         previewDataUrl,
-        items: Array.isArray(payload?.items) ? payload.items : [],
+        items: returnedItems,
+        hasExactMatch: hasExact,
         detectedLabel: payload?.detected?.label || '',
         chips: Array.isArray(payload?.detected?.chips) ? payload.detected.chips : [],
         degraded: payload?.degraded || 'none',
-        quota: payload?.quota,
+        quota: syncedQuota,
       });
     } catch (err: unknown) {
       if (stageTimer) clearTimeout(stageTimer);
@@ -193,15 +201,17 @@ export default function VisualSearchTrigger({
       }
       onStateChange({
         status: 'error',
-        previewDataUrl: null,
+        previewDataUrl: capturedPreview,
         items: [],
+        hasExactMatch: false,
         detectedLabel: '',
         chips: [],
         degraded: 'paused',
+        quota: readLocalVisualQuota(commerceId),
         error:
           err instanceof Error && err.message
             ? err.message
-            : 'No pudimos procesar la foto. Usa la busqueda por texto.',
+            : 'No pudimos procesar la foto. Intenta nuevamente o busca por texto.',
       });
     } finally {
       setBusy(false);
