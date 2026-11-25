@@ -304,6 +304,13 @@ export function resolveFinalVisualItems(
 
   if (exactItems.length > 0) {
     const orderedExact = sortStockPreservingOrder(exactItems);
+    for (const fb of fallbackSimilar) {
+      if (orderedExact.length + similarItems.length >= maxItems) break;
+      if (!used.has(fb.id)) {
+        used.add(fb.id);
+        similarItems.push({ ...fb, matchType: 'similar' });
+      }
+    }
     const orderedSim = sortStockPreservingOrder(similarItems);
     return {
       items: [...orderedExact, ...orderedSim].slice(0, maxItems),

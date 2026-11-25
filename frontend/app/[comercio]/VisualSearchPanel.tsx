@@ -6,6 +6,8 @@ import type { ProductDTO } from '../../lib/ecometri/types';
 import ProductQuickView from './ProductQuickView';
 import type { VisualSearchUiState } from './VisualSearchTrigger';
 
+export const VISUAL_RESULTS_HEADING = 'Resultados ordenados por similitud';
+
 function formatCountdown(seconds: number): string {
   const s = Math.max(0, Math.floor(seconds));
   const mins = Math.floor(s / 60);
@@ -53,6 +55,24 @@ const ChevronRightSmall = () => (
   </svg>
 );
 
+const ImagePlaceholder = () => (
+  <svg
+    viewBox="0 0 24 24"
+    width="18"
+    height="18"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.8"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className="text-white/25"
+  >
+    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+    <circle cx="8.5" cy="8.5" r="1.5" />
+    <polyline points="21 15 16 10 5 21" />
+  </svg>
+);
+
 export default function VisualSearchPanel({
   commerceId,
   state,
@@ -87,12 +107,10 @@ export default function VisualSearchPanel({
   if (state.status === 'idle') return null;
 
   const isLoading = state.status === 'identifying' || state.status === 'comparing';
-  const showSimilarNotice =
-    state.status === 'ok' && state.items.length > 0 && !state.hasExactMatch;
 
   return (
     <section
-      aria-label="Resultados de busqueda por foto"
+      aria-label={VISUAL_RESULTS_HEADING}
       className="w-full flex flex-col gap-2"
     >
       <div className="flex items-center justify-between px-1">
@@ -100,19 +118,14 @@ export default function VisualSearchPanel({
           {state.previewDataUrl && (
             <img
               src={state.previewDataUrl}
-              alt="Foto buscada"
+              alt="Foto consultada"
               className="h-6 w-6 rounded-md border border-white/15 object-cover shrink-0"
             />
           )}
-          <h2 className="truncate text-[10px] font-bold uppercase tracking-widest text-white/45">
+          <h2 className="truncate text-[10px] font-bold uppercase tracking-widest text-white/40">
             {state.status === 'identifying' && 'Identificando producto...'}
             {state.status === 'comparing' && 'Comparando en el catalogo...'}
-            {state.status === 'ok' &&
-              (state.hasExactMatch
-                ? `Coincidencia exacta: ${state.detectedLabel || 'encontrada'}`
-                : state.detectedLabel
-                  ? `Productos similares: ${state.detectedLabel}`
-                  : 'Productos similares')}
+            {state.status === 'ok' && VISUAL_RESULTS_HEADING}
             {state.status === 'error' && 'Busqueda por foto'}
           </h2>
         </div>
@@ -128,7 +141,7 @@ export default function VisualSearchPanel({
         </button>
       </div>
 
-      <div className="w-full rounded-2xl border border-white/[0.08] bg-zinc-900/75 p-2.5 flex flex-col gap-2.5">
+      <div className="w-full rounded-2xl border border-white/[0.08] bg-zinc-900/75 p-2 flex flex-col gap-2">
         {isLoading && (
           <div className="flex flex-col gap-2">
             {[0, 1, 2].map((idx) => (
@@ -147,21 +160,21 @@ export default function VisualSearchPanel({
         )}
 
         {state.status === 'error' && (
-          <div className="px-2 py-3 text-center">
-            <p className="text-xs text-white/65">
+          <div className="px-3 py-3 text-center">
+            <p className="text-xs text-white/60">
               {state.error || 'Buscador por foto en pausa breve, intenta en unos segundos o busca por texto.'}
             </p>
           </div>
         )}
 
         {state.status === 'ok' && state.chips.length > 0 && (
-          <div className="flex flex-wrap items-center gap-1.5 px-0.5">
+          <div className="flex flex-wrap items-center gap-1.5 px-0.5 pt-0.5">
             {state.chips.map((chip) => (
               <button
                 key={chip}
                 type="button"
                 onClick={() => onSelectChip(chip)}
-                className="rounded-full border border-white/12 bg-zinc-950/80 px-2.5 py-1 text-[11px] font-semibold text-white/75 transition-colors duration-150 hover:border-white/30 hover:text-white"
+                className="rounded-full border border-white/10 bg-zinc-950/75 px-2.5 py-1 text-[11px] font-medium text-white/70 transition-colors duration-150 hover:border-white/25 hover:text-white"
               >
                 {chip}
               </button>
@@ -169,27 +182,19 @@ export default function VisualSearchPanel({
           </div>
         )}
 
-        {showSimilarNotice && (
-          <div className="rounded-xl border border-white/[0.08] bg-zinc-950/60 px-3 py-2">
-            <p className="text-[11px] leading-snug text-white/65">
-              No encontramos una coincidencia exacta en el catalogo; te sugerimos las opciones mas parecidas:
-            </p>
-          </div>
-        )}
-
         {state.status === 'ok' && state.items.length === 0 && (
-          <div className="px-2 py-3 text-center">
+          <div className="px-3 py-3 text-center">
             <p className="text-xs text-white/55">
               El catalogo de este comercio no devolvio productos disponibles en este momento.
             </p>
           </div>
         )}
 
+        {/* Strict server-provided similarity order (never reordered or filtered on client) */}
         {state.status === 'ok' && state.items.length > 0 && (
           <div className="flex flex-col gap-1.5">
             {state.items.map((item) => {
               const showImg = Boolean(item.imageUrl && !failedImages[item.id]);
-              const isExact = item.matchType === 'exact';
               return (
                 <button
                   key={item.id}
@@ -197,9 +202,7 @@ export default function VisualSearchPanel({
                   onClick={() => setSelectedProduct(item)}
                   className={`group flex w-full items-center gap-3 rounded-xl border p-2.5 text-left transition-colors duration-150 ${
                     item.inStock
-                      ? isExact
-                        ? 'border-white/20 bg-zinc-950/85 hover:border-white/35 hover:bg-zinc-950'
-                        : 'border-white/[0.07] bg-zinc-950/70 hover:border-white/20 hover:bg-zinc-950'
+                      ? 'border-white/[0.07] bg-zinc-950/70 hover:border-white/20 hover:bg-zinc-950'
                       : 'border-white/[0.04] bg-zinc-950/40 opacity-60 hover:opacity-80'
                   }`}
                 >
@@ -215,28 +218,11 @@ export default function VisualSearchPanel({
                         }
                       />
                     ) : (
-                      <span className="text-[10px] text-white/30">Sin foto</span>
+                      <ImagePlaceholder />
                     )}
                   </div>
 
                   <div className="flex min-w-0 flex-1 flex-col gap-1">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <span
-                        className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${
-                          isExact
-                            ? 'border border-emerald-500/35 bg-emerald-500/15 text-emerald-300'
-                            : 'border border-white/10 bg-white/[0.05] text-white/55'
-                        }`}
-                      >
-                        {isExact ? 'Coincidencia exacta' : 'Producto similar'}
-                      </span>
-                      {item.sku && (
-                        <span className="font-mono text-[10px] font-semibold text-white/50">
-                          Ref: {item.sku}
-                        </span>
-                      )}
-                    </div>
-
                     <span className="line-clamp-2 text-[13px] font-semibold leading-snug text-white">
                       {item.title}
                     </span>
@@ -266,7 +252,7 @@ export default function VisualSearchPanel({
         )}
 
         {state.quota && (
-          <div className="flex items-center justify-between gap-2 border-t border-white/[0.06] pt-2 px-1 text-[10px] font-medium text-white/50">
+          <div className="flex items-center justify-between gap-2 border-t border-white/[0.06] pt-2 px-1 text-[10px] font-medium text-white/45">
             <span>
               {secondsLeft > 0 && state.quota.remaining < state.quota.limit
                 ? `Intentos disponibles: ${state.quota.remaining} de ${state.quota.limit}`

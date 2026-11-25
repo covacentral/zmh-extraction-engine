@@ -130,9 +130,9 @@ export default function ProductQuickView({
     }
   }, [product]);
 
-  // Fetch SKU / availability / description lazily only when modal is open
+  // Fetch SKU / availability / description lazily only when modal is open and SKU is not yet present
   useEffect(() => {
-    if (!product || !product.slug || !commerceId) {
+    if (!product || !product.slug || !commerceId || product.sku) {
       setDetail(null);
       setLoadingDetail(false);
       return;

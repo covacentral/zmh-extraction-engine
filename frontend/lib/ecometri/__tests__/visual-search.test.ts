@@ -447,7 +447,46 @@ test('handler returns 404 without calling Gemini/fetch when disabled, and 504 ti
   assert.equal((r504.body as any).quota.remaining, 10); // Refunded on timeout!
 });
 
-test('planQueries, mergeCandidates, prioritizeCandidatesForRerank and zero-emoji UI invariants', () => {
+test('VisualSearchPanel enforces neutral similarity heading, hides SKU in list, forbids exactness claims, and preserves server order', () => {
+  const EMOJI_RE = /\p{Extended_Pictographic}/u;
+  const FORBIDDEN_CLAIMS_RE = /\b(coincidencia|exact[oa]s?|id[eé]ntic[oa]s?)\b|100\s*%/i;
+
+  const root = path.resolve(process.cwd());
+  const triggerSrc = fs.readFileSync(path.join(root, 'app', '[comercio]', 'VisualSearchTrigger.tsx'), 'utf8');
+  const panelSrc = fs.readFileSync(path.join(root, 'app', '[comercio]', 'VisualSearchPanel.tsx'), 'utf8');
+
+  assert.equal(EMOJI_RE.test(triggerSrc), false);
+  assert.equal(EMOJI_RE.test(panelSrc), false);
+
+  // Neutral similarity heading present and zero exactness claims in VisualSearchPanel
+  assert.match(panelSrc, /Resultados ordenados por similitud/);
+  assert.equal(FORBIDDEN_CLAIMS_RE.test(panelSrc), false);
+
+  // SKU is NOT rendered in the list rows (reserved for ProductQuickView)
+  assert.equal(panelSrc.includes('item.sku'), false);
+  assert.equal(panelSrc.includes('Ref:'), false);
+
+  // Client never re-sorts or filters state.items
+  assert.equal(panelSrc.includes('state.items.sort'), false);
+  assert.equal(panelSrc.includes('state.items.filter'), false);
+  assert.match(panelSrc, /state\.items\.map\(/);
+});
+
+test('planQueries, mergeCandidates, prioritizeCandidatesForRerank and server descending similarity order', () => {
+  const c1 = mkProduct('m1', 'Mouse A', true, '100001');
+  const c2 = mkProduct('m2', 'Mouse B', true, '100002');
+  const c3 = mkProduct('m3', 'Mouse C', true, '100003');
+  const ordered = resolveFinalVisualItems(
+    [c1, c2, c3],
+    { exactIds: ['m2'], similarIds: ['m3'] },
+    [c1, c2, c3],
+    5
+  );
+  // Strict descending similarity order: exactIds ('m2') -> similarIds ('m3') -> lexical fallback ('m1')
+  assert.deepEqual(
+    ordered.items.map((x) => x.id),
+    ['m2', 'm3', 'm1']
+  );
   const analysis = parseVisualAnalysis({
     label: 'Tensiometro digital',
     exactTerms: ['tensionetro', 'presion', 'digital'],
