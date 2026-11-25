@@ -216,18 +216,37 @@ export default function ClientPage({ commerceId, data, themeHex, RENDER_API = ''
         </div>
 
         {/* ── SEARCH BAR ── */}
-        <div className="w-full relative">
-          <div className="absolute inset-y-0 left-3.5 flex items-center pointer-events-none"><SearchIcon /></div>
+        <div className="w-full relative group">
+          <div className="absolute inset-y-0 left-3.5 flex items-center pointer-events-none transition-opacity duration-150 group-focus-within:opacity-100 opacity-75">
+            <SearchIcon />
+          </div>
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Buscar canal, asesor o enlace..."
-            className="w-full bg-white/[0.06] border border-white/10 focus:border-[var(--theme)] rounded-2xl py-3 pl-10 pr-9 text-sm text-white placeholder-white/40 outline-none transition-all"
+            placeholder={
+              data?.ecometri?.enabled
+                ? 'Buscar producto, asesor o canal...'
+                : 'Buscar canal, asesor o enlace...'
+            }
+            aria-label={
+              data?.ecometri?.enabled
+                ? 'Buscar producto, asesor o canal'
+                : 'Buscar canal, asesor o enlace'
+            }
+            className="w-full bg-zinc-900/85 border border-white/10 focus:border-white/25 focus:bg-zinc-900 rounded-2xl py-3 pl-10 pr-10 text-sm text-white placeholder-white/40 outline-none transition-colors duration-150 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
           />
           {searchQuery && (
-            <button onClick={() => setSearchQuery('')} className="absolute inset-y-0 right-3.5 flex items-center text-white/40 hover:text-white text-sm transition-colors">
-              ✕
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              aria-label="Limpiar busqueda"
+              className="absolute inset-y-0 right-2.5 my-auto flex h-7 w-7 items-center justify-center rounded-full text-white/45 hover:bg-white/10 hover:text-white transition-colors duration-150"
+            >
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
             </button>
           )}
         </div>

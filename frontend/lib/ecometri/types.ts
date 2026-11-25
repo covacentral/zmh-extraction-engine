@@ -24,6 +24,7 @@ export interface EcometriClientConfig {
 
 export interface ProductDTO {
   id: string;
+  slug: string | null;
   title: string;
   sku: string | null;
   priceCop: number;           // entero COP
@@ -31,6 +32,12 @@ export interface ProductDTO {
   imageUrl: string | null;
   description: string | null;
   productUrl: string;
+}
+
+export interface ProductDetailDTO {
+  sku: string | null;
+  inStock: boolean | null;
+  description: string | null;
 }
 
 export interface EcometriSearchResponse {

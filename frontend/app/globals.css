@@ -108,8 +108,7 @@ dialog.product-quickview:modal {
 }
 
 dialog.product-quickview::backdrop {
-  background-color: rgba(0, 0, 0, 0.78);
-  backdrop-filter: blur(8px);
+  background-color: rgba(0, 0, 0, 0.82);
   overflow: hidden;
   overscroll-behavior: contain;
 }

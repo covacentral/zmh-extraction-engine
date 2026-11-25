@@ -165,6 +165,32 @@ function resolveInStock(raw: Record<string, unknown>): boolean {
   return true;
 }
 
+const SAFE_SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+function extractSafeSlug(raw: Record<string, unknown>): string | null {
+  const candidate =
+    (typeof raw.url === 'string' && raw.url.trim()) ||
+    (typeof raw.slug === 'string' && raw.slug.trim()) ||
+    '';
+  if (!candidate) return null;
+
+  let slugPart = candidate;
+  if (/^https?:\/\//i.test(candidate)) {
+    try {
+      const segments = new URL(candidate).pathname.split('/').filter(Boolean);
+      slugPart = segments[segments.length - 1] || '';
+    } catch {
+      return null;
+    }
+  }
+
+  const normalized = slugPart.replace(/^\/+/, '').replace(/\/+$/, '').toLowerCase();
+  if (!normalized || normalized.length > 120 || !SAFE_SLUG_RE.test(normalized)) {
+    return null;
+  }
+  return normalized;
+}
+
 export function normalizeEcometriProduct(
   raw: unknown,
   cfg: EcometriConfig
@@ -191,12 +217,14 @@ export function normalizeEcometriProduct(
   const skuRaw = typeof obj.sku === 'string' ? obj.sku.trim() : typeof obj.sku === 'number' ? String(obj.sku) : '';
   const sku = skuRaw ? skuRaw : null;
 
+  const slug = extractSafeSlug(obj);
   const imageUrl = resolveSafeImageUrl(obj, cfg.allowedImageHost);
   const inStock = resolveInStock(obj);
   const description = sanitizeDescription(obj.description);
 
   return {
     id,
+    slug,
     title,
     sku,
     priceCop,

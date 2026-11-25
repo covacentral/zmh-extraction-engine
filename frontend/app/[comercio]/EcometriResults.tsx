@@ -18,7 +18,7 @@ const ChevronRightSmall = () => (
     height="14"
     fill="none"
     stroke="currentColor"
-    strokeWidth="2.5"
+    strokeWidth="2.4"
     strokeLinecap="round"
     strokeLinejoin="round"
     className="shrink-0"
@@ -30,14 +30,14 @@ const ChevronRightSmall = () => (
 const ImagePlaceholder = () => (
   <svg
     viewBox="0 0 24 24"
-    width="20"
-    height="20"
+    width="18"
+    height="18"
     fill="none"
     stroke="currentColor"
     strokeWidth="1.8"
     strokeLinecap="round"
     strokeLinejoin="round"
-    className="text-white/30"
+    className="text-white/25"
   >
     <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
     <circle cx="8.5" cy="8.5" r="1.5" />
@@ -83,35 +83,35 @@ export default function EcometriResults({ commerceId, searchQuery }: EcometriRes
 
   return (
     <section
-      aria-label="Productos en catalogo"
+      aria-label="Coincidencias en catalogo"
       className="w-full flex flex-col gap-2"
     >
       <div className="flex items-center justify-between px-1">
-        <h2 className="text-[10px] font-bold uppercase tracking-widest text-white/45">
-          Productos en Catalogo
+        <h2 className="text-[10px] font-bold uppercase tracking-widest text-white/40">
+          Coincidencias en Catalogo
         </h2>
         {status === 'ok' && (
-          <span className="text-[10px] font-semibold text-white/40">
-            {total === 1 ? '1 coincidencia' : `${total} coincidencias`}
+          <span className="text-[10px] font-medium text-white/35">
+            {total === 1 ? '1 resultado' : `${total} resultados`}
           </span>
         )}
         {status === 'loading' && (
-          <span className="text-[10px] font-medium text-white/40">Buscando...</span>
+          <span className="text-[10px] font-medium text-white/35">Buscando...</span>
         )}
       </div>
 
-      <div className="w-full rounded-2xl border border-white/10 bg-zinc-950/85 p-2 shadow-[0_8px_32px_rgba(0,0,0,0.55)] backdrop-blur-xl">
+      <div className="w-full rounded-2xl border border-white/[0.08] bg-zinc-900/75 p-2">
         {status === 'loading' && (
-          <div className="flex flex-col gap-2 p-1">
+          <div className="flex flex-col gap-2">
             {[0, 1, 2].map((idx) => (
               <div
                 key={idx}
-                className="flex items-center gap-3 rounded-xl border border-white/[0.06] bg-white/[0.03] p-2.5 animate-pulse"
+                className="flex items-center gap-3 rounded-xl border border-white/[0.05] bg-zinc-950/60 p-2.5 animate-pulse"
               >
-                <div className="h-14 w-14 shrink-0 rounded-xl bg-white/10" />
+                <div className="h-14 w-14 shrink-0 rounded-xl bg-white/[0.07]" />
                 <div className="flex flex-1 flex-col gap-2">
-                  <div className="h-3.5 w-3/4 rounded bg-white/10" />
-                  <div className="h-3 w-1/3 rounded bg-white/10" />
+                  <div className="h-3.5 w-3/4 rounded bg-white/[0.07]" />
+                  <div className="h-3 w-1/3 rounded bg-white/[0.07]" />
                 </div>
               </div>
             ))}
@@ -120,7 +120,7 @@ export default function EcometriResults({ commerceId, searchQuery }: EcometriRes
 
         {status === 'error' && (
           <div className="px-3 py-4 text-center">
-            <p className="text-xs font-medium text-white/60">
+            <p className="text-xs text-white/55">
               {error || 'Resultados en vivo no disponibles temporalmente.'}
             </p>
           </div>
@@ -128,8 +128,8 @@ export default function EcometriResults({ commerceId, searchQuery }: EcometriRes
 
         {status === 'ok' && items.length === 0 && (
           <div className="px-3 py-4 text-center">
-            <p className="text-xs font-medium text-white/55">
-              No encontramos productos para &quot;{trimmed}&quot; en el catalogo.
+            <p className="text-xs text-white/50">
+              Sin coincidencias para &quot;{trimmed}&quot; en el catalogo.
             </p>
           </div>
         )}
@@ -137,7 +137,7 @@ export default function EcometriResults({ commerceId, searchQuery }: EcometriRes
         {status === 'ok' && items.length > 0 && (
           <div
             ref={scrollContainerRef}
-            className="flex max-h-[340px] flex-col gap-2 overflow-y-auto pr-0.5"
+            className="flex max-h-[340px] flex-col gap-1.5 overflow-y-auto"
             style={{ scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' } as any}
           >
             {items.map((item) => {
@@ -147,19 +147,19 @@ export default function EcometriResults({ commerceId, searchQuery }: EcometriRes
                   key={item.id}
                   type="button"
                   onClick={() => setSelectedProduct(item)}
-                  className={`group flex w-full items-center gap-3 rounded-xl border p-2.5 text-left transition-all hover:scale-[1.008] active:scale-[0.99] ${
+                  className={`group flex w-full items-center gap-3 rounded-xl border p-2.5 text-left transition-colors duration-150 ${
                     item.inStock
-                      ? 'border-white/10 bg-zinc-900/85 hover:border-white/25 hover:bg-zinc-900'
-                      : 'border-white/[0.06] bg-zinc-900/45 opacity-65 hover:opacity-85'
+                      ? 'border-white/[0.07] bg-zinc-950/70 hover:border-white/20 hover:bg-zinc-950'
+                      : 'border-white/[0.04] bg-zinc-950/40 opacity-60 hover:opacity-80'
                   }`}
                 >
-                  <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-zinc-950">
+                  <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-zinc-900">
                     {showImg ? (
                       <img
                         src={item.imageUrl as string}
                         alt={item.title}
                         loading="lazy"
-                        className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-105"
+                        className="h-full w-full object-cover"
                         onError={() =>
                           setFailedImages((prev) => ({ ...prev, [item.id]: true }))
                         }
@@ -170,26 +170,25 @@ export default function EcometriResults({ commerceId, searchQuery }: EcometriRes
                   </div>
 
                   <div className="flex min-w-0 flex-1 flex-col gap-1">
-                    <span className="line-clamp-2 text-xs font-bold leading-snug text-white group-hover:text-white">
+                    <span className="line-clamp-2 text-[13px] font-semibold leading-snug text-white">
                       {item.title}
                     </span>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-sm font-extrabold tracking-tight text-white">
+                    <div className="flex items-center gap-2.5">
+                      <span className="text-sm font-bold tracking-tight text-white">
                         {formatCop(item.priceCop)}
                       </span>
-                      {item.inStock ? (
-                        <span className="rounded-full border border-emerald-500/30 bg-emerald-500/15 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-300">
-                          Disponible
-                        </span>
-                      ) : (
-                        <span className="rounded-full border border-white/15 bg-white/[0.06] px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white/55">
-                          Agotado
-                        </span>
-                      )}
+                      <span className="inline-flex items-center gap-1 text-[10px] font-medium text-white/55">
+                        <span
+                          className={`h-1.5 w-1.5 rounded-full ${
+                            item.inStock ? 'bg-green-500' : 'bg-zinc-500'
+                          }`}
+                        />
+                        {item.inStock ? 'Disponible' : 'Agotado'}
+                      </span>
                     </div>
                   </div>
 
-                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.06] text-white/60 transition-all group-hover:border-white/25 group-hover:bg-white/15 group-hover:text-white">
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-white/40 transition-colors duration-150 group-hover:bg-white/10 group-hover:text-white">
                     <ChevronRightSmall />
                   </div>
                 </button>
@@ -199,16 +198,21 @@ export default function EcometriResults({ commerceId, searchQuery }: EcometriRes
             {hasMore && (
               <div
                 ref={sentinelRef}
-                className="flex items-center justify-center py-2 text-[11px] font-semibold text-white/45"
+                className="flex items-center justify-center py-2 text-[11px] font-medium text-white/40"
               >
-                {isLoadingMore ? 'Cargando mas productos...' : 'Desplaza para ver mas'}
+                {isLoadingMore ? 'Cargando mas...' : 'Desplaza para ver mas'}
               </div>
+            )}
+
+            {items.length > 3 && (
+              <div className="sticky bottom-0 h-5 bg-gradient-to-t from-zinc-900/90 to-transparent pointer-events-none -mt-5" />
             )}
           </div>
         )}
       </div>
 
       <ProductQuickView
+        commerceId={commerceId}
         product={selectedProduct}
         onClose={() => setSelectedProduct(null)}
       />
