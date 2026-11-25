@@ -9,6 +9,7 @@ export interface EcometriConfig {
   storeId: string;            // UUID de tienda Ecometri (solo servidor)
   storeBaseUrl: string;       // https://{host}/{telefono}
   allowedImageHost: string;   // d1b50uin55dq3m.cloudfront.net
+  visualSearchEnabled?: boolean;
   cartEnabled?: boolean;      // opcional, false/ausente en Fases 1-2
   advisorLines?: EcometriAdvisorLine[];
 }
@@ -18,6 +19,7 @@ export interface EcometriConfig {
  */
 export interface EcometriClientConfig {
   enabled: boolean;
+  visualSearchEnabled: boolean;
   cartEnabled: boolean;
   advisorLines: EcometriAdvisorLine[];
 }
@@ -45,4 +47,29 @@ export interface EcometriSearchResponse {
   total: number;
   page: number;
   hasMore: boolean;
+}
+
+export interface VisualAnalysis {
+  label: string;
+  exactTerms: string[];
+  functionalTerms: string[];
+  broadRoots: string[];
+}
+
+export interface VisualSearchRequest {
+  commerceId: string;
+  imageBase64: string;
+  mimeType: 'image/jpeg';
+}
+
+export type VisualSearchDegraded = 'none' | 'rerank_skipped' | 'paused';
+
+export interface VisualSearchResponse {
+  items: ProductDTO[];
+  detected: {
+    label: string;
+    chips: string[];
+  };
+  degraded: VisualSearchDegraded;
+  error?: string;
 }

@@ -3,10 +3,28 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
+import type { VisualSearchUiState } from './VisualSearchTrigger';
 
 const EcometriResults = dynamic(() => import('./EcometriResults'), {
   ssr: false,
 });
+
+const VisualSearchTrigger = dynamic(() => import('./VisualSearchTrigger'), {
+  ssr: false,
+});
+
+const VisualSearchPanel = dynamic(() => import('./VisualSearchPanel'), {
+  ssr: false,
+});
+
+const IDLE_VISUAL_STATE: VisualSearchUiState = {
+  status: 'idle',
+  previewDataUrl: null,
+  items: [],
+  detectedLabel: '',
+  chips: [],
+  degraded: 'none',
+};
 
 /* ─── Icons ──────────────────────────────────────────────────────────── */
 const WhatsappIcon = ({ size = 20 }: { size?: number }) => (
@@ -99,6 +117,8 @@ export default function ClientPage({ commerceId, data, themeHex, RENDER_API = ''
   const [searchQuery, setSearchQuery] = useState('');
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [activeContactTab, setActiveContactTab] = useState<string>('all');
+  const [visualState, setVisualState] = useState<VisualSearchUiState>(IDLE_VISUAL_STATE);
+  const visualSearchEnabled = Boolean(data?.ecometri?.enabled && data?.ecometri?.visualSearchEnabled);
 
   if (promoJid && (!Array.isArray(promos) || promos.length === 0)) {
     promos = [promoJid];
@@ -223,7 +243,10 @@ export default function ClientPage({ commerceId, data, themeHex, RENDER_API = ''
           <input
             type="text"
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              if (visualState.status !== 'idle') setVisualState(IDLE_VISUAL_STATE);
+            }}
             placeholder={
               data?.ecometri?.enabled
                 ? 'Buscar producto, asesor o canal...'
@@ -234,22 +257,48 @@ export default function ClientPage({ commerceId, data, themeHex, RENDER_API = ''
                 ? 'Buscar producto, asesor o canal'
                 : 'Buscar canal, asesor o enlace'
             }
-            className="w-full bg-zinc-900/85 border border-white/10 focus:border-white/25 focus:bg-zinc-900 rounded-2xl py-3 pl-10 pr-10 text-sm text-white placeholder-white/40 outline-none transition-colors duration-150 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
+            className={`w-full bg-zinc-900/85 border border-white/10 focus:border-white/25 focus:bg-zinc-900 rounded-2xl py-3 pl-10 text-sm text-white placeholder-white/40 outline-none transition-colors duration-150 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] ${
+              visualSearchEnabled ? (searchQuery ? 'pr-20' : 'pr-12') : 'pr-10'
+            }`}
           />
-          {searchQuery && (
-            <button
-              type="button"
-              onClick={() => setSearchQuery('')}
-              aria-label="Limpiar busqueda"
-              className="absolute inset-y-0 right-2.5 my-auto flex h-7 w-7 items-center justify-center rounded-full text-white/45 hover:bg-white/10 hover:text-white transition-colors duration-150"
-            >
-              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
-              </svg>
-            </button>
-          )}
+          <div className="absolute inset-y-0 right-2 flex items-center gap-1">
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                aria-label="Limpiar busqueda"
+                className="flex h-7 w-7 items-center justify-center rounded-full text-white/45 hover:bg-white/10 hover:text-white transition-colors duration-150"
+              >
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            )}
+            {visualSearchEnabled && (
+              <VisualSearchTrigger
+                commerceId={commerceId}
+                onStateChange={(next) => {
+                  setSearchQuery('');
+                  setVisualState(next);
+                }}
+              />
+            )}
+          </div>
         </div>
+
+        {/* ── VISUAL SEARCH PANEL (opt-in per commerce) ── */}
+        {visualSearchEnabled && visualState.status !== 'idle' && (
+          <VisualSearchPanel
+            commerceId={commerceId}
+            state={visualState}
+            onSelectChip={(chip) => {
+              setVisualState(IDLE_VISUAL_STATE);
+              setSearchQuery(chip);
+            }}
+            onClear={() => setVisualState(IDLE_VISUAL_STATE)}
+          />
+        )}
 
         {/* ── ECOMETRI LIVE CATALOG SEARCH (opt-in per commerce) ── */}
         {data?.ecometri?.enabled && (

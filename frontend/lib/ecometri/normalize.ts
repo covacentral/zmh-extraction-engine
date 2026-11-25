@@ -33,6 +33,7 @@ export function toClientEcometriConfig(
   if (!cfg || cfg.enabled !== true) return null;
   return {
     enabled: true,
+    visualSearchEnabled: cfg.visualSearchEnabled === true,
     cartEnabled: cfg.cartEnabled === true,
     advisorLines: Array.isArray(cfg.advisorLines) ? cfg.advisorLines : [],
   };
