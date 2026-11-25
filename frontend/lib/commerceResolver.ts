@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import { db } from './firebaseAdmin';
 
 export interface ResolvedCommerce {
@@ -8,9 +9,10 @@ export interface ResolvedCommerce {
 
 /**
  * Resolves a commerce either by its primary document ID or by any of its configured aliases / URL masks.
+ * Deduplicated per-request via React cache() so layout metadata and page share a single Firestore read.
  * Example: 'cc-bodega-mayorista', 'ccbm', 'bodega' -> all resolve to 'cc-bodega-mayorista'
  */
-export async function resolveCommerce(slugOrAlias: string): Promise<ResolvedCommerce | null> {
+export const resolveCommerce = cache(async (slugOrAlias: string): Promise<ResolvedCommerce | null> => {
   if (!db || !slugOrAlias || typeof slugOrAlias !== 'string') return null;
   const clean = slugOrAlias.toLowerCase().trim().replace(/^\/+/, '');
 
@@ -48,4 +50,4 @@ export async function resolveCommerce(slugOrAlias: string): Promise<ResolvedComm
   }
 
   return null;
-}
+});
