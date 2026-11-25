@@ -1,10 +1,18 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { formatCop } from '../../lib/ecometri/normalize';
 import type { ProductDTO } from '../../lib/ecometri/types';
 import ProductQuickView from './ProductQuickView';
 import type { VisualSearchUiState } from './VisualSearchTrigger';
+
+function formatCountdown(seconds: number): string {
+  const s = Math.max(0, Math.floor(seconds));
+  const mins = Math.floor(s / 60);
+  const rem = s % 60;
+  if (mins > 0) return `${mins} min ${rem} s`;
+  return `${rem} s`;
+}
 
 interface VisualSearchPanelProps {
   commerceId: string;
@@ -53,6 +61,28 @@ export default function VisualSearchPanel({
 }: VisualSearchPanelProps) {
   const [selectedProduct, setSelectedProduct] = useState<ProductDTO | null>(null);
   const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
+  const [secondsLeft, setSecondsLeft] = useState<number>(0);
+
+  useEffect(() => {
+    const quota = state.quota;
+    if (!quota || !quota.resetAt) {
+      setSecondsLeft(0);
+      return;
+    }
+
+    const compute = () => Math.max(0, Math.ceil((quota.resetAt - Date.now()) / 1000));
+    setSecondsLeft(compute());
+
+    const interval = setInterval(() => {
+      const next = compute();
+      setSecondsLeft(next);
+      if (next <= 0) {
+        clearInterval(interval);
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [state.quota]);
 
   if (state.status === 'idle') return null;
 
@@ -199,6 +229,19 @@ export default function VisualSearchPanel({
                 </button>
               );
             })}
+          </div>
+        )}
+
+        {state.quota && (
+          <div className="flex items-center justify-between gap-2 border-t border-white/[0.06] pt-2 px-1 text-[10px] font-medium text-white/45">
+            <span>
+              {secondsLeft > 0
+                ? `Intentos en este dispositivo: ${state.quota.remaining} de ${state.quota.limit}`
+                : `Intentos restablecidos: ${state.quota.limit} de ${state.quota.limit}`}
+            </span>
+            {secondsLeft > 0 && (
+              <span>Se restablece en {formatCountdown(secondsLeft)}</span>
+            )}
           </div>
         )}
       </div>

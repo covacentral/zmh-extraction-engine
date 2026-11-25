@@ -2,7 +2,12 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { compressImageToJpegBase64 } from '../../lib/ecometri/compressImage';
-import type { ProductDTO, VisualSearchDegraded, VisualSearchResponse } from '../../lib/ecometri/types';
+import type {
+  ProductDTO,
+  VisualSearchDegraded,
+  VisualSearchQuota,
+  VisualSearchResponse,
+} from '../../lib/ecometri/types';
 
 export interface VisualSearchUiState {
   status: 'idle' | 'identifying' | 'comparing' | 'ok' | 'error';
@@ -11,7 +16,28 @@ export interface VisualSearchUiState {
   detectedLabel: string;
   chips: string[];
   degraded: VisualSearchDegraded;
+  quota?: VisualSearchQuota;
   error?: string;
+}
+
+const DEVICE_ID_STORAGE_KEY = 'zmh:vsearch:did';
+
+function getOrCreateDeviceId(): string {
+  if (typeof window === 'undefined') return '';
+  try {
+    const existing = window.localStorage.getItem(DEVICE_ID_STORAGE_KEY);
+    if (existing && /^[a-zA-Z0-9_-]{8,64}$/.test(existing)) {
+      return existing;
+    }
+    const generated =
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID().replace(/-/g, '')
+        : `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 12)}`;
+    window.localStorage.setItem(DEVICE_ID_STORAGE_KEY, generated);
+    return generated;
+  } catch {
+    return '';
+  }
 }
 
 interface VisualSearchTriggerProps {
@@ -110,10 +136,16 @@ export default function VisualSearchTrigger({
         }
       }, 1500);
 
+      const deviceId = getOrCreateDeviceId();
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (deviceId) {
+        headers['X-Device-Id'] = deviceId;
+      }
+
       const resp = await fetch('/api/ecometri-visual-search', {
         method: 'POST',
         signal: controller.signal,
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           commerceId,
           imageBase64: base64,
@@ -137,6 +169,7 @@ export default function VisualSearchTrigger({
           detectedLabel: '',
           chips: [],
           degraded: payload?.degraded || 'paused',
+          quota: payload?.quota,
           error:
             payload?.error ||
             'Buscador por foto en pausa temporal, usa la busqueda por texto.',
@@ -151,6 +184,7 @@ export default function VisualSearchTrigger({
         detectedLabel: payload?.detected?.label || '',
         chips: Array.isArray(payload?.detected?.chips) ? payload.detected.chips : [],
         degraded: payload?.degraded || 'none',
+        quota: payload?.quota,
       });
     } catch (err: unknown) {
       if (stageTimer) clearTimeout(stageTimer);

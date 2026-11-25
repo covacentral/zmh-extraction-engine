@@ -51,6 +51,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     contentLengthHeader,
     rawBody,
     clientIp: getClientIp(request),
+    deviceId: request.headers.get('x-device-id'),
   });
 
   return NextResponse.json(result.body, {

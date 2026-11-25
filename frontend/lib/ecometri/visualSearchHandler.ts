@@ -39,11 +39,12 @@ export interface VisualSearchHandlerInput {
   contentLengthHeader?: string | null;
   rawBody: unknown;
   clientIp?: string;
+  deviceId?: string | null;
 }
 
 export interface VisualSearchHandlerResult {
   status: number;
-  body: VisualSearchResponse | { error: string };
+  body: VisualSearchResponse | { error: string; quota?: VisualSearchResponse['quota'] };
   headers?: Record<string, string>;
 }
 
@@ -236,15 +237,36 @@ export function createVisualSearchHandler({
       };
     }
 
-    // 5. Rate limit + Circuit Breaker
-    const limitCheck = rateLimiter.consume(input.clientIp || 'unknown');
+    // 5. Rate limit (per-device + shared Wi-Fi ceiling) + Circuit Breaker
+    const limitCheck = rateLimiter.consume(input.clientIp || 'unknown', input.deviceId);
+    const quota = {
+      remaining: limitCheck.remaining,
+      limit: limitCheck.limit,
+      resetInSec: limitCheck.resetInSec,
+      resetAt: limitCheck.resetAt,
+    };
+
     if (!limitCheck.allowed) {
+      const mins = Math.floor(limitCheck.retryAfterSec / 60);
+      const secs = limitCheck.retryAfterSec % 60;
+      const waitText = mins > 0 ? `${mins} min ${secs} s` : `${secs} s`;
       return {
         status: 429,
         body: {
-          error: 'Has alcanzado el limite temporal de busquedas por foto. Intenta en unos minutos o busca por texto.',
+          items: [],
+          detected: { label: '', chips: [] },
+          degraded: 'paused',
+          quota,
+          error:
+            limitCheck.scope === 'device'
+              ? `Limite de este dispositivo alcanzado (0 de ${limitCheck.limit}). Se restablece en ${waitText}.`
+              : `Limite temporal de la red alcanzado. Se restablece en ${waitText}.`,
         },
-        headers: { 'Retry-After': String(limitCheck.retryAfterSec) },
+        headers: {
+          'Retry-After': String(limitCheck.retryAfterSec),
+          'X-RateLimit-Limit': String(limitCheck.limit),
+          'X-RateLimit-Remaining': '0',
+        },
       };
     }
 
@@ -362,6 +384,7 @@ export function createVisualSearchHandler({
             items: [],
             detected: { label: analysis.label, chips },
             degraded: 'none',
+            quota,
           },
         };
       }
@@ -376,6 +399,7 @@ export function createVisualSearchHandler({
             items: candidates.slice(0, MAX_RESULT_ITEMS),
             detected: { label: analysis.label, chips },
             degraded: 'rerank_skipped',
+            quota,
           },
         };
       }
@@ -405,6 +429,7 @@ export function createVisualSearchHandler({
               items: candidates.slice(0, MAX_RESULT_ITEMS),
               detected: { label: analysis.label, chips },
               degraded: 'rerank_skipped',
+              quota,
             },
           };
         }
@@ -415,6 +440,7 @@ export function createVisualSearchHandler({
             items: applyRerank(candidates, order),
             detected: { label: analysis.label, chips },
             degraded: 'none',
+            quota,
           },
         };
       } catch (err: unknown) {
@@ -427,6 +453,7 @@ export function createVisualSearchHandler({
             items: candidates.slice(0, MAX_RESULT_ITEMS),
             detected: { label: analysis.label, chips },
             degraded: 'rerank_skipped',
+            quota,
           },
         };
       } finally {

@@ -148,7 +148,7 @@ test('handler rejects oversized payload (413) and non-JPEG mime/magic bytes (400
   assert.equal(badMagic.status, 400);
 });
 
-test('rate limiter allows 3 requests per 5 min per IP and returns 429 on the 4th', async () => {
+test('rate limiter scopes quota per device (5 per 5 min) so devices on the same Wi-Fi IP do not block each other', async () => {
   let now = 1_000_000;
   const limiter = createVisualRateLimiter({ nowFn: () => now });
 
@@ -162,7 +162,7 @@ test('rate limiter allows 3 requests per 5 min per IP and returns 429 on the 4th
       };
     },
     async rerank() {
-      return null;
+      return [];
     },
   };
 
@@ -178,28 +178,46 @@ test('rate limiter allows 3 requests per 5 min per IP and returns 429 on the 4th
     fetchFn: async () => new Response(JSON.stringify([]), { status: 200 }),
   });
 
-  for (let i = 0; i < 3; i++) {
+  // Device A uses all 5 attempts on shared Wi-Fi IP 9.9.9.9
+  for (let i = 0; i < 5; i++) {
     const ok = await handler({
       rawBody: { commerceId: 'bmm', imageBase64: VALID_JPEG_B64, mimeType: 'image/jpeg' },
       clientIp: '9.9.9.9',
+      deviceId: 'device_alpha_1234',
     });
     assert.equal(ok.status, 200);
+    assert.equal((ok.body as any).quota.remaining, 4 - i);
+    assert.equal((ok.body as any).quota.limit, 5);
   }
 
-  const fourth = await handler({
+  // 6th attempt for Device A -> 429 with quota & Retry-After
+  const sixth = await handler({
     rawBody: { commerceId: 'bmm', imageBase64: VALID_JPEG_B64, mimeType: 'image/jpeg' },
     clientIp: '9.9.9.9',
+    deviceId: 'device_alpha_1234',
   });
-  assert.equal(fourth.status, 429);
-  assert.ok(fourth.headers?.['Retry-After']);
+  assert.equal(sixth.status, 429);
+  assert.ok(sixth.headers?.['Retry-After']);
+  assert.equal((sixth.body as any).quota.remaining, 0);
 
-  // Advance clock past 5 minutes -> allowed again
+  // Device B on the EXACT SAME Wi-Fi IP 9.9.9.9 is NOT blocked!
+  const devB = await handler({
+    rawBody: { commerceId: 'bmm', imageBase64: VALID_JPEG_B64, mimeType: 'image/jpeg' },
+    clientIp: '9.9.9.9',
+    deviceId: 'device_beta_5678',
+  });
+  assert.equal(devB.status, 200);
+  assert.equal((devB.body as any).quota.remaining, 4);
+
+  // Advance clock past 5 minutes -> Device A is allowed again
   now += 5 * 60_000 + 1000;
   const afterWindow = await handler({
     rawBody: { commerceId: 'bmm', imageBase64: VALID_JPEG_B64, mimeType: 'image/jpeg' },
     clientIp: '9.9.9.9',
+    deviceId: 'device_alpha_1234',
   });
   assert.equal(afterWindow.status, 200);
+  assert.equal((afterWindow.body as any).quota.remaining, 4);
 });
 
 test('Gemini 429 opens circuit breaker and next request returns 503 without calling Gemini', async () => {

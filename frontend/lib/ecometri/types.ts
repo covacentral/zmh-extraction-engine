@@ -64,6 +64,13 @@ export interface VisualSearchRequest {
 
 export type VisualSearchDegraded = 'none' | 'rerank_skipped' | 'paused';
 
+export interface VisualSearchQuota {
+  remaining: number;
+  limit: number;
+  resetInSec: number;
+  resetAt: number; // unix epoch ms
+}
+
 export interface VisualSearchResponse {
   items: ProductDTO[];
   detected: {
@@ -71,5 +78,6 @@ export interface VisualSearchResponse {
     chips: string[];
   };
   degraded: VisualSearchDegraded;
+  quota?: VisualSearchQuota;
   error?: string;
 }

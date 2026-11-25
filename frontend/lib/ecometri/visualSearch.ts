@@ -319,53 +319,126 @@ export function validateJpegBase64(imageBase64: unknown): JpegValidationResult {
 
 export interface VisualRateLimitResult {
   allowed: boolean;
+  remaining: number;
+  limit: number;
+  resetInSec: number;
+  resetAt: number;
   retryAfterSec: number;
+  scope: 'device' | 'ip' | 'instance';
 }
 
 export interface VisualRateLimiter {
-  consume(ip: string): VisualRateLimitResult;
+  consume(ip: string, deviceId?: string | null): VisualRateLimitResult;
+}
+
+const SAFE_DEVICE_ID_RE = /^[a-zA-Z0-9_-]{8,64}$/;
+
+export function sanitizeDeviceId(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
+  const trimmed = raw.trim();
+  return SAFE_DEVICE_ID_RE.test(trimmed) ? trimmed : null;
 }
 
 export function createVisualRateLimiter(options?: {
+  maxPerDevice?: number;
+  deviceWindowMs?: number;
   maxPerIp?: number;
   ipWindowMs?: number;
   maxPerInstance?: number;
   instanceWindowMs?: number;
   nowFn?: () => number;
 }): VisualRateLimiter {
-  const maxPerIp = options?.maxPerIp ?? 3;
+  const maxPerDevice = options?.maxPerDevice ?? 5;
+  const deviceWindowMs = options?.deviceWindowMs ?? 5 * 60_000;
+  const maxPerIp = options?.maxPerIp ?? 30;
   const ipWindowMs = options?.ipWindowMs ?? 5 * 60_000;
-  const maxPerInstance = options?.maxPerInstance ?? 30;
+  const maxPerInstance = options?.maxPerInstance ?? 60;
   const instanceWindowMs = options?.instanceWindowMs ?? 60_000;
   const nowFn = options?.nowFn ?? (() => Date.now());
 
+  const deviceTimestamps = new Map<string, number[]>();
   const ipTimestamps = new Map<string, number[]>();
   let instanceTimestamps: number[] = [];
 
   return {
-    consume(ip: string): VisualRateLimitResult {
+    consume(ip: string, deviceId?: string | null): VisualRateLimitResult {
       const now = nowFn();
 
       instanceTimestamps = instanceTimestamps.filter((t) => now - t < instanceWindowMs);
       if (instanceTimestamps.length >= maxPerInstance) {
         const oldest = instanceTimestamps[0];
-        const retryAfterSec = Math.max(1, Math.ceil((instanceWindowMs - (now - oldest)) / 1000));
-        return { allowed: false, retryAfterSec };
+        const resetAt = oldest + instanceWindowMs;
+        const retryAfterSec = Math.max(1, Math.ceil((resetAt - now) / 1000));
+        return {
+          allowed: false,
+          remaining: 0,
+          limit: maxPerDevice,
+          resetInSec: retryAfterSec,
+          resetAt,
+          retryAfterSec,
+          scope: 'instance',
+        };
       }
 
-      const key = (ip || 'unknown').trim() || 'unknown';
-      const recent = (ipTimestamps.get(key) || []).filter((t) => now - t < ipWindowMs);
-      if (recent.length >= maxPerIp) {
-        ipTimestamps.set(key, recent);
-        const oldest = recent[0];
-        const retryAfterSec = Math.max(1, Math.ceil((ipWindowMs - (now - oldest)) / 1000));
-        return { allowed: false, retryAfterSec };
+      const ipKey = (ip || 'unknown').trim() || 'unknown';
+      const recentIp = (ipTimestamps.get(ipKey) || []).filter((t) => now - t < ipWindowMs);
+      if (recentIp.length >= maxPerIp) {
+        ipTimestamps.set(ipKey, recentIp);
+        const oldest = recentIp[0];
+        const resetAt = oldest + ipWindowMs;
+        const retryAfterSec = Math.max(1, Math.ceil((resetAt - now) / 1000));
+        return {
+          allowed: false,
+          remaining: 0,
+          limit: maxPerIp,
+          resetInSec: retryAfterSec,
+          resetAt,
+          retryAfterSec,
+          scope: 'ip',
+        };
       }
 
-      recent.push(now);
-      ipTimestamps.set(key, recent);
+      const cleanDevice = sanitizeDeviceId(deviceId);
+      const deviceKey = cleanDevice ? `dev:${cleanDevice}` : `ip:${ipKey}`;
+      const recentDev = (deviceTimestamps.get(deviceKey) || []).filter(
+        (t) => now - t < deviceWindowMs
+      );
+
+      if (recentDev.length >= maxPerDevice) {
+        deviceTimestamps.set(deviceKey, recentDev);
+        const oldest = recentDev[0];
+        const resetAt = oldest + deviceWindowMs;
+        const retryAfterSec = Math.max(1, Math.ceil((resetAt - now) / 1000));
+        return {
+          allowed: false,
+          remaining: 0,
+          limit: maxPerDevice,
+          resetInSec: retryAfterSec,
+          resetAt,
+          retryAfterSec,
+          scope: 'device',
+        };
+      }
+
+      recentDev.push(now);
+      deviceTimestamps.set(deviceKey, recentDev);
+      recentIp.push(now);
+      ipTimestamps.set(ipKey, recentIp);
       instanceTimestamps.push(now);
-      return { allowed: true, retryAfterSec: 0 };
+
+      const oldestDev = recentDev[0];
+      const resetAt = oldestDev + deviceWindowMs;
+      const resetInSec = Math.max(1, Math.ceil((resetAt - now) / 1000));
+
+      return {
+        allowed: true,
+        remaining: Math.max(0, maxPerDevice - recentDev.length),
+        limit: maxPerDevice,
+        resetInSec,
+        resetAt,
+        retryAfterSec: 0,
+        scope: 'device',
+      };
     },
   };
 }
