@@ -31,8 +31,17 @@ export interface GeminiClient {
   ): Promise<string[] | null>;
 }
 
-const GEMINI_MODEL = 'gemini-2.5-flash-lite';
-const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
+const DEFAULT_MODEL_CHAIN = [
+  'gemini-2.5-flash-lite',
+  'gemini-2.5-flash',
+  'gemini-2.0-flash',
+];
+
+function buildGeminiEndpoint(model: string): string {
+  return `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
+    model
+  )}:generateContent`;
+}
 
 const ANALYZE_PROMPT = [
   'Eres un experto vendedor de una bodega mayorista en Colombia.',
@@ -71,44 +80,76 @@ function parseJsonSafe(rawText: string): unknown {
 
 export function createHttpGeminiClient(
   apiKey: string,
-  fetchFn: typeof fetch = fetch
+  fetchFn: typeof fetch = fetch,
+  preferredModel?: string
 ): GeminiClient {
+  const models = preferredModel?.trim()
+    ? [preferredModel.trim(), ...DEFAULT_MODEL_CHAIN.filter((m) => m !== preferredModel.trim())]
+    : DEFAULT_MODEL_CHAIN;
+
   const callGemini = async (
     parts: Array<Record<string, unknown>>,
     signal: AbortSignal
   ): Promise<unknown> => {
-    const resp = await fetchFn(`${GEMINI_ENDPOINT}?key=${encodeURIComponent(apiKey)}`, {
-      method: 'POST',
-      signal,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ role: 'user', parts }],
-        generationConfig: {
-          temperature: 0.1,
-          maxOutputTokens: 260,
-          responseMimeType: 'application/json',
-        },
-      }),
-    });
+    let lastError: Error | null = null;
 
-    if (resp.status === 429) {
-      throw new GeminiQuotaError();
-    }
-    if (!resp.ok) {
-      throw new Error(`GEMINI_HTTP_${resp.status}`);
+    for (const model of models) {
+      const generationConfig: Record<string, unknown> = {
+        temperature: 0.1,
+        maxOutputTokens: 400,
+        responseMimeType: 'application/json',
+      };
+      if (model.startsWith('gemini-2.5-')) {
+        generationConfig.thinkingConfig = { thinkingBudget: 0 };
+      }
+
+      const resp = await fetchFn(
+        `${buildGeminiEndpoint(model)}?key=${encodeURIComponent(apiKey)}`,
+        {
+          method: 'POST',
+          signal,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ role: 'user', parts }],
+            generationConfig,
+          }),
+        }
+      );
+
+      if (resp.status === 429) {
+        throw new GeminiQuotaError();
+      }
+      if (resp.status === 404) {
+        lastError = new Error(`GEMINI_HTTP_404_${model}`);
+        continue;
+      }
+      if (!resp.ok) {
+        let detailCode = `GEMINI_HTTP_${resp.status}`;
+        try {
+          const errJson = (await resp.json()) as { error?: { status?: string; message?: string } };
+          if (errJson?.error?.status) {
+            detailCode = `GEMINI_HTTP_${resp.status}_${errJson.error.status}`;
+          }
+        } catch {
+          // Ignore non-JSON error body
+        }
+        throw new Error(detailCode);
+      }
+
+      const payload = await resp.json();
+      const text = extractTextFromGeminiPayload(payload);
+      if (!text) {
+        throw new GeminiInvalidOutputError();
+      }
+
+      try {
+        return parseJsonSafe(text);
+      } catch {
+        throw new GeminiInvalidOutputError();
+      }
     }
 
-    const payload = await resp.json();
-    const text = extractTextFromGeminiPayload(payload);
-    if (!text) {
-      throw new GeminiInvalidOutputError();
-    }
-
-    try {
-      return parseJsonSafe(text);
-    } catch {
-      throw new GeminiInvalidOutputError();
-    }
+    throw lastError || new Error('GEMINI_NO_AVAILABLE_MODEL');
   };
 
   return {

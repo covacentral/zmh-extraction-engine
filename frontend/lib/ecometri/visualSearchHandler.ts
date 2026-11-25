@@ -28,7 +28,7 @@ import {
 } from './visualSearch';
 
 export const TOTAL_BUDGET_MS = 9000;
-export const STAGE1_TIMEOUT_MS = 4000;
+export const STAGE1_TIMEOUT_MS = 5000;
 export const ECOMETRI_QUERY_TIMEOUT_MS = 3000;
 export const STAGE2_TIMEOUT_MS = 3500;
 export const MAX_RERANK_CANDIDATES = 6;
@@ -302,8 +302,16 @@ export function createVisualSearchHandler({
             return {
               status: 504,
               body: { error: 'Tiempo de espera agotado al analizar la imagen.' },
+              headers: { 'X-Visual-Reason': 'ROOT_TIMEOUT' },
             };
           }
+          const safeReason =
+            err instanceof Error && /^GEMINI_[A-Z0-9_.-]+$/i.test(err.message)
+              ? err.message
+              : err instanceof Error && err.name === 'AbortError'
+                ? 'STAGE1_TIMEOUT'
+                : 'STAGE1_UPSTREAM_ERROR';
+          console.warn('[ecometri-visual] stage1_error', { reason: safeReason });
           return {
             status: 503,
             body: {
@@ -312,6 +320,7 @@ export function createVisualSearchHandler({
               degraded: 'paused',
               error: 'Buscador por foto no disponible temporalmente, usa la busqueda por texto.',
             },
+            headers: { 'X-Visual-Reason': safeReason },
           };
         }
       }
