@@ -27,11 +27,12 @@ import {
   type VisualRateLimiter,
 } from './visualSearch';
 
-export const TOTAL_BUDGET_MS = 9000;
+export const TOTAL_BUDGET_MS = 12000;
 export const STAGE1_TIMEOUT_MS = 5000;
-export const ECOMETRI_QUERY_TIMEOUT_MS = 3000;
-export const STAGE2_TIMEOUT_MS = 3500;
-export const MAX_RERANK_CANDIDATES = 6;
+export const ECOMETRI_QUERY_TIMEOUT_MS = 2500;
+export const THUMBNAIL_TIMEOUT_MS = 1500;
+export const STAGE2_TIMEOUT_MS = 4500;
+export const MAX_RERANK_CANDIDATES = 8;
 export const MAX_THUMBNAIL_BYTES = 200 * 1024;
 
 export interface VisualSearchHandlerInput {
@@ -99,46 +100,48 @@ async function fetchCandidateThumbnails(
   parentSignal: AbortSignal,
   fetchFn: typeof fetch
 ): Promise<RerankCandidateImage[]> {
-  const top = candidates
-    .filter((c) => Boolean(c.imageUrl))
-    .slice(0, MAX_RERANK_CANDIDATES);
+  const top = candidates.slice(0, MAX_RERANK_CANDIDATES);
+  const thumbScope = createScopedSignal(parentSignal, THUMBNAIL_TIMEOUT_MS);
 
-  const settled = await Promise.all(
-    top.map(async (item): Promise<RerankCandidateImage | null> => {
-      const url = toSmallThumbnailUrl(item.imageUrl as string, allowedHost);
-      if (!url) return null;
-      try {
-        const resp = await fetchFn(url, {
-          method: 'GET',
-          signal: parentSignal,
-          redirect: 'error',
-        });
-        if (!resp.ok) return null;
-        const cl = Number(resp.headers.get('content-length') || '0');
-        if (Number.isFinite(cl) && cl > MAX_THUMBNAIL_BYTES) return null;
+  try {
+    return await Promise.all(
+      top.map(async (item): Promise<RerankCandidateImage> => {
+        const base: RerankCandidateImage = { id: item.id, title: item.title };
+        if (!item.imageUrl) return base;
+        const url = toSmallThumbnailUrl(item.imageUrl, allowedHost);
+        if (!url) return base;
+        try {
+          const resp = await fetchFn(url, {
+            method: 'GET',
+            signal: thumbScope.signal,
+            redirect: 'error',
+          });
+          if (!resp.ok) return base;
+          const cl = Number(resp.headers.get('content-length') || '0');
+          if (Number.isFinite(cl) && cl > MAX_THUMBNAIL_BYTES) return base;
 
-        const arrayBuf = await resp.arrayBuffer();
-        if (arrayBuf.byteLength === 0 || arrayBuf.byteLength > MAX_THUMBNAIL_BYTES) {
-          return null;
+          const arrayBuf = await resp.arrayBuffer();
+          if (arrayBuf.byteLength === 0 || arrayBuf.byteLength > MAX_THUMBNAIL_BYTES) {
+            return base;
+          }
+          const mimeType = (resp.headers.get('content-type') || 'image/jpeg')
+            .split(';')[0]
+            .trim();
+          if (!mimeType.startsWith('image/')) return base;
+
+          return {
+            ...base,
+            imageBase64: Buffer.from(arrayBuf).toString('base64'),
+            mimeType,
+          };
+        } catch {
+          return base;
         }
-        const mimeType = (resp.headers.get('content-type') || 'image/jpeg')
-          .split(';')[0]
-          .trim();
-        if (!mimeType.startsWith('image/')) return null;
-
-        return {
-          id: item.id,
-          title: item.title,
-          imageBase64: Buffer.from(arrayBuf).toString('base64'),
-          mimeType,
-        };
-      } catch {
-        return null;
-      }
-    })
-  );
-
-  return settled.filter((x): x is RerankCandidateImage => x !== null);
+      })
+    );
+  } finally {
+    thumbScope.cleanup();
+  }
 }
 
 async function runEcometriQueries(
@@ -339,28 +342,18 @@ export function createVisualSearchHandler({
 
       const chips = buildDetectedChips(analysis);
 
-      // Recursive Ecometri Search (Round 1 -> optional Round 2 if < 4 candidates)
+      // Recursive Ecometri Search: run Round 1 + Round 2 (roots/stems) in parallel
+      // so spelling mistakes or store typos (e.g. "Tensión metro") are always caught
       const round1Queries = planQueries(analysis, 1);
-      const round1Results = await runEcometriQueries(
+      const round2Queries = planQueries(analysis, 2);
+      const allQueries = [...round1Queries, ...round2Queries].slice(0, 5);
+      const queryResults = await runEcometriQueries(
         cfg,
-        round1Queries,
+        allQueries,
         rootController.signal,
         fetchFn
       );
-      let candidates = mergeCandidates(round1Results);
-
-      if (candidates.length < 4 && !rootController.signal.aborted) {
-        const round2Queries = planQueries(analysis, 2);
-        if (round2Queries.length > 0) {
-          const round2Results = await runEcometriQueries(
-            cfg,
-            round2Queries,
-            rootController.signal,
-            fetchFn
-          );
-          candidates = mergeCandidates([candidates, ...round2Results]);
-        }
-      }
+      const candidates = mergeCandidates(queryResults);
 
       if (candidates.length === 0) {
         return {
@@ -373,19 +366,8 @@ export function createVisualSearchHandler({
         };
       }
 
-      // Skip Stage 2 if <= 2 candidates (faster & saves 50% Gemini quota)
-      if (candidates.length <= 2) {
-        return {
-          status: 200,
-          body: {
-            items: candidates.slice(0, MAX_RESULT_ITEMS),
-            detected: { label: analysis.label, chips },
-            degraded: 'none',
-          },
-        };
-      }
-
-      // Stage 2: Optional Multimodal Visual Reranking
+      // Stage 2: Mandatory Semantic + Visual Verification (runs for >= 1 candidates
+      // so unrelated products like "Olla a presion" for a "Tensiometro" are strictly rejected)
       const remainingBeforeStage2 = totalBudgetMs - (nowFn() - startedAt);
       if (remainingBeforeStage2 < 1200 || rootController.signal.aborted) {
         return {
@@ -403,31 +385,20 @@ export function createVisualSearchHandler({
         Math.min(STAGE2_TIMEOUT_MS, remainingBeforeStage2)
       );
       try {
-        const thumbs = await fetchCandidateThumbnails(
+        const enrichedCandidates = await fetchCandidateThumbnails(
           candidates,
           cfg.allowedImageHost,
           stage2Scoped.signal,
           fetchFn
         );
 
-        if (thumbs.length < 2) {
-          return {
-            status: 200,
-            body: {
-              items: candidates.slice(0, MAX_RESULT_ITEMS),
-              detected: { label: analysis.label, chips },
-              degraded: 'rerank_skipped',
-            },
-          };
-        }
-
         const order = await geminiClient.rerank(
           imageBase64,
-          thumbs,
+          enrichedCandidates,
           stage2Scoped.signal
         );
 
-        if (!order) {
+        if (order === null) {
           return {
             status: 200,
             body: {

@@ -7,6 +7,70 @@ export const MAX_RESULT_ITEMS = 5;
 
 const CONTROL_CHARS_RE = /[\u0000-\u001F\u007F]/g;
 
+// Ambiguous modifiers that pull completely unrelated products in substring search
+const AMBIGUOUS_STANDALONE_WORDS = new Set([
+  'presion',
+  'digital',
+  'portatil',
+  'mini',
+  'grande',
+  'pequeno',
+  'negro',
+  'blanco',
+  'azul',
+  'rosa',
+  'rosado',
+  'rojo',
+  'verde',
+  'amarillo',
+  'morado',
+  'gris',
+  'dorado',
+  'plateado',
+  'usb',
+  'led',
+  'electrico',
+  'electrica',
+  'manual',
+  'recargable',
+  'inalambrico',
+  'inalambrica',
+  'set',
+  'kit',
+  'combo',
+  'juego',
+  'accesorio',
+  'accesorios',
+  'hogar',
+  'salud',
+  'belleza',
+  'cocina',
+  'profesional',
+  'nuevo',
+  'original',
+  'multiusos',
+]);
+
+function stripAccents(str: string): string {
+  return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+function isAmbiguousStandalone(term: string): boolean {
+  const norm = stripAccents(term.toLowerCase()).trim();
+  return AMBIGUOUS_STANDALONE_WORDS.has(norm);
+}
+
+function derivePrefixStem(term: string): string | null {
+  const firstWord = stripAccents(term.toLowerCase())
+    .trim()
+    .split(/\s+/)[0]
+    ?.replace(/[^a-z0-9]/g, '');
+  if (!firstWord || firstWord.length < 6) return null;
+  const stem = firstWord.slice(0, 5);
+  if (isAmbiguousStandalone(stem)) return null;
+  return stem;
+}
+
 function cleanTerm(raw: unknown): string | null {
   if (typeof raw !== 'string') return null;
   const cleaned = raw.replace(CONTROL_CHARS_RE, ' ').replace(/\s+/g, ' ').trim();
@@ -60,6 +124,8 @@ export function parseVisualAnalysis(raw: unknown): VisualAnalysis | null {
 
 /**
  * Plans search queries for Round 1 (max 3) or Round 2 (max 2).
+ * Filters out ambiguous standalone modifiers (e.g. "presion", "digital", "mini")
+ * and auto-derives a 5-char stem in Round 2 to survive minor spelling mistakes.
  */
 export function planQueries(analysis: VisualAnalysis, round: 1 | 2): string[] {
   const seen = new Set<string>();
@@ -67,8 +133,8 @@ export function planQueries(analysis: VisualAnalysis, round: 1 | 2): string[] {
     const out: string[] = [];
     for (const s of sources) {
       const cleaned = cleanTerm(s);
-      if (!cleaned) continue;
-      const key = cleaned.toLowerCase();
+      if (!cleaned || isAmbiguousStandalone(cleaned)) continue;
+      const key = stripAccents(cleaned.toLowerCase());
       if (seen.has(key)) continue;
       seen.add(key);
       out.push(cleaned);
@@ -81,10 +147,17 @@ export function planQueries(analysis: VisualAnalysis, round: 1 | 2): string[] {
     return pick([...analysis.exactTerms, ...analysis.functionalTerms], 3);
   }
 
-  // Round 2 excludes terms already used in Round 1
+  // Round 2 excludes terms already used in Round 1 and adds typo-resilient 5-char stems
   const round1 = pick([...analysis.exactTerms, ...analysis.functionalTerms], 3);
-  round1.forEach((q) => seen.add(q.toLowerCase()));
-  return pick([...analysis.broadRoots, ...analysis.functionalTerms], 2);
+  round1.forEach((q) => seen.add(stripAccents(q.toLowerCase())));
+
+  const derivedStems: string[] = [];
+  for (const t of analysis.exactTerms) {
+    const stem = derivePrefixStem(t);
+    if (stem) derivedStems.push(stem);
+  }
+
+  return pick([...analysis.broadRoots, ...derivedStems, ...analysis.functionalTerms], 3);
 }
 
 /**
@@ -139,6 +212,9 @@ export function mergeCandidates(rounds: ProductDTO[][]): ProductDTO[] {
 
 /**
  * Parses untrusted Gemini Stage 2 rerank output and discards any hallucinated IDs.
+ * IMPORTANT: An explicit valid empty array `{"orderedIds": []}` returns `[]`
+ * (meaning NONE of the candidates match the photographed product), whereas `null`
+ * indicates a malformed/unparseable response.
  */
 export function parseRerankResult(
   raw: unknown,
@@ -165,18 +241,23 @@ export function parseRerankResult(
     filtered.push(entry);
   }
 
-  return filtered.length > 0 ? filtered : null;
+  return filtered;
 }
 
 /**
  * Applies validated rerank order while preserving inStock-first priority.
+ * If `order` is `[]` (explicit semantic rejection of all candidates), returns `[]`.
+ * Only falls back to unranked candidates when `order === null` (technical failure).
  */
 export function applyRerank(
   candidates: ProductDTO[],
   order: string[] | null
 ): ProductDTO[] {
-  if (!order || order.length === 0) {
+  if (order === null) {
     return candidates.slice(0, MAX_RESULT_ITEMS);
+  }
+  if (order.length === 0) {
+    return [];
   }
 
   const byId = new Map<string, ProductDTO>();

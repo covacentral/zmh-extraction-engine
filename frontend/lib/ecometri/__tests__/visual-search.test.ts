@@ -297,6 +297,33 @@ test('Stage 2 rerank failure degrades cleanly to 200 rerank_skipped with Stage 1
   assert.equal(JSON.stringify(body).includes(SAMPLE_CFG.storeId), false);
 });
 
+test('planQueries blocks ambiguous modifiers (presion), derives typo-resilient 5-char stem (tensi), and empty rerank rejects unrelated items', () => {
+  const analysis = parseVisualAnalysis({
+    label: 'Tensiometro digital',
+    exactTerms: ['tensionetro', 'presion', 'digital'],
+    functionalTerms: [],
+    broadRoots: [],
+  });
+  assert.ok(analysis);
+
+  const r1 = planQueries(analysis, 1);
+  assert.equal(r1.includes('presion'), false);
+  assert.equal(r1.includes('digital'), false);
+  assert.deepEqual(r1, ['tensionetro']);
+
+  const r2 = planQueries(analysis, 2);
+  assert.equal(r2.includes('tensi'), true);
+
+  // Explicit empty orderedIds [] means Gemini rejected all unrelated candidates (e.g. Olla a presion)
+  const rejected = parseRerankResult({ orderedIds: [] }, ['olla-1', 'olla-2']);
+  assert.deepEqual(rejected, []);
+
+  const candidates: ProductDTO[] = [
+    { id: 'olla-1', slug: 'olla-1', title: 'Olla a presion', sku: null, priceCop: 95000, inStock: true, imageUrl: null, description: null, productUrl: 'https://x.com/olla-1/' },
+  ];
+  assert.deepEqual(applyRerank(candidates, rejected), []);
+});
+
 test('FASE_3 UI components contain zero emojis', () => {
   const EMOJI_RE = /\p{Extended_Pictographic}/u;
   const root = path.resolve(process.cwd());
