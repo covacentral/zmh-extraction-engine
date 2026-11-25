@@ -32,10 +32,8 @@ export interface GeminiClient {
 }
 
 const DEFAULT_MODEL_CHAIN = [
-  'gemini-flash-latest',
   'gemini-flash-lite-latest',
-  'gemini-3.5-flash-lite',
-  'gemini-3.1-flash-lite',
+  'gemini-flash-latest',
 ];
 
 const MODELS_LIST_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models';
