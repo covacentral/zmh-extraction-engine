@@ -36,7 +36,7 @@ import {
 
 // Strict 9.2s internal budget per binding ADR (safe inside serverless limits)
 export const TOTAL_BUDGET_MS = 9200;
-export const STAGE1_TIMEOUT_MS = 4200;
+export const STAGE1_TIMEOUT_MS = 6800;
 export const CATALOG_INDEX_TIMEOUT_MS = 2400;
 export const ECOMETRI_QUERY_TIMEOUT_MS = 2200;
 export const THUMBNAIL_TIMEOUT_MS = 1500;

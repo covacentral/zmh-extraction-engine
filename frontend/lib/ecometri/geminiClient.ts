@@ -151,7 +151,8 @@ export function createHttpGeminiClient(
     model: string,
     parts: Array<Record<string, unknown>>,
     responseSchema: Record<string, unknown>,
-    signal: AbortSignal
+    signal: AbortSignal,
+    disableThinking: boolean = true
   ): Promise<{
     retryNextModel: boolean;
     quotaLimited?: boolean;
@@ -164,6 +165,9 @@ export function createHttpGeminiClient(
       responseMimeType: 'application/json',
       responseSchema,
     };
+    if (disableThinking) {
+      generationConfig.thinkingConfig = { thinkingBudget: 0 };
+    }
 
     const resp = await fetchFn(
       `${buildGeminiEndpoint(model)}?key=${encodeURIComponent(apiKey)}`,
@@ -177,6 +181,11 @@ export function createHttpGeminiClient(
         }),
       }
     );
+
+    // If a model does not accept thinkingConfig (HTTP 400), retry once without it
+    if (resp.status === 400 && disableThinking && !signal.aborted) {
+      return invokeModel(model, parts, responseSchema, signal, false);
+    }
 
     if (resp.status === 429) {
       const ra = Number(resp.headers.get('retry-after') || '0');
