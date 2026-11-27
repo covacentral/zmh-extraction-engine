@@ -7,6 +7,7 @@ import {
 } from '../catalogIndex';
 import type { ProductDTO, VisualAnalysis } from '../types';
 import { extractImageKey } from './imageKey';
+import { canonicalizeModelCode } from './parseEnrichment';
 import { deduplicateGhostTwins } from './twins';
 import type { EnrichedProduct, LiveProduct, SemanticIndex } from './types';
 
@@ -186,10 +187,9 @@ function scoreTokensAgainstField(
 }
 
 /**
- * Deterministic multi-field text & SKU scorer (D10):
- * - Exact SKU (3+ digits or exact code): 10,000+
- * - Prefix SKU (3+ digits): 5,000+
- * - Weighted fields: live title (40) > displayTitle (36) > article (34) > modelRef (32) > brand (30) > keywords (24) > colors (16).
+ * Deterministic multi-field text, modelRef & SKU scorer (D10 + v3.0 ADR):
+ * Fixed hierarchy:
+ *   SKU exact (10,000) > modelRef exact >=4 chars (1,200) > SKU prefix (900) > weighted fields.
  */
 export function scoreTextQuery(term: string, p: EnrichedProduct): number {
   const rawTrimmed = (term || '').trim();
@@ -197,21 +197,55 @@ export function scoreTextQuery(term: string, p: EnrichedProduct): number {
 
   const qCompactRaw = rawTrimmed.toLowerCase();
   const skuNorm = (p.sku || '').trim().toLowerCase();
+  const sem = p.semantic && p.semantic.status === 'ok' ? p.semantic : null;
 
-  // (a) Numeric SKU exact & prefix matching (3+ digits) or exact code match
+  // 1. Exact SKU match (maximum priority: 10,000)
   if (skuNorm) {
-    if (/^\d{3,}$/.test(qCompactRaw)) {
-      if (skuNorm === qCompactRaw) return 10_000;
-      if (skuNorm.startsWith(qCompactRaw)) return 5_000;
-      if (skuNorm.includes(qCompactRaw)) return 1_500;
-    } else if (qCompactRaw.length >= 3 && skuNorm === qCompactRaw) {
+    if (/^\d{3,}$/.test(qCompactRaw) && skuNorm === qCompactRaw) {
+      return 10_000;
+    }
+    if (qCompactRaw.length >= 3 && skuNorm === qCompactRaw) {
       return 10_000;
     }
   }
 
-  // (b) Normalized tokenization across live & semantic fields
+  // 2. Exact canonical `modelRef` match (minimum 4 alphanumeric chars, symmetric normalization -> 1,200)
+  const canonicalItemModel = sem?.modelRef ? canonicalizeModelCode(sem.modelRef) : '';
+  let modelRefExactBoost = 0;
+  if (canonicalItemModel.length >= 4) {
+    const fullQueryModel = canonicalizeModelCode(rawTrimmed);
+    if (fullQueryModel === canonicalItemModel) {
+      return 1_200;
+    }
+    const rawParts = rawTrimmed
+      .toLowerCase()
+      .split(/\s+/)
+      .filter(Boolean);
+    for (let i = 0; i < rawParts.length; i++) {
+      const singlePart = canonicalizeModelCode(rawParts[i]);
+      if (singlePart.length >= 4 && singlePart === canonicalItemModel) {
+        modelRefExactBoost = 1_200;
+        break;
+      }
+      if (i + 1 < rawParts.length) {
+        const joinedPair = canonicalizeModelCode(`${rawParts[i]}${rawParts[i + 1]}`);
+        if (joinedPair.length >= 4 && joinedPair === canonicalItemModel) {
+          modelRefExactBoost = 1_200;
+          break;
+        }
+      }
+    }
+  }
+
+  // 3. Prefix / substring numeric SKU match (900 / 600, strictly below modelRef exact 1,200)
+  if (skuNorm && /^\d{3,}$/.test(qCompactRaw)) {
+    if (skuNorm.startsWith(qCompactRaw)) return Math.max(modelRefExactBoost, 900);
+    if (skuNorm.includes(qCompactRaw)) return Math.max(modelRefExactBoost, 600);
+  }
+
+  // 4. Normalized tokenization across live & semantic fields (tolerating mixed v2/v3 items)
   const normQuery = normalizeTextToken(rawTrimmed);
-  if (!normQuery) return 0;
+  if (!normQuery) return modelRefExactBoost;
 
   let queryTokens = tokenizeForScoring(rawTrimmed);
   if (queryTokens.length === 0) {
@@ -220,10 +254,9 @@ export function scoreTextQuery(term: string, p: EnrichedProduct): number {
       .filter((t) => t.length >= 2)
       .map(singularizeSpanish);
   }
-  if (queryTokens.length === 0) return 0;
+  if (queryTokens.length === 0) return modelRefExactBoost;
 
   const compactQuery = normQuery.replace(/\s+/g, '');
-  const sem = p.semantic && p.semantic.status === 'ok' ? p.semantic : null;
 
   const weightedFields: Array<[string, number]> = [
     [p.title, 40],
@@ -235,7 +268,7 @@ export function scoreTextQuery(term: string, p: EnrichedProduct): number {
     [(sem?.colors || []).join(' '), 16],
   ];
 
-  let totalScore = 0;
+  let totalScore = modelRefExactBoost;
   const globalMatched = new Set<string>();
 
   for (const [text, weight] of weightedFields) {
@@ -245,7 +278,9 @@ export function scoreTextQuery(term: string, p: EnrichedProduct): number {
     res.matchedTokens.forEach((t) => globalMatched.add(t));
   }
 
-  if (totalScore === 0 || globalMatched.size === 0) return 0;
+  if (totalScore === 0 || (globalMatched.size === 0 && modelRefExactBoost === 0)) {
+    return 0;
+  }
 
   // Multi-token coverage bonus so matching all query words beats matching just one word
   const coverageRatio = globalMatched.size / queryTokens.length;
@@ -301,14 +336,15 @@ export function rankVisualWithSemantics(
 
   const baseRanked = rankSimilar(analysis, syntheticDtos, enriched.length);
 
-  // Add direct weighted boost from primary visual terms against `scoreTextQuery`
-  const primaryQuery = [analysis.label, ...analysis.exactTerms.slice(0, 3)]
+  // Add direct weighted boost from primary visual terms (including extracted brand & modelRef!)
+  const primaryQuery = [analysis.label, ...analysis.exactTerms.slice(0, 5)]
     .filter(Boolean)
     .join(' ');
 
   const combined: ScoredItem[] = baseRanked.map(({ item: syn, score: bm25Score }) => {
     const orig = enrichedById.get(syn.id)!;
-    const directBoost = primaryQuery ? scoreTextQuery(primaryQuery, orig) * 0.05 : 0;
+    const directScore = primaryQuery ? scoreTextQuery(primaryQuery, orig) : 0;
+    const directBoost = directScore >= 1_200 ? 120 + directScore * 0.05 : directScore * 0.05;
     return {
       item: toPublicProductDTO(orig),
       score: bm25Score + directBoost,

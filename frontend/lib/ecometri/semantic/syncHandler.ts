@@ -16,8 +16,8 @@ import {
 import type { LiveProduct, SemanticStore } from './types';
 import type { EcometriConfig } from '../types';
 
-export const MAX_SYNC_ITEMS_PER_RUN = 40;
-export const SYNC_BUDGET_MS = 50_000;
+export const MAX_SYNC_ITEMS_PER_RUN = 24;
+export const SYNC_BUDGET_MS = 45_000;
 export const SYNC_LOCK_TTL_MS = 90_000;
 
 export interface SyncResponseBody {

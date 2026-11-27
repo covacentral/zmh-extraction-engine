@@ -1,7 +1,7 @@
 import type { ProductDTO } from '../types';
 
 export const SEMANTIC_SCHEMA_VERSION = 2 as const;
-export const CURRENT_PROMPT_VERSION = 'v2.0';
+export const CURRENT_PROMPT_VERSION = 'v3.0';
 export const MAX_SHARD_ITEMS = 300;
 export const MAX_SHARD_BYTES = 600_000;
 export const MAX_KEYWORDS = 15;

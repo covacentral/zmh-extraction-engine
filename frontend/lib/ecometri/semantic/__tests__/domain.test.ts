@@ -5,6 +5,7 @@ import { computeDelta } from '../delta';
 import {
   buildTextOnlySemanticItem,
   hasInventedTechSpecs,
+  hasPhotoNarration,
   parseEnrichment,
 } from '../parseEnrichment';
 import {
@@ -247,6 +248,118 @@ test('parseEnrichment rejects hallucinated technical specs (mAh/W/GB/garantia) a
   assert.equal(parseEnrichment(null), null);
   assert.equal(parseEnrichment('not-json'), null);
   assert.equal(parseEnrichment({ displayTitle: 'x'.repeat(81), article: 'a', visualSummary: 'b' }), null);
+});
+
+test('v3.0 SKU 801545 Vizzon OCR & anti-photo-narration guardrails: rejects 6000 vs 5000 misread, rejects unbacked modelRef/doubtful ?, and rejects box/photo narration', () => {
+  const vizzonCtx = {
+    ecometriId: 'vz-801545',
+    sku: '801545',
+    rawTitle: 'Power Bank Vizzon',
+    imageKey: 'a6b1b588-966d-49ab-b1fc-792e9363453c.jpg',
+    promptVersion: CURRENT_PROMPT_VERSION,
+  };
+
+  // 1. Misreading 5000 as 6000 (even without "mAh" unit!) when ocrBoxText reads "5000" -> rejected!
+  assert.equal(
+    parseEnrichment(
+      {
+        ocrBoxText: 'Vizzon Model: VN19 15W MAGNETIC WIRELESS CHARGING POWER BANK 5000',
+        displayTitle: 'Power Bank Vizzon Magnetico 6000 Negro',
+        article: 'power bank',
+        brand: 'Vizzon',
+        modelRef: 'VN19',
+        colors: ['negro'],
+        keywords: ['powerbank'],
+        visualSummary: 'Bateria externa magnetica compacta para recarga inalambrica.',
+      },
+      vizzonCtx
+    ),
+    null
+  );
+
+  // 2. Doubtful OCR digit "?000" cannot justify "5000mAh" in displayTitle, and "?" tokens never enter keywords
+  assert.equal(
+    parseEnrichment(
+      {
+        ocrBoxText: 'Vizzon Model: VN19 ?000mAh',
+        displayTitle: 'Power Bank Vizzon VN19 5000mAh',
+        article: 'power bank',
+        brand: 'Vizzon',
+        modelRef: 'VN19',
+        colors: ['negro'],
+        keywords: ['powerbank', '?000mah'],
+        visualSummary: 'Bateria externa magnetica compacta.',
+      },
+      vizzonCtx
+    ),
+    null
+  );
+
+  // 3. Literal photo/box narration phrases reported by user -> rejected!
+  const forbiddenSummaries = [
+    'Cargador portatil Power Bank Vizzon de color negro, mostrado dentro de su caja de presentacion blanca.',
+    'Bateria portatil rectangular de color negro acompanada de su caja de empaque.',
+    'Mouse inalambrico ergonomico empacado en blister.',
+    'Producto portatil al lado de su caja con cable incluido.',
+    'Mouse gamer blanco presentado en su caja de exhibicion.',
+  ];
+  for (const badSummary of forbiddenSummaries) {
+    assert.equal(hasPhotoNarration(badSummary), true, `Expected narration rejection for: ${badSummary}`);
+    assert.equal(
+      parseEnrichment(
+        {
+          ocrBoxText: 'Vizzon Model: VN19 5000',
+          displayTitle: 'Power Bank Magnetico Vizzon VN19',
+          article: 'power bank',
+          brand: 'Vizzon',
+          modelRef: 'VN19',
+          colors: ['negro'],
+          keywords: ['powerbank'],
+          visualSummary: badSummary,
+        },
+        vizzonCtx
+      ),
+      null
+    );
+  }
+
+  // 4. Hallucinated modelRef ("VN99") absent from ocrBoxText -> modelRef discarded (null), while valid VN19 + 5000mAh + 15W succeeds!
+  const unbackedRef = parseEnrichment(
+    {
+      ocrBoxText: 'Vizzon 15W MAGNETIC WIRELESS CHARGING POWER BANK 5000',
+      displayTitle: 'Power Bank Inalambrico Magnetico Vizzon 5000mAh',
+      article: 'power bank',
+      brand: 'Vizzon',
+      modelRef: 'VN99',
+      colors: ['negro'],
+      keywords: ['powerbank', '?bad'],
+      visualSummary:
+        'Bateria externa inalambrica magnetica de 5000 mAh con carga rapida de 15W, compacta y ligera para recargar tu celular sin cables.',
+    },
+    vizzonCtx
+  );
+  assert.ok(unbackedRef);
+  assert.equal(unbackedRef.modelRef, null);
+  assert.equal(unbackedRef.keywords.some((k) => k.includes('?')), false);
+
+  const validVizzon = parseEnrichment(
+    {
+      ocrBoxText: 'Vizzon Model: VN19 15W MAGNETIC WIRELESS CHARGING POWER BANK 5000',
+      displayTitle: 'Power Bank Magnetico Vizzon VN19 5000mAh Negro',
+      article: 'power bank',
+      brand: 'Vizzon',
+      modelRef: 'Model: VN19',
+      colors: ['negro'],
+      keywords: ['powerbank', 'bateria portatil', 'magsafe'],
+      visualSummary:
+        'Bateria externa inalambrica magnetica de 5000 mAh con carga rapida de 15W, diseno compacto ideal para recargar smartphones sin cables.',
+    },
+    vizzonCtx
+  );
+  assert.ok(validVizzon);
+  assert.equal(validVizzon.modelRef, 'VN19');
+  assert.equal(validVizzon.keywords.includes('vn19'), true);
+  assert.equal(validVizzon.keywords.includes('vizzon'), true);
 });
 
 test('partitionShards enforces both maxItems and maxBytes deterministically, and InMemorySemanticStore isolates generations', async () => {

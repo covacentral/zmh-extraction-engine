@@ -5,6 +5,7 @@ import type { EcometriConfig } from '../types';
 import { computeDelta } from './delta';
 import {
   buildFailedSemanticItem,
+  DEFAULT_CALL_TIMEOUT_MS,
   enrichBatch,
   fetchThumbnailAsBase64,
   MAX_ENRICH_BATCH_SIZE,
@@ -132,6 +133,7 @@ export interface SyncExecutionOptions {
   batchSize?: number;
   maxVisionItems?: number;
   budgetMs?: number;
+  callTimeoutMs?: number;
   dryRun?: boolean;
   now?: () => number;
   fetchFn?: typeof fetch;
@@ -237,11 +239,16 @@ export async function runCatalogEnrichmentSync(
       ? Math.max(0, opts.maxVisionItems)
       : dirtyVision.length;
   const candidateVision = dirtyVision.slice(0, visionCap);
+  const callTimeoutMs = opts.callTimeoutMs ?? DEFAULT_CALL_TIMEOUT_MS;
   let visionAttempted = 0;
 
   for (let offset = 0; offset < candidateVision.length; offset += batchSize) {
-    if (typeof opts.budgetMs === 'number' && now() - startedAt >= opts.budgetMs) {
-      break;
+    if (typeof opts.budgetMs === 'number') {
+      const remainingMs = opts.budgetMs - (now() - startedAt);
+      // Enforce strict pre-batch deadline check per v3.0 ADR: never start a batch if remaining < callTimeoutMs
+      if (remainingMs < callTimeoutMs) {
+        break;
+      }
     }
 
     const chunk = candidateVision.slice(offset, offset + batchSize);
@@ -285,6 +292,7 @@ export async function runCatalogEnrichmentSync(
           promptVersion,
           nowIso: nowIso(),
           batchSize,
+          callTimeoutMs,
           sleep: opts.sleep,
         }
       );

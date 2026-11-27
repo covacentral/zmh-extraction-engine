@@ -310,29 +310,124 @@ test('visualSearchHandler D11: uses semantic fields to disambiguate generic "Mou
   assert.equal(body.items[0].priceCop, 22000);
 });
 
-test('scoreTextQuery enforces SKU exact > SKU prefix > title/semantic fields', () => {
+test('scoreTextQuery enforces v3.0 fixed hierarchy: SKU exact > modelRef exact (>=4 chars, hyphen-insensitive) > SKU prefix > title/semantic fields, and tolerates mixed v2/v3 index', async () => {
   const [enriched] = mergeLiveAndSemantic(
-    [toLiveProduct(mkLiveDto({ id: 'p1', sku: '801268', title: 'Power, Band' }))],
+    [toLiveProduct(mkLiveDto({ id: 'p1', sku: '801545', title: 'Power Bank Vizzon' }))],
     buildSemanticIndexFromItems(1, [
       mkSemantic({
         ecometriId: 'p1',
-        sku: '801268',
-        displayTitle: 'Power Bank Compacta',
+        sku: '801545',
+        displayTitle: 'Power Bank Magnetico Vizzon VN19 5000mAh',
         article: 'power bank',
-        keywords: ['cargador portatil'],
+        brand: 'Vizzon',
+        modelRef: 'VN-19',
+        keywords: ['cargador portatil', 'vn19'],
       }),
     ])
   );
 
-  const exactSku = scoreTextQuery('801268', enriched);
-  const prefixSku = scoreTextQuery('8012', enriched);
+  const exactSku = scoreTextQuery('801545', enriched);
+  const exactModelNoHyphen = scoreTextQuery('vn19', enriched);
+  const exactModelWithHyphen = scoreTextQuery('VN-19', enriched);
+  const prefixSku = scoreTextQuery('8015', enriched);
   const titleHit = scoreTextQuery('power bank', enriched);
   const keywordHit = scoreTextQuery('cargador portatil', enriched);
 
-  assert.ok(exactSku > prefixSku);
+  assert.equal(exactSku, 10_000);
+  assert.equal(exactModelNoHyphen, 1_200);
+  assert.equal(exactModelWithHyphen, 1_200);
+  assert.ok(exactSku > exactModelNoHyphen);
+  assert.ok(exactModelNoHyphen > prefixSku);
   assert.ok(prefixSku > titleHit);
   assert.ok(titleHit > keywordHit);
   assert.ok(keywordHit > 0);
+
+  // Short modelRef (<4 chars, e.g. "K9") does NOT trigger the 1200 exact boost (prevents false positives)
+  const [shortRefItem] = mergeLiveAndSemantic(
+    [toLiveProduct(mkLiveDto({ id: 'p-short', sku: '803297', title: 'Microfono K9' }))],
+    buildSemanticIndexFromItems(1, [
+      {
+        ...mkSemantic({
+          ecometriId: 'p-short',
+          sku: '803297',
+          displayTitle: 'Microfono Inalambrico K9',
+          article: 'microfono',
+          modelRef: 'K9',
+          keywords: ['k9', 'lavalier'],
+        }),
+        promptVersion: 'v2.0', // Also verifies mixed v2.0 + v3.0 coexistence!
+      },
+    ])
+  );
+  const k9Score = scoreTextQuery('k9', shortRefItem);
+  assert.ok(k9Score > 0 && k9Score < 900);
+
+  // Visual search Stage 1 extracting ["powerbank", "vizzon", "vn19"] + 300x300 Stage 2 thumbnail puts VN19 #1 within 9.2s budget
+  const fetchedThumbUrls: string[] = [];
+  const visHandler = createVisualSearchHandler({
+    resolveCommerceFn: async () => ({
+      commerceId: 'bmm',
+      isAlias: false,
+      data: { ecometri: SEMANTIC_CFG },
+    }),
+    geminiClient: {
+      async analyze() {
+        return {
+          label: 'Power Bank Vizzon VN19',
+          exactTerms: ['powerbank', 'vizzon', 'vn19'],
+          functionalTerms: ['carga inalambrica'],
+          broadRoots: ['power'],
+        };
+      },
+      async rerank(_img, candidates) {
+        return { exactIds: [candidates[0].id], similarIds: candidates.slice(1).map((c) => c.id) };
+      },
+    },
+    catalogIndexStore: {
+      async getOrFetch() {
+        return [
+          mkLiveDto({ id: 'other-pb', sku: '801268', title: 'Power, Band', priceCop: 30000 }),
+          mkLiveDto({ id: 'vz-801545', sku: '801545', title: 'Power Bank Vizzon', priceCop: 40000 }),
+        ];
+      },
+    },
+    loadSemanticIndexFn: async () =>
+      buildSemanticIndexFromItems(2, [
+        {
+          ...mkSemantic({
+            ecometriId: 'other-pb',
+            sku: '801268',
+            displayTitle: 'Power Bank Basica Negra',
+            article: 'power bank',
+          }),
+          promptVersion: 'v2.0',
+        },
+        mkSemantic({
+          ecometriId: 'vz-801545',
+          sku: '801545',
+          displayTitle: 'Power Bank Magnetico Vizzon VN19 5000mAh',
+          article: 'power bank',
+          brand: 'Vizzon',
+          modelRef: 'VN19',
+          keywords: ['vn19', 'vizzon', 'powerbank'],
+        }),
+      ]),
+    fetchFn: async (url) => {
+      fetchedThumbUrls.push(String(url));
+      return new Response(Buffer.from([0xff, 0xd8, 0xff, 0xd9]), {
+        status: 200,
+        headers: { 'content-type': 'image/jpeg' },
+      });
+    },
+  });
+
+  const visRes = await visHandler({
+    rawBody: { commerceId: 'bmm', imageBase64: VALID_JPEG_B64, mimeType: 'image/jpeg' },
+    deviceId: 'dev_vn19_test',
+  });
+  assert.equal(visRes.status, 200);
+  assert.equal((visRes.body as { items: ProductDTO[] }).items[0].id, 'vz-801545');
+  assert.ok(fetchedThumbUrls.some((u) => u.includes('/fit-in/300x300/')));
 });
 
 test('mixed fallback branch (D1 + D10): when semanticIndex is loaded but live catalogIndex fails or returns 0 matches, handler falls back to upstream preserving live price/stock without partial-window twin distortion', async () => {

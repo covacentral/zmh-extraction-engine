@@ -1,11 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  createHttpGeminiClient,
   GeminiQuotaError,
   type EnrichPromptCandidate,
   type GeminiClient,
 } from '../../geminiClient';
 import {
+  buildThumbnail160Url,
   createRateLimiter,
   enrichBatch,
   fetchThumbnailAsBase64,
@@ -40,6 +42,7 @@ function mkImgInput(id: string, sku: string, rawTitle: string, imageKey: string 
 function mkValidAiEntry(id: string, displayTitle: string, article = 'mouse') {
   return {
     ecometriId: id,
+    ocrBoxText: 'Basik Model M-100',
     displayTitle,
     article,
     brand: 'Basik',
@@ -312,7 +315,7 @@ test('resumable backfill & FirestoreSemanticStore: mid-run checkpoint resumes wi
     allowedImageHost: 'd1b50uin55dq3m.cloudfront.net',
   };
 
-  // First run crashes right after batch 1 (8 items) writes checkpoint, BEFORE writeGeneration
+  // First run crashes right after batch 1 (6 items in v3.0) writes checkpoint, BEFORE writeGeneration
   await assert.rejects(async () => {
     await runCatalogEnrichmentSync({
       cfg,
@@ -320,7 +323,7 @@ test('resumable backfill & FirestoreSemanticStore: mid-run checkpoint resumes wi
       store,
       geminiClient: fakeGemini,
       limiter,
-      batchSize: 8,
+      batchSize: 6,
       fetchFn: fakeThumbFetch,
       onCheckpoint: (items) => {
         savedCheckpoint = items;
@@ -332,10 +335,10 @@ test('resumable backfill & FirestoreSemanticStore: mid-run checkpoint resumes wi
     });
   }, /SIMULATED_PROCESS_CRASH/);
 
-  assert.equal(savedCheckpoint.length, 8);
+  assert.equal(savedCheckpoint.length, 6);
   assert.equal(await store.readMeta(), null); // Store meta untouched after crash!
 
-  // Second run resumes from `savedCheckpoint` -> ONLY enriches the remaining 4 items (p-9..p-12)!
+  // Second run resumes from `savedCheckpoint` -> ONLY enriches the remaining 6 items (p-7..p-12)!
   enrichedIdsAcrossRuns = [];
   const summary = await runCatalogEnrichmentSync({
     cfg,
@@ -344,12 +347,12 @@ test('resumable backfill & FirestoreSemanticStore: mid-run checkpoint resumes wi
     geminiClient: fakeGemini,
     limiter,
     checkpointItems: savedCheckpoint,
-    batchSize: 8,
+    batchSize: 6,
     fetchFn: fakeThumbFetch,
   });
 
-  assert.deepEqual(enrichedIdsAcrossRuns, ['p-9', 'p-10', 'p-11', 'p-12']);
-  assert.equal(summary.processed, 4);
+  assert.deepEqual(enrichedIdsAcrossRuns, ['p-7', 'p-8', 'p-9', 'p-10', 'p-11', 'p-12']);
+  assert.equal(summary.processed, 6);
   assert.equal(summary.backlog, 0);
   assert.equal(summary.gen, 1);
 
@@ -438,4 +441,68 @@ test('resumable backfill & FirestoreSemanticStore: mid-run checkpoint resumes wi
   );
   assert.equal(blocked, null);
   assert.equal(networkCalled, false);
+
+  // v3.0: Verify 600x600 high-clarity OCR URL generation & gemini-flash-latest primary for enrichCatalogBatch vs flash-lite for live analyze
+  assert.equal(
+    buildThumbnail160Url(
+      'https://d1b50uin55dq3m.cloudfront.net/fit-in/160x160/pic.jpg',
+      'd1b50uin55dq3m.cloudfront.net'
+    ),
+    'https://d1b50uin55dq3m.cloudfront.net/fit-in/600x600/pic.jpg'
+  );
+
+  const hitUrls: string[] = [];
+  const httpClient = createHttpGeminiClient('fake-key', async (url) => {
+    const u = String(url);
+    hitUrls.push(u);
+    if (u.includes('gemini-flash-latest') && hitUrls.length === 1) {
+      return new Response(
+        JSON.stringify({
+          candidates: [
+            {
+              content: {
+                parts: [
+                  {
+                    text: JSON.stringify({ items: [] }),
+                  },
+                ],
+              },
+            },
+          ],
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } }
+      );
+    }
+    return new Response(
+      JSON.stringify({
+        candidates: [
+          {
+            content: {
+              parts: [
+                {
+                  text: JSON.stringify({
+                    label: 'Mouse',
+                    exactTerms: ['mouse'],
+                    functionalTerms: [],
+                    broadRoots: [],
+                  }),
+                },
+              ],
+            },
+          },
+        ],
+      }),
+      { status: 200, headers: { 'content-type': 'application/json' } }
+    );
+  });
+
+  assert.ok(httpClient.enrichCatalogBatch);
+  await httpClient.enrichCatalogBatch(
+    [{ id: '1', rawTitle: 'T', imageBase64: 'ZmFrZQ==', mimeType: 'image/jpeg' }],
+    new AbortController().signal
+  );
+  assert.match(hitUrls[0], /gemini-flash-latest:generateContent/);
+
+  await httpClient.analyze('ZmFrZQ==', new AbortController().signal);
+  assert.match(hitUrls[1], /gemini-flash-lite-latest:generateContent/);
 });

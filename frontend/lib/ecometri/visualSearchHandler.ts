@@ -110,7 +110,7 @@ function toSmallThumbnailUrl(imageUrl: string, allowedHost: string): string | nu
     ) {
       return null;
     }
-    const shrunk = parsed.pathname.replace(/\/fit-in\/\d+x\d+\//, '/fit-in/160x160/');
+    const shrunk = parsed.pathname.replace(/\/fit-in\/\d+x\d+\//, '/fit-in/300x300/');
     return `${parsed.origin}${shrunk}`;
   } catch {
     return null;

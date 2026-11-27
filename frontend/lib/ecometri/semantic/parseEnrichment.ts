@@ -1,4 +1,5 @@
 import {
+  CURRENT_PROMPT_VERSION,
   MAX_DISPLAY_TITLE_LEN,
   MAX_KEYWORDS,
   MAX_VISUAL_SUMMARY_LEN,
@@ -12,6 +13,52 @@ const CONTROL_RE = /[\u0000-\u001F\u007F]/g;
 // Detects numeric + unit technical claims (e.g. "20000mAh", "65 W", "128GB", "12 meses de garantia")
 const TECH_SPEC_CLAIM_RE =
   /\b(\d+(?:[.,]\d+)?)\s*(mah|ah|wh|watts?|w|voltios?|volts?|v|amperios?|amp|gb|tb|mb|ghz|mhz|hz|lumens?|lm|litros?|ml|kg|gramos?|gr|horas?|meses\s+de\s+garantia|a[nñ]os?\s+de\s+garantia)\b/gi;
+
+// Detects standalone 4-5 digit capacity/power numbers (e.g. "5000", "6000", "10000", "20000")
+// even when Gemini omits the unit "mAh" in displayTitle!
+const STANDALONE_CAPACITY_RE = /\b([1-9]\d{3,4})\b/g;
+
+/**
+ * Versioned v3.0 blocklist of normalized (lowercase, accent-free) photo-staging phrases.
+ * Any `visualSummary` matching these patterns is rejected so descriptions always read
+ * like genuine e-commerce product copy rather than narrating the photograph or packaging.
+ */
+export const FORBIDDEN_PHOTO_NARRATION_PATTERNS_V3: readonly string[] = [
+  'mostrado en',
+  'mostrada en',
+  'mostrado dentro',
+  'mostrada dentro',
+  'mostrado junto',
+  'mostrada junto',
+  'exhibido',
+  'exhibida',
+  'caja de exhibicion',
+  'caja de presentacion',
+  'caja de empaque',
+  'junto a su caja',
+  'al lado de su caja',
+  'al lado de la caja',
+  'dentro de su caja',
+  'acompanado de su caja',
+  'acompanada de su caja',
+  'acompanado de su empaque',
+  'acompanada de su empaque',
+  'acompanado de una caja',
+  'acompanada de una caja',
+  'acompanado de un estuche',
+  'acompanada de un estuche',
+  'presentado en',
+  'presentada en',
+  'empacado en',
+  'empacada en',
+  'viene en una caja',
+  'viene en caja',
+  'en la foto',
+  'en la imagen',
+  'se observa',
+  'se aprecia',
+  'blister',
+];
 
 export interface EnrichmentContext {
   ecometriId: string;
@@ -40,6 +87,82 @@ export function normalizeKeywordToken(input: string): string {
     .replace(/[^a-z0-9\s-]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+function normalizeAccentFreeLower(input: string): string {
+  return cleanPlainString(input)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+export function hasPhotoNarration(text: string): boolean {
+  const norm = normalizeAccentFreeLower(text);
+  if (!norm) return false;
+  for (const phrase of FORBIDDEN_PHOTO_NARRATION_PATTERNS_V3) {
+    if (norm.includes(phrase)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Symmetric canonicalizer for alphanumeric model/reference codes:
+ * strips common prefixes (`model:`, `modelo:`, `ref:`), accents, hyphens, dots, and spaces.
+ * Example: `"Model: VN-19"` -> `"vn19"`, `"KM-6558"` -> `"km6558"`.
+ */
+export function canonicalizeModelCode(input: string): string {
+  return cleanPlainString(input)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/^(?:modelo?|ref(?:erencia)?|mod)\s*[:.#-]?\s*/i, '')
+    .replace(/[^a-z0-9]/g, '');
+}
+
+function sanitizeUncertainOcrTokens(ocrText: string): string {
+  return ocrText
+    .split(/\s+/)
+    .filter((tok) => tok && !tok.includes('?'))
+    .join(' ');
+}
+
+/**
+ * Verifies that `rawModelRef` contains no uncertain `?` characters and appears as a
+ * canonicalized substring within `rawTitle` or `ocrBoxText` (when `ocrBoxText` is provided).
+ */
+export function resolveVerifiedModelRef(
+  rawModelRef: unknown,
+  rawTitle: string,
+  rawOcrBoxText: unknown
+): string | null {
+  const cleaned = cleanPlainString(rawModelRef).replace(
+    /^(?:modelo?|ref(?:erencia)?|mod)\s*[:.#-]?\s*/i,
+    ''
+  );
+  if (!cleaned || cleaned.length < 2 || cleaned.length > 40 || cleaned.includes('?')) {
+    return null;
+  }
+
+  const canonicalCandidate = canonicalizeModelCode(cleaned);
+  if (canonicalCandidate.length < 2) return null;
+
+  // When ocrBoxText is explicitly supplied (v3.0 schema), modelRef MUST be backed by rawTitle or clean ocrBoxText
+  if (rawOcrBoxText !== undefined) {
+    const cleanOcr =
+      typeof rawOcrBoxText === 'string'
+        ? sanitizeUncertainOcrTokens(cleanPlainString(rawOcrBoxText))
+        : '';
+    const evidencePool = canonicalizeModelCode(`${rawTitle} ${cleanOcr}`);
+    if (!evidencePool.includes(canonicalCandidate)) {
+      return null;
+    }
+  }
+
+  return cleaned;
 }
 
 function canonicalizeUnit(rawUnit: string): string {
@@ -73,22 +196,52 @@ function extractCanonicalClaims(text: string): Set<string> {
   return out;
 }
 
+function extractStandaloneNumbers(text: string): Set<string> {
+  const normalized = text.replace(/(\d)[.,](\d{3})(?!\d)/g, '$1$2');
+  const out = new Set<string>();
+  const re = new RegExp(STANDALONE_CAPACITY_RE.source, 'g');
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(normalized)) !== null) {
+    out.add(m[1]);
+  }
+  return out;
+}
+
 /**
- * Verifies that `candidateText` does NOT introduce numeric+unit technical claims
- * absent from `allowedEvidence` (rawTitle + legible modelRef).
+ * Verifies that `candidateText` does NOT introduce numeric+unit technical claims OR
+ * unverified 4-5 digit capacity numbers (e.g. writing "6000" when box says "5000")
+ * absent from `allowedEvidence`.
  */
 export function hasInventedTechSpecs(
   candidateText: string,
   allowedEvidence: string
 ): boolean {
   const candidateClaims = extractCanonicalClaims(candidateText);
-  if (candidateClaims.size === 0) return false;
-  const evidenceClaims = extractCanonicalClaims(allowedEvidence);
-  for (const claim of Array.from(candidateClaims)) {
-    if (!evidenceClaims.has(claim)) {
-      return true;
+  if (candidateClaims.size > 0) {
+    const evidenceClaims = extractCanonicalClaims(allowedEvidence);
+    const evidenceNumbers = extractStandaloneNumbers(allowedEvidence);
+    for (const claim of Array.from(candidateClaims)) {
+      const digitsOnly = (/^\d+/.exec(claim) || [''])[0];
+      // Accept if exact number+unit is in evidence, OR if box printed "5000" next to small "mAh" logo
+      const mahSupportedByBoxDigits =
+        claim.endsWith('mah') && digitsOnly.length >= 4 && evidenceNumbers.has(digitsOnly);
+      if (!evidenceClaims.has(claim) && !mahSupportedByBoxDigits) {
+        return true;
+      }
     }
   }
+
+  // Also block standalone 4-5 digit capacity hallucinations (e.g. "Power Bank Vizzon 6000" when box says "5000")
+  const candidateNumbers = extractStandaloneNumbers(candidateText);
+  if (candidateNumbers.size > 0) {
+    const evidenceNumbers = extractStandaloneNumbers(allowedEvidence);
+    for (const num of Array.from(candidateNumbers)) {
+      if (!evidenceNumbers.has(num)) {
+        return true;
+      }
+    }
+  }
+
   return false;
 }
 
@@ -102,7 +255,7 @@ function normalizeStringList(
   const seen = new Set<string>();
   const out: string[] = [];
   for (const entry of raw) {
-    if (typeof entry !== 'string') continue;
+    if (typeof entry !== 'string' || entry.includes('?')) continue;
     const norm = normalizeKeywordToken(entry);
     if (norm.length < minLen || norm.length > maxLen) continue;
     if (seen.has(norm)) continue;
@@ -115,7 +268,8 @@ function normalizeStringList(
 
 /**
  * Defensive parser for untrusted Gemini enrichment JSON. Never throws.
- * Returns `null` if malformed or if anti-hallucination guardrails reject invented specs.
+ * Rejects malformed shapes, uncertain `?` claims, photo-narration descriptions,
+ * unbacked `modelRef` values, and hallucinated numeric specs.
  */
 export function parseEnrichment(
   raw: unknown,
@@ -139,23 +293,49 @@ export function parseEnrichment(
     );
     const visualSummary = cleanPlainString(obj.visualSummary);
 
-    if (!displayTitle || displayTitle.length > MAX_DISPLAY_TITLE_LEN) {
+    if (
+      !displayTitle ||
+      displayTitle.length > MAX_DISPLAY_TITLE_LEN ||
+      displayTitle.includes('?')
+    ) {
       return null;
     }
-    if (!article || article.length < 2 || article.length > 60) {
+    if (!article || article.length < 2 || article.length > 60 || article.includes('?')) {
       return null;
     }
-    if (!visualSummary || visualSummary.length > MAX_VISUAL_SUMMARY_LEN) {
+    if (
+      !visualSummary ||
+      visualSummary.length > MAX_VISUAL_SUMMARY_LEN ||
+      visualSummary.includes('?')
+    ) {
+      return null;
+    }
+
+    // Reject photo-staging narration in description or title (v3.0 double enforcement)
+    if (hasPhotoNarration(visualSummary) || hasPhotoNarration(displayTitle)) {
       return null;
     }
 
     const brandRaw = cleanPlainString(obj.brand);
-    const brand = brandRaw && brandRaw.length <= 40 ? brandRaw : null;
+    const brand =
+      brandRaw && brandRaw.length <= 40 && !brandRaw.includes('?') ? brandRaw : null;
 
-    const modelRaw = cleanPlainString(obj.modelRef);
-    const modelRef = modelRaw && modelRaw.length <= 40 ? modelRaw : null;
+    const modelRef = resolveVerifiedModelRef(
+      obj.modelRef,
+      rawTitle,
+      obj.ocrBoxText
+    );
 
-    const allowedEvidence = `${rawTitle} ${modelRef || ''}`;
+    const cleanOcrEvidence =
+      typeof obj.ocrBoxText === 'string'
+        ? sanitizeUncertainOcrTokens(cleanPlainString(obj.ocrBoxText))
+        : '';
+
+    const allowedEvidence =
+      obj.ocrBoxText !== undefined
+        ? `${rawTitle} ${cleanOcrEvidence}`
+        : `${rawTitle} ${modelRef || ''}`;
+
     if (
       hasInventedTechSpecs(displayTitle, allowedEvidence) ||
       hasInventedTechSpecs(visualSummary, allowedEvidence)
@@ -164,7 +344,28 @@ export function parseEnrichment(
     }
 
     const colors = normalizeStringList(obj.colors, 5, 3, 25);
-    const keywords = normalizeStringList(obj.keywords, MAX_KEYWORDS, 2, 40);
+
+    // Seed keywords with verified modelRef variants (with & without hyphen) + brand before AI synonyms
+    const seededKeywords: string[] = [];
+    if (modelRef) {
+      const normRef = normalizeKeywordToken(modelRef);
+      const compactRef = canonicalizeModelCode(modelRef);
+      if (normRef.length >= 2) seededKeywords.push(normRef);
+      if (compactRef.length >= 2 && compactRef !== normRef) {
+        seededKeywords.push(compactRef);
+      }
+    }
+    if (brand) {
+      const normBrand = normalizeKeywordToken(brand);
+      if (normBrand.length >= 2) seededKeywords.push(normBrand);
+    }
+    const rawKeywords = Array.isArray(obj.keywords) ? obj.keywords : [];
+    const keywords = normalizeStringList(
+      [...seededKeywords, ...rawKeywords],
+      MAX_KEYWORDS,
+      2,
+      40
+    );
 
     return {
       ecometriId,
@@ -180,7 +381,7 @@ export function parseEnrichment(
       source: 'vision',
       status: 'ok',
       enrichedAt: ctx?.nowIso || new Date().toISOString(),
-      promptVersion: ctx?.promptVersion || 'v2.0',
+      promptVersion: ctx?.promptVersion || CURRENT_PROMPT_VERSION,
     };
   } catch {
     return null;

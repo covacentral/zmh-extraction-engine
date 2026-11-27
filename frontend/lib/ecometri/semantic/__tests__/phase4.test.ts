@@ -117,6 +117,7 @@ test('mutual exclusion lock: active lock returns 409 with zero work; expired loc
         return {
           items: candidates.map((c) => ({
             ecometriId: c.id,
+            ocrBoxText: c.rawTitle,
             displayTitle: `Curado ${c.rawTitle}`,
             article: 'termo',
             colors: ['negro'],
@@ -180,11 +181,12 @@ test('self-draining 40-item cap: 95 dirty products drain deterministically acros
         return {
           items: candidates.map((c) => ({
             ecometriId: c.id,
+            ocrBoxText: c.rawTitle,
             displayTitle: `Limpio ${c.rawTitle}`,
             article: 'articulo',
             colors: ['blanco'],
             keywords: ['hogar'],
-            visualSummary: 'Articulo para el hogar en empaque individual.',
+            visualSummary: 'Articulo practico para uso diario en el hogar.',
           })),
         };
       },
@@ -257,6 +259,7 @@ test('typical daily sync & fault isolation: 6 new + 2 photo changes + 25 price/s
         return {
           items: candidates.map((c) => ({
             ecometriId: c.id,
+            ocrBoxText: c.rawTitle,
             displayTitle: `Curado ${c.rawTitle}`,
             article: 'producto',
             colors: ['azul'],
@@ -276,10 +279,14 @@ test('typical daily sync & fault isolation: 6 new + 2 photo changes + 25 price/s
     fetchFn: fakeThumbFetch,
   });
 
-  // Initial seed -> gen 1 (30 items)
+  // Initial seed -> gen 1 (30 items: 24 in seed1 + 6 in seed2 due to MAX_SYNC_ITEMS_PER_RUN=24)
   const seed = await handler({ authorizationHeader: 'Bearer sec-daily', commerce: 'bmm' });
   assert.equal(seed.status, 200);
   assert.equal((seed.body as SyncResponseBody).gen, 1);
+  const seed2 = await handler({ authorizationHeader: 'Bearer sec-daily', commerce: 'bmm' });
+  assert.equal(seed2.status, 200);
+  assert.equal((seed2.body as SyncResponseBody).backlog, 0);
+  assert.equal((seed2.body as SyncResponseBody).gen, 2);
 
   // Typical next day:
   // - 3 deleted (`base-28..30` dropped)
@@ -309,17 +316,17 @@ test('typical daily sync & fault isolation: 6 new + 2 photo changes + 25 price/s
 
   const daily = await handler({ authorizationHeader: 'Bearer sec-daily', commerce: 'bmm' });
   assert.equal(daily.status, 200);
-  assert.equal(geminiBatchCalls.length, 1, 'Expected 1 Gemini batch call (< 3) for 8 daily deltas');
+  assert.equal(geminiBatchCalls.length, 2, 'Expected 2 Gemini batches of <=6 (< 3 calls) for 8 daily deltas');
   assert.deepEqual(daily.body, {
     processed: 8,
     reused: 0,
     failed: 0,
     removed: 3,
     backlog: 0,
-    gen: 2,
+    gen: 3,
   });
 
-  // Simulate upstream crash on subsequent sync -> returns 502, releases lock, and leaves gen 2 100% servable!
+  // Simulate upstream crash on subsequent sync -> returns 502, releases lock, and leaves gen 3 100% servable!
   shouldFailFeed = true;
   const failedRun = await handler({ authorizationHeader: 'Bearer sec-daily', commerce: 'bmm' });
   assert.equal(failedRun.status, 502);
@@ -327,7 +334,7 @@ test('typical daily sync & fault isolation: 6 new + 2 photo changes + 25 price/s
   const loader = createSemanticIndexLoader();
   const loadedAfterFailure = await loader.load('bmm', { store, now: () => Date.now() });
   assert.ok(loadedAfterFailure);
-  assert.equal(loadedAfterFailure.gen, 2);
+  assert.equal(loadedAfterFailure.gen, 3);
   assert.equal(loadedAfterFailure.byId.size, 33); // 27 kept + 6 new, 3 deleted purged!
   assert.equal(loadedAfterFailure.byId.has('base-30'), false);
 
@@ -378,4 +385,54 @@ test('typical daily sync & fault isolation: 6 new + 2 photo changes + 25 price/s
   assert.equal(rolledBack.status, 200);
   assert.equal((rolledBack.body as SyncResponseBody).semanticIndexEnabled, false);
   assert.equal(savedFlagState, false);
+
+  // Verify v3.0 pre-batch global deadline: when remainingMs < callTimeoutMs (20s), stops cleanly before next batch
+  const deadlineStore = new InMemorySemanticStore();
+  let clockMs = 100_000;
+  const deadlineHandler = createEcometriSyncHandler({
+    getCronSecret: () => 'sec-daily',
+    resolveCommerceFn: async () => ({
+      commerceId: 'bmm',
+      isAlias: false,
+      data: { ecometri: SYNC_CFG },
+    }),
+    semanticStoreFactory: () => deadlineStore,
+    geminiClientFactory: () => ({
+      async analyze() {
+        throw new Error('unused');
+      },
+      async rerank() {
+        return null;
+      },
+      async enrichCatalogBatch(candidates) {
+        // First 6-item batch takes 27s -> remaining = 45s - 27s = 18s < 20s callTimeoutMs -> stops before batch 2!
+        clockMs += 27_000;
+        return {
+          items: candidates.map((c) => ({
+            ecometriId: c.id,
+            ocrBoxText: c.rawTitle,
+            displayTitle: `Curado ${c.rawTitle}`,
+            article: 'producto',
+            colors: ['negro'],
+            keywords: ['hogar'],
+            visualSummary: 'Producto practico para el hogar.',
+          })),
+        };
+      },
+    }),
+    limiterFactory: () => createRateLimiter(60, { now: () => clockMs, sleep: async () => {} }),
+    fetchLiveCatalogFn: async () => currentFeed.slice(0, 18),
+    fetchFn: fakeThumbFetch,
+    nowFn: () => clockMs,
+    budgetMs: 45_000,
+    maxItemsPerRun: 24,
+  });
+
+  const boundedRun = await deadlineHandler({
+    authorizationHeader: 'Bearer sec-daily',
+    commerce: 'bmm',
+  });
+  assert.equal(boundedRun.status, 200);
+  assert.equal((boundedRun.body as SyncResponseBody).processed, 6);
+  assert.equal((boundedRun.body as SyncResponseBody).backlog, 12);
 });

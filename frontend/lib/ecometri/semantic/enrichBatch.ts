@@ -14,9 +14,9 @@ import {
 } from './types';
 
 export const DEFAULT_ENRICH_RPM = 12;
-export const MAX_ENRICH_BATCH_SIZE = 8;
+export const MAX_ENRICH_BATCH_SIZE = 6;
 export const DEFAULT_CALL_TIMEOUT_MS = 20_000;
-export const DEFAULT_THUMBNAIL_TIMEOUT_MS = 4_000;
+export const DEFAULT_THUMBNAIL_TIMEOUT_MS = 5_000;
 
 export interface ImageInput {
   ecometriId: string;
@@ -372,7 +372,8 @@ export async function enrichBatch(
 }
 
 /**
- * Builds a safe `160x160` CloudFront thumbnail URL restricted strictly to `allowedImageHost`.
+ * Builds a safe `600x600` CloudFront image URL restricted strictly to `allowedImageHost`
+ * so printed box model references (e.g. `Model: VN19`) and capacity digits (`5000`) are crisp.
  */
 export function buildThumbnail160Url(
   imageUrl: string | null,
@@ -387,7 +388,7 @@ export function buildThumbnail160Url(
     if (parsed.protocol !== 'https:' || parsed.hostname.toLowerCase() !== host) {
       return null;
     }
-    parsed.pathname = parsed.pathname.replace(/\/fit-in\/\d+x\d+\//i, '/fit-in/160x160/');
+    parsed.pathname = parsed.pathname.replace(/\/fit-in\/\d+x\d+\//i, '/fit-in/600x600/');
     return parsed.toString();
   } catch {
     return null;
