@@ -202,6 +202,68 @@ test('enrichBatch: exponential backoff on 429 recovers cleanly, and timeout degr
   );
   assert.equal(timedOut[0].item.status, 'failed');
   assert.equal(timedOut[0].errorReason, 'timeout');
+
+  // 3. Bisect recovery: 6-item slow batch times out, splits 6 -> 3 + 3 and enriches all 6!
+  const sixSlowBatch = Array.from({ length: 6 }, (_, i) =>
+    mkImgInput(`slow-${i + 1}`, String(310001 + i), `Olla ${i + 1}`)
+  );
+  const bisectTimeoutClient: GeminiClient = {
+    async analyze() {
+      throw new Error('unused');
+    },
+    async rerank() {
+      throw new Error('unused');
+    },
+    async enrichCatalogBatch(candidates, signal) {
+      if (candidates.length > 3) {
+        return new Promise((_res, rej) => {
+          signal.addEventListener('abort', () => {
+            const err = new Error('aborted');
+            err.name = 'AbortError';
+            rej(err);
+          });
+        });
+      }
+      return {
+        items: candidates.map((c) => mkValidAiEntry(c.id, `Olla ${c.id}`, 'olla')),
+      };
+    },
+  };
+  const bisectedOk = await enrichBatch(bisectTimeoutClient, sixSlowBatch, instantLimiter, {
+    callTimeoutMs: 15,
+  });
+  assert.equal(bisectedOk.length, 6);
+  assert.equal(bisectedOk.every((r) => r.item.status === 'ok'), true);
+
+  // 4. Poison-pill isolation: 1 bad image throwing http_error inside a 4-item batch isolates ONLY that 1 item (retriedSingle=true) while saving the other 3
+  const fourMixed = [
+    mkImgInput('ok-a', '320001', 'Aro luz'),
+    mkImgInput('poison-b', '320002', 'Item bloqueado'),
+    mkImgInput('ok-c', '320003', 'Rallador'),
+    mkImgInput('ok-d', '320004', 'Mouse'),
+  ];
+  const poisonClient: GeminiClient = {
+    async analyze() {
+      throw new Error('unused');
+    },
+    async rerank() {
+      throw new Error('unused');
+    },
+    async enrichCatalogBatch(candidates) {
+      if (candidates.some((c) => c.id === 'poison-b')) {
+        throw new Error('GEMINI_INVALID_JSON');
+      }
+      return {
+        items: candidates.map((c) => mkValidAiEntry(c.id, `Limpio ${c.id}`)),
+      };
+    },
+  };
+  const isolated = await enrichBatch(poisonClient, fourMixed, instantLimiter);
+  assert.equal(isolated[0].item.status, 'ok');
+  assert.equal(isolated[1].item.status, 'failed');
+  assert.equal(isolated[1].retriedSingle, true);
+  assert.equal(isolated[2].item.status, 'ok');
+  assert.equal(isolated[3].item.status, 'ok');
 });
 
 test('loadSemanticIndex: 20 concurrent cold reads execute exactly 1 readMeta and 1 shard load (single-flight), and unchanged gen skips shard reads', async () => {

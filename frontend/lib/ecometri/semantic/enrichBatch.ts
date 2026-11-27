@@ -280,8 +280,11 @@ export async function enrichBatch(
     return { rawMap: null, quotaRetries, errorReason: 'quota' };
   };
 
-  for (let offset = 0; offset < visionQueue.length; offset += batchSize) {
-    const chunk = visionQueue.slice(offset, offset + batchSize);
+  const processChunk = async (
+    chunk: ImageInput[],
+    allowBisect: boolean,
+    isBisectedSingle: boolean = false
+  ): Promise<void> => {
     const promptCandidates: EnrichPromptCandidate[] = chunk.map((c) => ({
       id: c.ecometriId,
       rawTitle: c.rawTitle,
@@ -292,16 +295,39 @@ export async function enrichBatch(
     const batchOutcome = await callWithRetry(promptCandidates);
 
     if (!batchOutcome.rawMap) {
-      // Entire batch failed due to quota exhaustion, timeout, or transport error
+      if (
+        allowBisect &&
+        chunk.length > 1 &&
+        batchOutcome.errorReason !== 'quota' &&
+        !options?.signal?.aborted
+      ) {
+        const mid = Math.ceil(chunk.length / 2);
+        const left = chunk.slice(0, mid);
+        const right = chunk.slice(mid);
+        const keepBisecting = batchOutcome.errorReason === 'http_error';
+        await processChunk(
+          left,
+          keepBisecting,
+          keepBisecting && left.length === 1
+        );
+        await processChunk(
+          right,
+          keepBisecting,
+          keepBisecting && right.length === 1
+        );
+        return;
+      }
+
+      // Entire chunk failed due to quota exhaustion, timeout, or isolated bad image
       for (const item of chunk) {
         resultsById.set(item.ecometriId, {
           item: buildFailedSemanticItem(item, promptVersion, nowIso),
-          retriedSingle: false,
+          retriedSingle: isBisectedSingle && chunk.length === 1,
           quotaRetries: batchOutcome.quotaRetries,
           errorReason: batchOutcome.errorReason || 'http_error',
         });
       }
-      continue;
+      return;
     }
 
     for (const item of chunk) {
@@ -320,7 +346,7 @@ export async function enrichBatch(
       if (parsed) {
         resultsById.set(item.ecometriId, {
           item: parsed,
-          retriedSingle: false,
+          retriedSingle: isBisectedSingle,
           quotaRetries: batchOutcome.quotaRetries,
         });
         continue;
@@ -366,6 +392,11 @@ export async function enrichBatch(
         });
       }
     }
+  };
+
+  for (let offset = 0; offset < visionQueue.length; offset += batchSize) {
+    const chunk = visionQueue.slice(offset, offset + batchSize);
+    await processChunk(chunk, chunk.length > 1, false);
   }
 
   return batch.map((b) => resultsById.get(b.ecometriId)!);
