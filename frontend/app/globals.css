@@ -29,7 +29,7 @@ dialog.product-quickview::backdrop {
   overscroll-behavior: contain;
 }
 
-/* ── Option B: Matte Unified Dual-Tray Catalog Card ── */
+/* ── Option B: Seamless Continuous Dual-Tray Catalog Card ── */
 .hub-catalog-card {
   background-color: #1C1A19;
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -48,21 +48,17 @@ dialog.product-quickview::backdrop {
   color: #57534E;
 }
 
-.hub-cream-input-box {
-  background-color: #FFFFFF;
-  border: 1px solid #E6E2DC;
-  box-shadow: 0 1px 3px rgba(28, 25, 23, 0.06);
+.hub-cream-input-row {
+  border-bottom: 2px solid rgba(28, 25, 23, 0.14);
   transition: border-color 150ms ease-out;
 }
 
-.hub-cream-input-box:hover {
-  border-color: rgba(28, 25, 23, 0.2);
+.hub-cream-input-row:hover {
+  border-bottom-color: rgba(28, 25, 23, 0.28);
 }
 
-.hub-cream-input-box:focus-within {
-  border-color: #1C1917;
-  outline: 2px solid #1C1917;
-  outline-offset: 2px;
+.hub-cream-input-row:focus-within {
+  border-bottom-color: #1C1917;
 }
 
 .hub-search-input {
@@ -84,12 +80,11 @@ dialog.product-quickview::backdrop {
   background-color: #1C1917;
   background-color: var(--brand-safe, #1C1917);
   color: #FFFFFF;
-  border: 1px solid rgba(0, 0, 0, 0.08);
   transition: opacity 150ms ease-out, transform 150ms ease-out;
 }
 
 .hub-photo-trigger:hover:not(:disabled) {
-  opacity: 0.92;
+  opacity: 0.9;
 }
 
 .hub-photo-trigger:active:not(:disabled) {
@@ -99,29 +94,38 @@ dialog.product-quickview::backdrop {
 .hub-photo-trigger:focus-visible,
 .hub-cream-clear-btn:focus-visible,
 .hub-cream-close-btn:focus-visible,
-.hub-cream-row-active:focus-visible,
 .hub-cream-chip:focus-visible {
   outline: 2px solid #1C1917;
-  outline-offset: 2px;
+  outline-offset: 3px;
+}
+
+.hub-cream-row-active,
+.hub-cream-row-muted {
+  border-bottom: 1px solid rgba(28, 25, 23, 0.08);
+  transition: background-color 150ms ease-out;
+}
+
+.hub-cream-row-active:last-child,
+.hub-cream-row-muted:last-child {
+  border-bottom: 0;
 }
 
 .hub-cream-row-active {
-  background-color: #FFFFFF;
-  border: 1px solid #E6E2DC;
-  box-shadow: 0 1px 3px rgba(28, 25, 23, 0.05);
   color: #1C1917;
-  transition: border-color 150ms ease-out, background-color 150ms ease-out;
 }
 
 .hub-cream-row-active:hover {
-  background-color: #FFFFFF;
-  border-color: rgba(28, 25, 23, 0.22);
+  background-color: rgba(28, 25, 23, 0.04);
 }
 
 .hub-cream-row-muted {
-  background-color: #F4F1EC;
-  border: 1px solid #E6E2DC;
   color: #57534E;
+}
+
+.hub-cream-row-active:focus-visible,
+.hub-cream-row-muted:focus-visible {
+  outline: 2px solid #1C1917;
+  outline-offset: -2px;
 }
 
 .hub-status-available {
@@ -129,21 +133,17 @@ dialog.product-quickview::backdrop {
 }
 
 .hub-cream-chip {
-  background-color: #FFFFFF;
-  border: 1px solid #E6E2DC;
-  box-shadow: 0 1px 3px rgba(28, 25, 23, 0.04);
+  background-color: #EFEBE3;
   color: #1C1917;
-  transition: background-color 150ms ease-out, border-color 150ms ease-out;
+  transition: background-color 150ms ease-out;
 }
 
 .hub-cream-chip:hover {
-  background-color: #F3EFE8;
-  border-color: rgba(28, 25, 23, 0.22);
+  background-color: #E5DFD3;
 }
 
 .hub-catalog-tray {
   background-color: #1C1A19;
-  border-top: 1px solid rgba(255, 255, 255, 0.07);
   color: #FAF7F2;
   transition: background-color 150ms ease-out;
 }
@@ -188,29 +188,40 @@ dialog.product-quickview::backdrop {
 }
 
 @media (prefers-contrast: more) {
-  .hub-cream-input-box,
+  .hub-cream-input-row,
   .hub-cream-row-active,
-  .hub-cream-row-muted,
-  .hub-cream-chip {
-    border-color: #57534E;
+  .hub-cream-row-muted {
+    border-bottom-color: #57534E;
   }
 }
 
 @media (forced-colors: active) {
   .hub-catalog-card,
-  .hub-catalog-cream,
-  .hub-cream-input-box,
-  .hub-cream-row-active,
-  .hub-cream-row-muted,
-  .hub-cream-chip,
+  .hub-catalog-cream {
+    forced-color-adjust: auto;
+    background-color: Canvas;
+    color: CanvasText;
+    border: 1px solid CanvasText;
+  }
+
   .hub-catalog-tray {
     forced-color-adjust: auto;
     background-color: Canvas;
     color: CanvasText;
-    box-shadow: none;
-    border: 1px solid CanvasText;
+    border-top: 1px solid CanvasText;
   }
 
+  .hub-cream-input-row {
+    border: 1px solid CanvasText;
+    padding-inline: 0.5rem;
+  }
+
+  .hub-cream-row-active,
+  .hub-cream-row-muted {
+    border-bottom: 1px solid GrayText;
+  }
+
+  .hub-cream-chip,
   .hub-photo-trigger,
   .hub-tray-pill,
   .hub-tray-badge {
@@ -220,11 +231,11 @@ dialog.product-quickview::backdrop {
     border: 1px solid ButtonText;
   }
 
-  .hub-cream-input-box:focus-within,
   .hub-photo-trigger:focus-visible,
   .hub-cream-clear-btn:focus-visible,
   .hub-cream-close-btn:focus-visible,
   .hub-cream-row-active:focus-visible,
+  .hub-cream-row-muted:focus-visible,
   .hub-cream-chip:focus-visible,
   .hub-catalog-tray:focus-visible {
     outline: 2px solid Highlight;
@@ -233,9 +244,10 @@ dialog.product-quickview::backdrop {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .hub-cream-input-box,
+  .hub-cream-input-row,
   .hub-photo-trigger,
   .hub-cream-row-active,
+  .hub-cream-row-muted,
   .hub-cream-chip,
   .hub-catalog-tray,
   .hub-tray-pill {

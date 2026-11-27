@@ -270,27 +270,22 @@ export default function ClientPage({ commerceId, data, themeHex, RENDER_API = ''
           <div className="w-2.5 h-2.5 rounded-full shrink-0 opacity-80" style={{ backgroundColor: 'var(--theme)' }} />
         </div>
 
-        {/* ── OPTION B: UNIFIED DUAL-TRAY CATALOG & SEARCH CARD ── */}
+        {/* ── OPTION B: SEAMLESS DUAL-TRAY CATALOG & SEARCH CARD ── */}
         <div className="hub-catalog-card w-full rounded-2xl overflow-hidden">
           <div
-            className={`hub-catalog-cream p-3.5 flex flex-col gap-2.5 ${
+            className={`hub-catalog-cream px-4 pt-3.5 pb-3 flex flex-col gap-2 ${
               showCatalogButton ? 'rounded-t-[15px]' : 'rounded-[15px]'
             }`}
           >
-            <search className="w-full flex flex-col gap-2">
-              <div className="flex items-center justify-between gap-2 px-0.5">
-                <label
-                  htmlFor="hub-catalog-search"
-                  className="hub-cream-title text-[13px] font-bold leading-snug cursor-pointer select-none"
-                >
-                  {data?.ecometri?.enabled || showCatalogButton
-                    ? 'Que estas buscando?'
-                    : 'Buscar en este comercio'}
-                </label>
-                <span className="hub-cream-muted text-[11px] font-medium leading-snug">
-                  {visualSearchEnabled ? 'Texto o foto' : 'Busqueda directa'}
-                </span>
-              </div>
+            <search className="w-full flex flex-col gap-1">
+              <label
+                htmlFor="hub-catalog-search"
+                className="hub-cream-title text-[13px] font-bold leading-snug cursor-pointer select-none"
+              >
+                {data?.ecometri?.enabled || showCatalogButton
+                  ? 'Que estas buscando?'
+                  : 'Buscar en este comercio'}
+              </label>
 
               <div
                 onClick={(e) => {
@@ -299,7 +294,7 @@ export default function ClientPage({ commerceId, data, themeHex, RENDER_API = ''
                     searchInputRef.current?.focus();
                   }
                 }}
-                className="hub-cream-input-box w-full flex items-center gap-2 rounded-xl pl-3 pr-1.5 py-1.5 min-h-[48px] cursor-text"
+                className="hub-cream-input-row w-full flex items-center gap-2.5 pb-2 pt-1 min-h-[46px] cursor-text"
               >
                 <SearchIcon />
 
@@ -335,7 +330,7 @@ export default function ClientPage({ commerceId, data, themeHex, RENDER_API = ''
                         searchInputRef.current?.focus();
                       }}
                       aria-label="Limpiar busqueda"
-                      className="hub-cream-clear-btn flex min-h-[40px] min-w-[40px] items-center justify-center rounded-lg text-[#57534E] hover:bg-stone-100 hover:text-[#1C1917] transition-colors duration-150"
+                      className="hub-cream-clear-btn flex min-h-[40px] min-w-[40px] items-center justify-center rounded-lg text-[#57534E] hover:bg-stone-200/60 hover:text-[#1C1917] transition-colors duration-150"
                     >
                       <svg aria-hidden="true" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
                         <line x1="18" y1="6" x2="6" y2="18" />
