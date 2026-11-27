@@ -4,6 +4,7 @@ import type { EnrichPromptCandidate, GeminiClient } from '../../geminiClient';
 import { createRateLimiter } from '../enrichBatch';
 import { createSemanticIndexLoader } from '../loadIndex';
 import { InMemorySemanticStore } from '../shards';
+import { runCatalogEnrichmentSync } from '../syncCore';
 import {
   createEcometriSyncHandler,
   verifyBearerSecretConstantTime,
@@ -435,4 +436,80 @@ test('typical daily sync & fault isolation: 6 new + 2 photo changes + 25 price/s
   assert.equal(boundedRun.status, 200);
   assert.equal((boundedRun.body as SyncResponseBody).processed, 6);
   assert.equal((boundedRun.body as SyncResponseBody).backlog, 12);
+
+  // Verify transient whole-batch failure preserves prior v2.0 ok items AND keeps them in backlog for next run
+  const transientStore = new InMemorySemanticStore();
+  let failNextBatchWithTimeout = false;
+  let promptVer = 'v2.0';
+  const transientFeed = currentFeed.slice(0, 6);
+
+  const runSyncStep = (retryFailed = false) =>
+    runCatalogEnrichmentSync({
+      cfg: SYNC_CFG,
+      liveProducts: transientFeed,
+      store: transientStore,
+      promptVersion: promptVer,
+      retryFailed,
+      batchSize: 6,
+      callTimeoutMs: 20,
+      fetchFn: fakeThumbFetch,
+      limiter: createRateLimiter(60, { now: () => 0, sleep: async () => {} }),
+      geminiClient: {
+        async analyze() {
+          throw new Error('unused');
+        },
+        async rerank() {
+          return null;
+        },
+        async enrichCatalogBatch(candidates, signal) {
+          if (failNextBatchWithTimeout) {
+            return new Promise((_res, rej) => {
+              signal.addEventListener('abort', () => {
+                const err = new Error('aborted');
+                err.name = 'AbortError';
+                rej(err);
+              });
+            });
+          }
+          return {
+            items: candidates.map((c) => ({
+              ecometriId: c.id,
+              ocrBoxText: c.rawTitle,
+              displayTitle: `${promptVer} ${c.rawTitle}`,
+              article: 'producto',
+              colors: ['gris'],
+              keywords: ['hogar'],
+              visualSummary: 'Producto resistente de uso diario para el hogar.',
+            })),
+          };
+        },
+      },
+    });
+
+  // Seed v2.0
+  const seedV2 = await runSyncStep();
+  assert.equal(seedV2.processed, 6);
+
+  // Upgrade to v3.0, but batch 1 times out transiently -> preserves v2.0 items and keeps backlog = 6!
+  promptVer = 'v3.0';
+  failNextBatchWithTimeout = true;
+  const timedOutV3 = await runSyncStep();
+  assert.equal(timedOutV3.failed, 6);
+  assert.equal(timedOutV3.backlog, 6);
+
+  const loadedDuringOutage = await loader.load('bmm-trans', {
+    store: transientStore,
+    now: () => Date.now(),
+  });
+  assert.ok(loadedDuringOutage);
+  for (const item of loadedDuringOutage.byId.values()) {
+    assert.equal(item.status, 'ok');
+    assert.equal(item.promptVersion, 'v2.0');
+  }
+
+  // Next run succeeds cleanly without manual intervention -> all 6 upgraded to v3.0, backlog = 0!
+  failNextBatchWithTimeout = false;
+  const recoveredV3 = await runSyncStep();
+  assert.equal(recoveredV3.processed, 6);
+  assert.equal(recoveredV3.backlog, 0);
 });

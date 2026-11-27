@@ -20,18 +20,30 @@ async function handleSyncRequest(request: NextRequest): Promise<NextResponse> {
         ? false
         : null;
 
+  const retryParam = request.nextUrl.searchParams.get('retryFailed');
+  let retryFailed: boolean | null =
+    retryParam === 'true' || retryParam === '1'
+      ? true
+      : retryParam === 'false' || retryParam === '0'
+        ? false
+        : null;
+
   if (request.method === 'POST') {
     try {
       const body = (await request.json()) as {
         commerce?: string;
         commerceId?: string;
         enableSemantic?: boolean;
+        retryFailed?: boolean;
       } | null;
       if (!commerce) {
         commerce = body?.commerce || body?.commerceId || null;
       }
       if (enableSemantic === null && typeof body?.enableSemantic === 'boolean') {
         enableSemantic = body.enableSemantic;
+      }
+      if (retryFailed === null && typeof body?.retryFailed === 'boolean') {
+        retryFailed = body.retryFailed;
       }
     } catch {
       // Allow empty POST body when query param is used
@@ -42,6 +54,7 @@ async function handleSyncRequest(request: NextRequest): Promise<NextResponse> {
     authorizationHeader: request.headers.get('authorization'),
     commerce,
     enableSemantic,
+    retryFailed,
   });
 
   return NextResponse.json(result.body, { status: result.status });

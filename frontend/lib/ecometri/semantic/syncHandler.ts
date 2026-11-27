@@ -34,6 +34,7 @@ export interface SyncRequestInput {
   authorizationHeader: string | null;
   commerce: string | null;
   enableSemantic?: boolean | null;
+  retryFailed?: boolean | null;
 }
 
 export interface SyncHandlerResult {
@@ -220,6 +221,7 @@ export function createEcometriSyncHandler({
         batchSize: MAX_ENRICH_BATCH_SIZE,
         maxVisionItems: maxItemsPerRun,
         budgetMs,
+        retryFailed: input.retryFailed === true,
         dryRun: false,
         now: nowFn,
         fetchFn,

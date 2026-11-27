@@ -197,12 +197,15 @@ export function createHttpGeminiClient(
     ? [preferredModel.trim(), ...DEFAULT_MODEL_CHAIN.filter((m) => m !== preferredModel.trim())]
     : DEFAULT_MODEL_CHAIN;
 
+  type ThinkingMode = 'zero_budget' | 'minimal_level' | 'none';
+  const modelThinkingMode = new Map<string, ThinkingMode>();
+
   const invokeModel = async (
     model: string,
     parts: Array<Record<string, unknown>>,
     responseSchema: Record<string, unknown>,
     signal: AbortSignal,
-    disableThinking: boolean = true,
+    thinkingMode: ThinkingMode = modelThinkingMode.get(model) ?? 'zero_budget',
     maxOutputTokens: number = 400
   ): Promise<{
     retryNextModel: boolean;
@@ -216,8 +219,10 @@ export function createHttpGeminiClient(
       responseMimeType: 'application/json',
       responseSchema,
     };
-    if (disableThinking) {
+    if (thinkingMode === 'zero_budget') {
       generationConfig.thinkingConfig = { thinkingBudget: 0 };
+    } else if (thinkingMode === 'minimal_level') {
+      generationConfig.thinkingConfig = { thinkingLevel: 'MINIMAL' };
     }
 
     const resp = await fetchFn(
@@ -233,9 +238,12 @@ export function createHttpGeminiClient(
       }
     );
 
-    // If a model does not accept thinkingConfig (HTTP 400), retry once without it
-    if (resp.status === 400 && disableThinking && !signal.aborted) {
-      return invokeModel(model, parts, responseSchema, signal, false, maxOutputTokens);
+    // Step down and memoize thinkingConfig compatibility per model (zero_budget -> minimal_level -> none)
+    if (resp.status === 400 && thinkingMode !== 'none' && !signal.aborted) {
+      const nextMode: ThinkingMode =
+        thinkingMode === 'zero_budget' ? 'minimal_level' : 'none';
+      modelThinkingMode.set(model, nextMode);
+      return invokeModel(model, parts, responseSchema, signal, nextMode, maxOutputTokens);
     }
 
     if (resp.status === 429) {
@@ -297,7 +305,14 @@ export function createHttpGeminiClient(
     for (const model of attemptModels) {
       if (signal.aborted) break;
       lastModel = model;
-      const result = await invokeModel(model, parts, responseSchema, signal, true, maxOutputTokens);
+      const result = await invokeModel(
+        model,
+        parts,
+        responseSchema,
+        signal,
+        modelThinkingMode.get(model) ?? 'zero_budget',
+        maxOutputTokens
+      );
       if (!result.retryNextModel) {
         if (!explicitModelChain) {
           discoveredModelCache = model;
@@ -317,7 +332,14 @@ export function createHttpGeminiClient(
     const discovered = await discoverFlashModel(apiKey, signal, fetchFn);
     if (discovered && !attemptModels.includes(discovered) && !signal.aborted) {
       lastModel = discovered;
-      const retry = await invokeModel(discovered, parts, responseSchema, signal, true, maxOutputTokens);
+      const retry = await invokeModel(
+        discovered,
+        parts,
+        responseSchema,
+        signal,
+        modelThinkingMode.get(discovered) ?? 'zero_budget',
+        maxOutputTokens
+      );
       if (!retry.retryNextModel) {
         return retry.data;
       }
@@ -423,7 +445,7 @@ export function createHttpGeminiClient(
       }
 
       const explicitOrder = preferredModel?.trim() ? undefined : ENRICH_MODEL_CHAIN;
-      return callGemini(parts, ENRICH_BATCH_RESPONSE_SCHEMA, signal, 4096, explicitOrder);
+      return callGemini(parts, ENRICH_BATCH_RESPONSE_SCHEMA, signal, 8192, explicitOrder);
     },
   };
 }

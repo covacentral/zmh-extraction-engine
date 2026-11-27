@@ -134,6 +134,7 @@ export interface SyncExecutionOptions {
   maxVisionItems?: number;
   budgetMs?: number;
   callTimeoutMs?: number;
+  retryFailed?: boolean;
   dryRun?: boolean;
   now?: () => number;
   fetchFn?: typeof fetch;
@@ -177,10 +178,16 @@ export async function runCatalogEnrichmentSync(
   // Merge stored DB items with optional local disk checkpoint items (checkpoint overrides stale DB)
   const baselineMap = new Map<string, SemanticItem>();
   for (const item of storedInDb) {
+    if (opts.retryFailed && item.status === 'failed') {
+      continue;
+    }
     baselineMap.set(item.ecometriId, item);
   }
   if (opts.checkpointItems) {
     for (const ckItem of opts.checkpointItems) {
+      if (opts.retryFailed && ckItem.status === 'failed') {
+        continue;
+      }
       baselineMap.set(ckItem.ecometriId, ckItem);
     }
   }
@@ -241,6 +248,7 @@ export async function runCatalogEnrichmentSync(
   const candidateVision = dirtyVision.slice(0, visionCap);
   const callTimeoutMs = opts.callTimeoutMs ?? DEFAULT_CALL_TIMEOUT_MS;
   let visionAttempted = 0;
+  let transientBatchFailures = 0;
 
   for (let offset = 0; offset < candidateVision.length; offset += batchSize) {
     if (typeof opts.budgetMs === 'number') {
@@ -298,6 +306,19 @@ export async function runCatalogEnrichmentSync(
       );
 
       for (const res of enrichedResults) {
+        if (
+          res.item.status === 'failed' &&
+          !res.retriedSingle &&
+          (res.errorReason === 'timeout' ||
+            res.errorReason === 'quota' ||
+            res.errorReason === 'http_error')
+        ) {
+          // Transient whole-batch failure (timeout/429/5xx): keep baseline item intact
+          // so live catalog never regresses and item remains dirty for next sync run.
+          failed += 1;
+          transientBatchFailures += 1;
+          continue;
+        }
         workingById.set(res.item.ecometriId, res.item);
         if (res.item.status === 'ok') {
           processed += 1;
@@ -339,11 +360,15 @@ export async function runCatalogEnrichmentSync(
     }
   }
 
-  const backlog = Math.max(0, dirtyVision.length - visionAttempted);
+  const backlog = Math.max(
+    0,
+    dirtyVision.length - visionAttempted + transientBatchFailures
+  );
+  const persistedFailures = Math.max(0, failed - transientBatchFailures);
   const hasChanges =
     processed > 0 ||
     reused > 0 ||
-    failed > 0 ||
+    persistedFailures > 0 ||
     delta.removed.length > 0 ||
     Boolean(opts.checkpointItems && opts.checkpointItems.length > 0 && !prevMeta);
 
@@ -356,7 +381,7 @@ export async function runCatalogEnrichmentSync(
       estimatedGeminiBatches,
       processed: 0,
       reused: 0,
-      failed: 0,
+      failed,
       removed: 0,
       backlog,
       gen: prevMeta.gen,
