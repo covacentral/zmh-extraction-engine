@@ -7,6 +7,42 @@ import { toClientEcometriConfig } from '../normalize';
 const FRONTEND_ROOT = path.resolve(process.cwd());
 const EMOJI_RE = /\p{Extended_Pictographic}/u;
 
+export const OPTION_B_PALETTE = {
+  creamBg: '#FAF7F2',
+  whiteSurface: '#FFFFFF',
+  primaryInk: '#1C1917',
+  secondaryInk: '#57534E',
+  placeholderInk: '#6B655E',
+  inputBorder: '#857D73',
+  availableGreen: '#047857',
+  trayBg: '#1C1A19',
+  trayTitle: '#FAF7F2',
+  traySubtitle: '#B8B0A6',
+  trayPillBg: '#FAF7F2',
+  trayPillInk: '#1C1917',
+} as const;
+
+function hexLuminance(hex: string): number {
+  const clean = hex.trim().replace(/^#/, '');
+  assert.match(clean, /^[0-9a-fA-F]{6}$/, `Invalid hex color: ${hex}`);
+  const r = parseInt(clean.slice(0, 2), 16);
+  const g = parseInt(clean.slice(2, 4), 16);
+  const b = parseInt(clean.slice(4, 6), 16);
+  const toLinear = (v: number) => {
+    const s = v / 255;
+    return s <= 0.04045 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+  };
+  return 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b);
+}
+
+function wcagContrast(hexA: string, hexB: string): number {
+  const l1 = hexLuminance(hexA);
+  const l2 = hexLuminance(hexB);
+  const lighter = Math.max(l1, l2);
+  const darker = Math.min(l1, l2);
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
 test('toClientEcometriConfig returns null when disabled or absent (zero-impact isolation)', () => {
   assert.equal(toClientEcometriConfig(undefined), null);
   assert.equal(toClientEcometriConfig(null), null);
@@ -39,30 +75,25 @@ test('EcometriResults and ProductQuickView contain zero emojis and follow securi
     'utf8'
   );
 
-  // Zero emojis in new UI components
   assert.equal(EMOJI_RE.test(resultsSrc), false);
   assert.equal(EMOJI_RE.test(quickViewSrc), false);
 
-  // Never render untrusted third-party HTML
   assert.equal(quickViewSrc.includes('dangerouslySetInnerHTML'), false);
   assert.equal(resultsSrc.includes('dangerouslySetInnerHTML'), false);
 
-  // Native accessible dialog + light-dismiss + Safari fallback
   assert.match(quickViewSrc, /<dialog\b/);
   assert.match(quickViewSrc, /\.showModal\(\)/);
   assert.match(quickViewSrc, /closedby:\s*'any'/);
   assert.match(quickViewSrc, /'closedBy' in HTMLDialogElement\.prototype/);
 
-  // Infinite scroll uses IntersectionObserver (not scroll event)
   assert.match(resultsSrc, /new IntersectionObserver\(/);
 
-  // Conditional lazy-loading in ClientPage and storeId stripping in page.tsx
   assert.match(clientPageSrc, /dynamic\(\(\) => import\('\.\/EcometriResults'\)/);
   assert.match(clientPageSrc, /data\?\.ecometri\?\.enabled/);
   assert.match(serverPageSrc, /toClientEcometriConfig\(data\?\.ecometri\)/);
 });
 
-test('co-primary search bar & Foto trigger enforce ADR invariants (single accessible label, 16px search input, oklab/forced-colors fallbacks, opt-in Foto, zero SKU/exactness in rows)', () => {
+test('Option B Dual-Tray card enforces structure, sobriety, WCAG luminance ratios, worst-case light theme fallback, and focus/forced-colors invariants', () => {
   const clientPageSrc = fs.readFileSync(
     path.join(FRONTEND_ROOT, 'app', '[comercio]', 'ClientPage.tsx'),
     'utf8'
@@ -84,38 +115,85 @@ test('co-primary search bar & Foto trigger enforce ADR invariants (single access
     'utf8'
   );
 
-  // Zero emojis across modified UI & CSS files
+  // 1. Zero emojis & strict sobriety (zero shimmer, zero keyframes, zero brand-tinted box-shadow)
   assert.equal(EMOJI_RE.test(clientPageSrc), false);
   assert.equal(EMOJI_RE.test(triggerSrc), false);
   assert.equal(EMOJI_RE.test(panelSrc), false);
   assert.equal(EMOJI_RE.test(resultsSrc), false);
   assert.equal(EMOJI_RE.test(globalsCss), false);
+  assert.equal(/shimmer|@keyframes/i.test(globalsCss), false);
+  assert.equal(/box-shadow:[^;]*var\(--(theme|brand-safe)\)/i.test(globalsCss), false);
 
-  // Semantic <search> landmark + single <label htmlFor="hub-catalog-search"> + decorative badge aria-hidden="true"
+  // 2. Unified .hub-catalog-card with <search>, single <label htmlFor>, 16px input, and single-link bottom tray
+  assert.match(clientPageSrc, /hub-catalog-card/);
   assert.match(clientPageSrc, /<search\b/);
   const labelMatches = clientPageSrc.match(/htmlFor="hub-catalog-search"/g) || [];
-  assert.equal(labelMatches.length, 1, 'Expected exactly one <label htmlFor="hub-catalog-search">');
-  assert.match(clientPageSrc, /aria-hidden="true"[\s\S]{0,120}hub-search-badge/);
+  assert.equal(labelMatches.length, 1);
 
-  // Search input has type="search" and 16px (text-base) font size without conflicting aria-label
   const inputBlockMatch = clientPageSrc.match(/<input[\s\S]*?id="hub-catalog-search"[\s\S]*?\/>/);
-  assert.ok(inputBlockMatch, 'Expected #hub-catalog-search input');
+  assert.ok(inputBlockMatch);
   assert.match(inputBlockMatch[0], /type="search"/);
   assert.match(inputBlockMatch[0], /\btext-base\b/);
-  assert.equal(/aria-label=/.test(inputBlockMatch[0]), false, 'Visible <label> must be the sole accessible name');
+  assert.equal(/aria-label=/.test(inputBlockMatch[0]), false);
 
-  // VisualSearchTrigger stays strictly opt-in behind visualSearchEnabled, displays "Foto" and aria-label="Buscar por foto"
+  // Bottom tray renders as a single <a>/<Link> without nested <button> or <a> inside trayContent
+  const trayContentMatch = clientPageSrc.match(/const trayContent = \(([\s\S]*?)\);/);
+  assert.ok(trayContentMatch);
+  assert.equal(/<(button|a)\b/i.test(trayContentMatch[1]), false);
+
+  // Opt-in Foto trigger preserved
   assert.match(clientPageSrc, /\{visualSearchEnabled && \(\s*<VisualSearchTrigger/);
   assert.match(triggerSrc, /aria-label="Buscar por foto"/);
   assert.match(triggerSrc, /<span>Foto<\/span>/);
+  assert.match(triggerSrc, /min-h-\[40px\]/);
 
-  // Progressive oklab + solid base + forced-colors + prefers-reduced-motion in globals.css
+  // 3. Verify all palette hex constants exist in globals.css and pass mathematical WCAG 2.1 contrast thresholds
+  for (const hex of Object.values(OPTION_B_PALETTE)) {
+    assert.ok(
+      globalsCss.toUpperCase().includes(hex.toUpperCase()),
+      `Expected ${hex} to be anchored in globals.css`
+    );
+  }
+
+  assert.ok(wcagContrast(OPTION_B_PALETTE.primaryInk, OPTION_B_PALETTE.creamBg) >= 15);
+  assert.ok(wcagContrast(OPTION_B_PALETTE.secondaryInk, OPTION_B_PALETTE.creamBg) >= 4.5);
+  assert.ok(wcagContrast(OPTION_B_PALETTE.placeholderInk, OPTION_B_PALETTE.whiteSurface) >= 4.5);
+  assert.ok(wcagContrast(OPTION_B_PALETTE.inputBorder, OPTION_B_PALETTE.creamBg) >= 3.0);
+  assert.ok(wcagContrast(OPTION_B_PALETTE.availableGreen, OPTION_B_PALETTE.whiteSurface) >= 4.5);
+  assert.ok(wcagContrast(OPTION_B_PALETTE.trayTitle, OPTION_B_PALETTE.trayBg) >= 15);
+  assert.ok(wcagContrast(OPTION_B_PALETTE.traySubtitle, OPTION_B_PALETTE.trayBg) >= 4.5);
+  assert.ok(wcagContrast(OPTION_B_PALETTE.trayPillInk, OPTION_B_PALETTE.trayPillBg) >= 15);
+  // Distinct focus rings: #1C1917 on cream >= 3:1, #FAF7F2 on dark tray >= 3:1
+  assert.ok(wcagContrast('#1C1917', OPTION_B_PALETTE.creamBg) >= 3.0);
+  assert.ok(wcagContrast('#FAF7F2', OPTION_B_PALETTE.trayBg) >= 3.0);
+
+  // 4. Execute ClientPage's actual resolveSafeBrandAccent against bright/pastel/white worst-case themes
+  const fnMatch = clientPageSrc.match(
+    /function resolveSafeBrandAccent\(rawHex\?: string\): string \{([\s\S]*?)\n\}/
+  );
+  assert.ok(fnMatch, 'Expected resolveSafeBrandAccent in ClientPage.tsx');
+  const jsBody = fnMatch[1].replace(/:\s*number/g, '');
+  const evalResolver = new Function('rawHex', jsBody) as (h?: string) => string;
+
+  const bmmResolved = evalResolver('#FF3DB8');
+  assert.notEqual(bmmResolved, '#1C1917', 'BMM magenta should keep rich matte brand hue');
+  assert.ok(wcagContrast(bmmResolved, '#FFFFFF') >= 4.5);
+
+  for (const trickyTheme of ['#FFFFFF', '#FAF7F2', '#FFFF00', '#A7F3D0', '#38BDF8', '', 'bad']) {
+    const safe = evalResolver(trickyTheme);
+    assert.ok(
+      wcagContrast(safe, '#FFFFFF') >= 4.5,
+      `Theme "${trickyTheme}" resolved to "${safe}" with insufficient white text contrast`
+    );
+  }
+  assert.equal(evalResolver('#FFFFFF'), '#1C1917');
+  assert.equal(evalResolver('#FFFF00'), '#1C1917');
+
+  // 5. Progressive oklab, forced-colors, reduced-motion, and privacy invariants
   assert.match(globalsCss, /@supports \(color: color-mix\(in oklab, red, blue\)\)/);
   assert.match(globalsCss, /@media \(forced-colors: active\)/);
   assert.match(globalsCss, /outline:\s*2px solid Highlight/);
   assert.match(globalsCss, /@media \(prefers-reduced-motion: reduce\)/);
-
-  // No SKU rendered in list rows and no exactness claims in visual panel
   assert.equal(/\.sku\b/.test(resultsSrc), false);
   assert.equal(/\.sku\b/.test(panelSrc), false);
   assert.equal(/\b(coincidencia|exact[oa]s?|id[eé]ntic[oa]s?)\b|100\s*%/i.test(panelSrc), false);

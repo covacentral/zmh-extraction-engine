@@ -25,6 +25,7 @@ interface VisualSearchPanelProps {
 
 const CloseSmallIcon = () => (
   <svg
+    aria-hidden="true"
     viewBox="0 0 24 24"
     width="13"
     height="13"
@@ -41,6 +42,7 @@ const CloseSmallIcon = () => (
 
 const ChevronRightSmall = () => (
   <svg
+    aria-hidden="true"
     viewBox="0 0 24 24"
     width="14"
     height="14"
@@ -57,6 +59,7 @@ const ChevronRightSmall = () => (
 
 const ImagePlaceholder = () => (
   <svg
+    aria-hidden="true"
     viewBox="0 0 24 24"
     width="18"
     height="18"
@@ -65,7 +68,7 @@ const ImagePlaceholder = () => (
     strokeWidth="1.8"
     strokeLinecap="round"
     strokeLinejoin="round"
-    className="text-white/25"
+    className="text-[#57534E]"
   >
     <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
     <circle cx="8.5" cy="8.5" r="1.5" />
@@ -113,16 +116,16 @@ export default function VisualSearchPanel({
       aria-label={VISUAL_RESULTS_HEADING}
       className="w-full flex flex-col gap-2"
     >
-      <div className="flex items-center justify-between px-1">
+      <div className="flex items-center justify-between px-0.5 pt-0.5">
         <div className="flex items-center gap-2 min-w-0">
           {state.previewDataUrl && (
             <img
               src={state.previewDataUrl}
               alt="Foto consultada"
-              className="h-6 w-6 rounded-md border border-white/15 object-cover shrink-0"
+              className="h-7 w-7 rounded-md border border-[#857D73] object-cover shrink-0"
             />
           )}
-          <h2 className="hub-search-label truncate text-[10px] font-bold uppercase tracking-widest">
+          <h2 className="hub-cream-muted truncate text-[11px] font-bold">
             {state.status === 'identifying' && 'Identificando producto...'}
             {state.status === 'comparing' && 'Comparando en el catalogo...'}
             {state.status === 'ok' && VISUAL_RESULTS_HEADING}
@@ -134,25 +137,25 @@ export default function VisualSearchPanel({
           type="button"
           onClick={onClear}
           aria-label="Cerrar busqueda por foto"
-          className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[10px] font-semibold text-white/65 transition-colors duration-150 hover:bg-white/10 hover:text-white"
+          className="hub-cream-close-btn inline-flex min-h-[40px] items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-[#57534E] transition-colors duration-150 hover:bg-stone-200/70 hover:text-[#1C1917]"
         >
           <span>Cerrar</span>
           <CloseSmallIcon />
         </button>
       </div>
 
-      <div className="hub-results-card w-full rounded-2xl p-2 flex flex-col gap-2">
+      <div className="hub-cream-results-box w-full rounded-xl p-2 flex flex-col gap-2">
         {isLoading && (
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-1.5">
             {[0, 1, 2].map((idx) => (
               <div
                 key={idx}
-                className="flex items-center gap-3 rounded-xl border border-white/[0.05] bg-zinc-950/60 p-2.5 animate-pulse"
+                className="flex items-center gap-3 rounded-xl border border-[#E5DFD4] bg-white p-2.5 animate-pulse"
               >
-                <div className="h-14 w-14 shrink-0 rounded-xl bg-white/[0.07]" />
+                <div className="h-14 w-14 shrink-0 rounded-xl bg-stone-200/80" />
                 <div className="flex flex-1 flex-col gap-2">
-                  <div className="h-3.5 w-3/4 rounded bg-white/[0.07]" />
-                  <div className="h-3 w-1/3 rounded bg-white/[0.07]" />
+                  <div className="h-3.5 w-3/4 rounded bg-stone-200/80" />
+                  <div className="h-3 w-1/3 rounded bg-stone-200/80" />
                 </div>
               </div>
             ))}
@@ -161,7 +164,7 @@ export default function VisualSearchPanel({
 
         {state.status === 'error' && (
           <div className="px-3 py-3 text-center">
-            <p className="text-xs text-white/60">
+            <p className="hub-cream-muted text-xs">
               {state.error || 'Buscador por foto en pausa breve, intenta en unos segundos o busca por texto.'}
             </p>
           </div>
@@ -174,7 +177,7 @@ export default function VisualSearchPanel({
                 key={chip}
                 type="button"
                 onClick={() => onSelectChip(chip)}
-                className="hub-visual-chip rounded-full px-2.5 py-1 text-[11px] font-semibold text-white/85 hover:text-white"
+                className="hub-cream-chip min-h-[36px] rounded-full px-3 py-1 text-xs font-semibold"
               >
                 {chip}
               </button>
@@ -184,7 +187,7 @@ export default function VisualSearchPanel({
 
         {state.status === 'ok' && state.items.length === 0 && (
           <div className="px-3 py-3 text-center">
-            <p className="text-xs text-white/55">
+            <p className="hub-cream-muted text-xs">
               El catalogo de este comercio no devolvio productos disponibles en este momento.
             </p>
           </div>
@@ -201,13 +204,13 @@ export default function VisualSearchPanel({
                   key={item.id}
                   type="button"
                   onClick={() => setSelectedProduct(item)}
-                  className={`group flex w-full items-center gap-3 rounded-xl border p-2.5 text-left ${
+                  className={`group flex w-full min-h-[64px] items-center gap-3 rounded-xl p-2 text-left ${
                     item.inStock
-                      ? 'hub-result-row-active'
-                      : 'border-white/[0.04] bg-zinc-950/40 opacity-60 hover:opacity-80 transition-opacity duration-150'
+                      ? 'hub-cream-row-active'
+                      : 'hub-cream-row-muted opacity-75 hover:opacity-95 transition-opacity duration-150'
                   }`}
                 >
-                  <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-zinc-900">
+                  <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-[#E5DFD4] bg-[#F7F4EE]">
                     {showImg ? (
                       <img
                         src={item.imageUrl as string}
@@ -224,18 +227,23 @@ export default function VisualSearchPanel({
                   </div>
 
                   <div className="flex min-w-0 flex-1 flex-col gap-1">
-                    <span className="line-clamp-2 text-[13px] font-semibold leading-snug text-white">
+                    <span className="line-clamp-2 text-[13px] font-semibold leading-snug text-[#1C1917]">
                       {visibleTitle}
                     </span>
 
                     <div className="flex items-center gap-2.5">
-                      <span className="text-sm font-bold tracking-tight text-white">
+                      <span className="text-sm font-bold tracking-tight text-[#1C1917]">
                         {formatCop(item.priceCop)}
                       </span>
-                      <span className="inline-flex items-center gap-1 text-[10px] font-medium text-white/55">
+                      <span
+                        className={`inline-flex items-center gap-1 text-[11px] font-semibold ${
+                          item.inStock ? 'hub-status-available' : 'hub-cream-muted'
+                        }`}
+                      >
                         <span
+                          aria-hidden="true"
                           className={`h-1.5 w-1.5 rounded-full ${
-                            item.inStock ? 'bg-green-500' : 'bg-zinc-500'
+                            item.inStock ? 'bg-[#047857]' : 'bg-[#857D73]'
                           }`}
                         />
                         {item.inStock ? 'Disponible' : 'Agotado'}
@@ -243,7 +251,7 @@ export default function VisualSearchPanel({
                     </div>
                   </div>
 
-                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/[0.05] text-white/65 transition-colors duration-150 group-hover:bg-white/15 group-hover:text-white">
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#F3EFE8] text-[#57534E] transition-colors duration-150 group-hover:bg-[#E5DFD4] group-hover:text-[#1C1917]">
                     <ChevronRightSmall />
                   </div>
                 </button>
@@ -253,7 +261,7 @@ export default function VisualSearchPanel({
         )}
 
         {state.quota && (
-          <div className="flex items-center justify-between gap-2 border-t border-white/[0.06] pt-2 px-1 text-[10px] font-medium text-white/45">
+          <div className="hub-cream-muted flex items-center justify-between gap-2 border-t border-[#DED7CB] pt-2 px-1 text-[11px] font-medium">
             <span>
               {secondsLeft > 0 && state.quota.remaining < state.quota.limit
                 ? `Intentos disponibles: ${state.quota.remaining} de ${state.quota.limit}`

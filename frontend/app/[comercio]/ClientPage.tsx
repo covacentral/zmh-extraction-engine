@@ -65,8 +65,39 @@ const MessageCircleIcon = () => (
   <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg>
 );
 const SearchIcon = () => (
-  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" className="stroke-white shrink-0"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+  <svg aria-hidden="true" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" className="text-[#57534E] shrink-0"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
 );
+
+/* ─── Safe Matte Brand Contrast Resolver (WCAG >= 4.5:1 vs #FFFFFF) ─── */
+function resolveSafeBrandAccent(rawHex?: string): string {
+  const FALLBACK = '#1C1917';
+  if (typeof rawHex !== 'string') return FALLBACK;
+  const clean = rawHex.trim().replace(/^#/, '');
+  const full =
+    clean.length === 3
+      ? clean.split('').map((c) => c + c).join('')
+      : clean;
+  if (!/^[0-9a-fA-F]{6}$/.test(full)) return FALLBACK;
+
+  const r = parseInt(full.slice(0, 2), 16);
+  const g = parseInt(full.slice(2, 4), 16);
+  const b = parseInt(full.slice(4, 6), 16);
+
+  // Mix 74% merchant brand color with 26% warm charcoal (#141210) for matte finish
+  const mr = Math.round(r * 0.74 + 0x14 * 0.26);
+  const mg = Math.round(g * 0.74 + 0x12 * 0.26);
+  const mb = Math.round(b * 0.74 + 0x10 * 0.26);
+
+  const toLinear = (v: number) => {
+    const s = v / 255;
+    return s <= 0.04045 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+  };
+  const lum = 0.2126 * toLinear(mr) + 0.7152 * toLinear(mg) + 0.0722 * toLinear(mb);
+  const whiteContrast = 1.05 / (lum + 0.05);
+
+  if (whiteContrast < 4.5) return FALLBACK;
+  return `#${[mr, mg, mb].map((x) => x.toString(16).padStart(2, '0')).join('').toUpperCase()}`;
+}
 const VerifiedIcon = () => (
   <svg viewBox="0 0 24 24" width="13" height="13" className="fill-green-400 shrink-0"><path d="M23 12l-2.44-2.79.34-3.69-3.61-.82-1.89-3.2L12 2.96 8.6 1.5 6.71 4.7l-3.61.81.34 3.7L1 12l2.44 2.79-.34 3.7 3.61.82 1.89 3.2 3.4-1.47 3.4 1.46 1.89-3.19 3.61-.82-.34-3.69L23 12zm-12.91 4.72l-3.8-3.81 1.48-1.48 2.32 2.33 5.85-5.87 1.48 1.48-7.33 7.35z"/></svg>
 );
@@ -197,14 +228,16 @@ export default function ClientPage({ commerceId, data, themeHex, RENDER_API = ''
   const WA_SHOW = 4;
   const WEB_SHOW = 4;
 
+  const safeBrandHex = resolveSafeBrandAccent(themeHex);
+
   return (
     <main
       className="flex flex-col items-center px-3.5 py-6 min-h-screen w-full relative bg-black font-sans pb-28 overflow-x-hidden"
-      style={{ '--theme': themeHex } as any}
+      style={{ '--theme': themeHex, '--brand-safe': safeBrandHex } as any}
     >
-      {/* Ambient glow */}
+      {/* Subtle ambient top tone */}
       <div
-        className="absolute top-0 left-1/2 -translate-x-1/2 w-[140%] h-72 opacity-25 blur-[120px] pointer-events-none z-0"
+        className="absolute top-0 left-1/2 -translate-x-1/2 w-[140%] h-64 opacity-10 blur-[120px] pointer-events-none z-0"
         style={{ backgroundColor: 'var(--theme)' }}
       />
 
@@ -237,137 +270,170 @@ export default function ClientPage({ commerceId, data, themeHex, RENDER_API = ''
           <div className="w-2.5 h-2.5 rounded-full shrink-0 opacity-80" style={{ backgroundColor: 'var(--theme)' }} />
         </div>
 
-        {/* ── CO-PRIMARY BRAND SEARCH BAR ── */}
-        <search className="w-full">
-          <div
-            onClick={(e) => {
-              const target = e.target as HTMLElement | null;
-              if (target && !target.closest('button') && target !== searchInputRef.current) {
-                searchInputRef.current?.focus();
-              }
-            }}
-            className="hub-search-shell w-full flex items-center gap-3 px-3.5 py-2.5 rounded-2xl cursor-text"
-          >
-            <div
-              aria-hidden="true"
-              className="hub-search-badge w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
-            >
-              <SearchIcon />
-            </div>
-
-            <div className="flex flex-col flex-1 min-w-0">
-              <label
-                htmlFor="hub-catalog-search"
-                className="hub-search-label text-[10.5px] font-bold tracking-wide leading-tight cursor-text select-none"
-              >
-                {data?.ecometri?.enabled ? 'Buscar en el catalogo' : 'Buscar en este comercio'}
-              </label>
-              <input
-                ref={searchInputRef}
-                id="hub-catalog-search"
-                name="q"
-                type="search"
-                value={searchQuery}
-                onChange={(e) => {
-                  setSearchQuery(e.target.value);
-                  if (visualState.status !== 'idle') setVisualState(IDLE_VISUAL_STATE);
-                }}
-                placeholder={
-                  data?.ecometri?.enabled
-                    ? 'Producto, marca, referencia o asesor...'
-                    : 'Canal, asesor o enlace...'
-                }
-                autoComplete="off"
-                autoCorrect="off"
-                autoCapitalize="none"
-                spellCheck={false}
-                enterKeyHint="search"
-                className="hub-search-input w-full bg-transparent pt-0.5 text-base font-semibold text-white placeholder-white/55 outline-none leading-snug"
-              />
-            </div>
-
-            <div className="flex items-center gap-1.5 shrink-0">
-              {searchQuery && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSearchQuery('');
-                    searchInputRef.current?.focus();
-                  }}
-                  aria-label="Limpiar busqueda"
-                  className="hub-clear-btn flex h-9 w-9 items-center justify-center rounded-xl text-white/70 hover:bg-white/15 hover:text-white transition-colors duration-150"
+        {/* ── OPTION B: UNIFIED DUAL-TRAY CATALOG & SEARCH CARD ── */}
+        <div className="hub-catalog-card w-full rounded-2xl overflow-hidden">
+          <div className="hub-catalog-cream p-3.5 flex flex-col gap-2.5">
+            <search className="w-full flex flex-col gap-2">
+              <div className="flex items-center justify-between gap-2 px-0.5">
+                <label
+                  htmlFor="hub-catalog-search"
+                  className="hub-cream-title text-[13px] font-bold leading-snug cursor-pointer select-none"
                 >
-                  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="18" y1="6" x2="6" y2="18" />
-                    <line x1="6" y1="6" x2="18" y2="18" />
-                  </svg>
-                </button>
-              )}
-              {visualSearchEnabled && (
-                <VisualSearchTrigger
-                  commerceId={commerceId}
-                  onStateChange={(next) => {
-                    setSearchQuery('');
-                    setVisualState(next);
+                  {data?.ecometri?.enabled || showCatalogButton
+                    ? 'Que estas buscando?'
+                    : 'Buscar en este comercio'}
+                </label>
+                <span className="hub-cream-muted text-[11px] font-medium leading-snug">
+                  {visualSearchEnabled ? 'Texto o foto' : 'Busqueda directa'}
+                </span>
+              </div>
+
+              <div
+                onClick={(e) => {
+                  const target = e.target as HTMLElement | null;
+                  if (target && !target.closest('button') && target !== searchInputRef.current) {
+                    searchInputRef.current?.focus();
+                  }
+                }}
+                className="hub-cream-input-box w-full flex items-center gap-2 rounded-xl pl-3 pr-1.5 py-1.5 min-h-[48px] cursor-text"
+              >
+                <SearchIcon />
+
+                <input
+                  ref={searchInputRef}
+                  id="hub-catalog-search"
+                  name="q"
+                  type="search"
+                  value={searchQuery}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    if (visualState.status !== 'idle') setVisualState(IDLE_VISUAL_STATE);
                   }}
+                  placeholder={
+                    data?.ecometri?.enabled
+                      ? 'Escribe nombre, marca o modelo...'
+                      : 'Canal, asesor o enlace...'
+                  }
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  enterKeyHint="search"
+                  className="hub-search-input w-full flex-1 min-w-0 bg-transparent text-base font-medium outline-none leading-snug"
                 />
-              )}
-            </div>
+
+                <div className="flex items-center gap-1 shrink-0">
+                  {searchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSearchQuery('');
+                        searchInputRef.current?.focus();
+                      }}
+                      aria-label="Limpiar busqueda"
+                      className="hub-cream-clear-btn flex min-h-[40px] min-w-[40px] items-center justify-center rounded-lg text-[#57534E] hover:bg-stone-100 hover:text-[#1C1917] transition-colors duration-150"
+                    >
+                      <svg aria-hidden="true" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                      </svg>
+                    </button>
+                  )}
+                  {visualSearchEnabled && (
+                    <VisualSearchTrigger
+                      commerceId={commerceId}
+                      onStateChange={(next) => {
+                        setSearchQuery('');
+                        setVisualState(next);
+                      }}
+                    />
+                  )}
+                </div>
+              </div>
+            </search>
+
+            {/* ── VISUAL SEARCH PANEL (inline inside cream card) ── */}
+            {visualSearchEnabled && visualState.status !== 'idle' && (
+              <VisualSearchPanel
+                commerceId={commerceId}
+                state={visualState}
+                onSelectChip={(chip) => {
+                  setVisualState(IDLE_VISUAL_STATE);
+                  setSearchQuery(chip);
+                }}
+                onClear={() => setVisualState(IDLE_VISUAL_STATE)}
+              />
+            )}
+
+            {/* ── ECOMETRI LIVE CATALOG SEARCH (inline inside cream card) ── */}
+            {data?.ecometri?.enabled && (
+              <EcometriResults commerceId={commerceId} searchQuery={searchQuery} />
+            )}
           </div>
-        </search>
 
-        {/* ── VISUAL SEARCH PANEL (opt-in per commerce) ── */}
-        {visualSearchEnabled && visualState.status !== 'idle' && (
-          <VisualSearchPanel
-            commerceId={commerceId}
-            state={visualState}
-            onSelectChip={(chip) => {
-              setVisualState(IDLE_VISUAL_STATE);
-              setSearchQuery(chip);
-            }}
-            onClear={() => setVisualState(IDLE_VISUAL_STATE)}
-          />
-        )}
-
-        {/* ── ECOMETRI LIVE CATALOG SEARCH (opt-in per commerce) ── */}
-        {data?.ecometri?.enabled && (
-          <EcometriResults commerceId={commerceId} searchQuery={searchQuery} />
-        )}
-
-        {/* ── CATALOG CTA ── */}
-        {showCatalogButton && (() => {
-          const btnUrl = formatUrl(data?.catalogButtonUrl || `/${commerceId}/catalogo`);
-          const isExt = /^https?:\/\//i.test(btnUrl);
-          const label = data?.catalogButtonText || (data?.businessType === 'restaurante' ? 'Menu & Pedidos' : 'Catalogo & Agendamiento');
-          const subtitle = data?.businessType === 'restaurante' ? 'Ver menu y pedir ahora' : 'Explorar productos y precios';
-          const inner = (
-            <div
-              className="catalog-cta-btn group w-full flex items-center justify-between gap-3 px-4 py-3.5 rounded-2xl cursor-pointer hover:scale-[1.015] active:scale-[0.985] transition-all duration-200"
-            >
-              <div className="relative z-10 flex items-center gap-3 min-w-0">
-                <div className="w-10 h-10 rounded-xl bg-white/15 border border-white/25 backdrop-blur-sm flex items-center justify-center shrink-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.3)] group-hover:scale-105 transition-transform duration-200">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-white">
-                    <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" />
-                    <line x1="3" y1="6" x2="21" y2="6" />
-                    <path d="M16 10a4 4 0 0 1-8 0" />
+          {/* ── ATTACHED BOTTOM TRAY: SINGLE-LINK STORE REDIRECT CTA ── */}
+          {showCatalogButton && (() => {
+            const btnUrl = formatUrl(data?.catalogButtonUrl || `/${commerceId}/catalogo`);
+            const isExt = /^https?:\/\//i.test(btnUrl);
+            const trayTitle =
+              data?.catalogButtonText ||
+              (data?.businessType === 'restaurante'
+                ? 'Prefieres ver todo el menu?'
+                : 'Prefieres mirar todo el catalogo?');
+            const traySubtitle =
+              data?.businessType === 'restaurante'
+                ? 'Abrir carta completa y pedidos'
+                : 'Abrir tienda completa y precios';
+            const trayContent = (
+              <>
+                <div className="flex items-center gap-3 min-w-0">
+                  <div
+                    aria-hidden="true"
+                    className="hub-tray-badge w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+                  >
+                    <svg aria-hidden="true" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+                      <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" />
+                      <line x1="3" y1="6" x2="21" y2="6" />
+                      <path d="M16 10a4 4 0 0 1-8 0" />
+                    </svg>
+                  </div>
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-[13px] font-bold text-[#FAF7F2] leading-snug break-words">
+                      {trayTitle}
+                    </span>
+                    <span className="hub-tray-subtitle text-[11px] font-medium leading-snug mt-0.5">
+                      {traySubtitle}
+                    </span>
+                  </div>
+                </div>
+                <span className="hub-tray-pill inline-flex items-center gap-1 rounded-xl px-3 py-1.5 text-xs font-bold shrink-0">
+                  <span>Abrir</span>
+                  <svg aria-hidden="true" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="9 18 15 12 9 6" />
                   </svg>
-                </div>
-                <div className="flex flex-col min-w-0">
-                  <span className="text-[14px] font-extrabold tracking-wide text-white leading-tight break-words">{label}</span>
-                  <span className="text-[11px] font-medium text-white/80 leading-tight mt-0.5">{subtitle}</span>
-                </div>
-              </div>
-              <div className="relative z-10 w-8 h-8 rounded-full bg-white/20 border border-white/30 flex items-center justify-center shrink-0 text-white group-hover:bg-white group-hover:text-black group-hover:translate-x-0.5 transition-all duration-200">
-                <ChevronRightIcon />
-              </div>
-            </div>
-          );
-          return (
-            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }} className="w-full">
-              {isExt ? <a href={btnUrl} target="_blank" rel="noopener noreferrer" className="block">{inner}</a> : <Link href={btnUrl} className="block">{inner}</Link>}
-            </motion.div>
-          );
-        })()}
+                </span>
+              </>
+            );
+
+            return isExt ? (
+              <a
+                href={btnUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hub-catalog-tray w-full min-h-[56px] px-3.5 py-3 flex items-center justify-between gap-3 cursor-pointer"
+              >
+                {trayContent}
+              </a>
+            ) : (
+              <Link
+                href={btnUrl}
+                className="hub-catalog-tray w-full min-h-[56px] px-3.5 py-3 flex items-center justify-between gap-3 cursor-pointer"
+              >
+                {trayContent}
+              </Link>
+            );
+          })()}
+        </div>
 
         {/* ══════════════════════════════════════════════════════════════════
             MODULE 0 — SOCIAL MEDIA: 4-COLUMN BRAND GRID (top placement)

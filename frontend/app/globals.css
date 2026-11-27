@@ -6,13 +6,6 @@
   :root {
     --background: 240 10% 3.9%;
     --foreground: 0 0% 98%;
-    --in-oklab: ;
-  }
-}
-
-@supports (background: linear-gradient(in oklab, white, black)) {
-  :root {
-    --in-oklab: in oklab;
   }
 }
 
@@ -20,90 +13,6 @@ body {
   color: hsl(var(--foreground));
   background-color: hsl(var(--background));
   @apply antialiased min-h-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-zinc-900 via-background to-background;
-}
-
-.catalog-cta-btn {
-  position: relative;
-  isolation: isolate;
-  overflow: hidden;
-  color: #ffffff;
-  background-color: var(--theme);
-  background-image: linear-gradient(
-    135deg,
-    color-mix(in oklab, var(--theme) 76%, #09090b) 0%,
-    color-mix(in oklab, var(--theme) 50%, #09090b) 100%
-  );
-  border: 1px solid color-mix(in oklab, var(--theme) 55%, rgba(255, 255, 255, 0.55));
-  box-shadow:
-    0 12px 32px -8px color-mix(in oklab, var(--theme) 60%, transparent),
-    0 4px 14px -2px rgba(0, 0, 0, 0.65),
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.35),
-    inset 0 -1px 0 0 rgba(0, 0, 0, 0.3);
-  text-shadow: 0 1px 2px rgb(0 0 0 / 0.45);
-}
-
-@supports (background: linear-gradient(in oklab, white, black)) {
-  .catalog-cta-btn {
-    background-image: linear-gradient(
-      135deg in oklab,
-      color-mix(in oklab, var(--theme) 76%, #09090b) 0%,
-      color-mix(in oklab, var(--theme) 50%, #09090b) 100%
-    );
-  }
-}
-
-.catalog-cta-btn:hover {
-  box-shadow:
-    0 16px 38px -6px color-mix(in oklab, var(--theme) 72%, transparent),
-    0 6px 16px -2px rgba(0, 0, 0, 0.7),
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.45),
-    inset 0 -1px 0 0 rgba(0, 0, 0, 0.25);
-}
-
-.catalog-cta-btn::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(
-    120% 90% at 15% 0%,
-    rgba(255, 255, 255, 0.24) 0%,
-    transparent 55%
-  );
-  pointer-events: none;
-  z-index: 0;
-}
-
-.catalog-cta-btn::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  width: 55%;
-  background: linear-gradient(
-    105deg,
-    transparent 0%,
-    rgba(255, 255, 255, 0.24) 50%,
-    transparent 100%
-  );
-  transform: translateX(-160%) skewX(-18deg);
-  animation: catalog-shimmer 3.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-  pointer-events: none;
-  z-index: 0;
-}
-
-@keyframes catalog-shimmer {
-  0%, 55% {
-    transform: translateX(-160%) skewX(-18deg);
-  }
-  100% {
-    transform: translateX(340%) skewX(-18deg);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .catalog-cta-btn::after {
-    animation: none;
-    display: none;
-  }
 }
 
 dialog.product-quickview[open] {
@@ -120,46 +29,49 @@ dialog.product-quickview::backdrop {
   overscroll-behavior: contain;
 }
 
-/* ── Co-Primary Brand Search Bar & Warm Result Surfaces ─────────────── */
-.hub-search-shell {
-  position: relative;
-  isolation: isolate;
-  background-color: #17171f;
-  background-image: radial-gradient(
-    120% 95% at 10% 0%,
-    rgba(255, 255, 255, 0.1) 0%,
-    transparent 58%
-  );
-  border: 1px solid rgba(255, 255, 255, 0.36);
-  box-shadow:
-    0 10px 28px -10px rgba(0, 0, 0, 0.72),
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.16);
-  transition:
-    border-color 160ms ease-out,
-    box-shadow 160ms ease-out,
-    background-color 160ms ease-out;
+/* ── Option B: Matte Unified Dual-Tray Catalog Card ── */
+.hub-catalog-card {
+  background-color: #FAF7F2;
+  border: 1px solid #D6CFC4;
+  box-shadow: 0 10px 26px -12px rgba(0, 0, 0, 0.62);
 }
 
-.hub-search-shell:hover {
-  border-color: rgba(255, 255, 255, 0.48);
+.hub-catalog-cream {
+  background-color: #FAF7F2;
+  color: #1C1917;
 }
 
-.hub-search-shell:focus-within {
-  border-color: rgba(255, 255, 255, 0.68);
-  outline: 2px solid #ffffff;
+.hub-cream-title {
+  color: #1C1917;
+}
+
+.hub-cream-muted {
+  color: #57534E;
+}
+
+.hub-cream-input-box {
+  background-color: #FFFFFF;
+  border: 1px solid #857D73;
+  transition: border-color 150ms ease-out;
+}
+
+.hub-cream-input-box:hover {
+  border-color: #57534E;
+}
+
+.hub-cream-input-box:focus-within {
+  border-color: #1C1917;
+  outline: 2px solid #1C1917;
   outline-offset: 2px;
 }
 
-.hub-search-badge {
-  background-color: var(--theme);
-  border: 1px solid rgba(255, 255, 255, 0.38);
-  box-shadow:
-    0 4px 12px -3px rgba(0, 0, 0, 0.55),
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.32);
+.hub-search-input {
+  color: #1C1917;
 }
 
-.hub-search-label {
-  color: rgba(255, 255, 255, 0.76);
+.hub-search-input::placeholder {
+  color: #6B655E;
+  opacity: 1;
 }
 
 .hub-search-input::-webkit-search-cancel-button,
@@ -169,20 +81,15 @@ dialog.product-quickview::backdrop {
 }
 
 .hub-photo-trigger {
-  background-color: rgba(255, 255, 255, 0.12);
-  border: 1px solid rgba(255, 255, 255, 0.34);
-  color: #ffffff;
-  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.2);
-  transition:
-    background-color 150ms ease-out,
-    border-color 150ms ease-out,
-    box-shadow 150ms ease-out,
-    transform 150ms ease-out;
+  background-color: #1C1917;
+  background-color: var(--brand-safe, #1C1917);
+  color: #FFFFFF;
+  border: 1px solid rgba(0, 0, 0, 0.14);
+  transition: opacity 150ms ease-out, transform 150ms ease-out;
 }
 
 .hub-photo-trigger:hover:not(:disabled) {
-  background-color: rgba(255, 255, 255, 0.18);
-  border-color: rgba(255, 255, 255, 0.5);
+  opacity: 0.92;
 }
 
 .hub-photo-trigger:active:not(:disabled) {
@@ -190,171 +97,143 @@ dialog.product-quickview::backdrop {
 }
 
 .hub-photo-trigger:focus-visible,
-.hub-clear-btn:focus-visible {
-  outline: 2px solid #ffffff;
+.hub-cream-clear-btn:focus-visible,
+.hub-cream-close-btn:focus-visible,
+.hub-cream-row-active:focus-visible,
+.hub-cream-chip:focus-visible {
+  outline: 2px solid #1C1917;
   outline-offset: 2px;
 }
 
-.hub-results-card {
-  background-color: #14141b;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  box-shadow:
-    0 10px 26px -12px rgba(0, 0, 0, 0.7),
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.08);
+.hub-cream-results-box {
+  background-color: #F3EFE8;
+  border: 1px solid #DED7CB;
 }
 
-.hub-result-row-active {
-  background-color: rgba(12, 12, 16, 0.82);
-  border-color: rgba(255, 255, 255, 0.12);
-  transition:
-    border-color 150ms ease-out,
-    background-color 150ms ease-out;
+.hub-cream-row-active {
+  background-color: #FFFFFF;
+  border: 1px solid #D6CFC4;
+  color: #1C1917;
+  transition: border-color 150ms ease-out, background-color 150ms ease-out;
 }
 
-.hub-result-row-active:hover {
-  background-color: rgba(20, 20, 28, 0.96);
-  border-color: rgba(255, 255, 255, 0.3);
+.hub-cream-row-active:hover {
+  background-color: #FFFEFC;
+  border-color: #857D73;
 }
 
-.hub-result-row-active:focus-visible,
-.hub-visual-chip:focus-visible {
-  outline: 2px solid #ffffff;
-  outline-offset: 2px;
+.hub-cream-row-muted {
+  background-color: #F7F4EE;
+  border: 1px solid #E5DFD4;
+  color: #57534E;
 }
 
-.hub-visual-chip {
-  background-color: rgba(20, 20, 28, 0.88);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  transition:
-    border-color 150ms ease-out,
-    background-color 150ms ease-out,
-    color 150ms ease-out;
+.hub-status-available {
+  color: #047857;
+}
+
+.hub-cream-chip {
+  background-color: #FFFFFF;
+  border: 1px solid #857D73;
+  color: #1C1917;
+  transition: background-color 150ms ease-out, border-color 150ms ease-out;
+}
+
+.hub-cream-chip:hover {
+  background-color: #EDE7DD;
+  border-color: #1C1917;
+}
+
+.hub-catalog-tray {
+  background-color: #1C1A19;
+  border-top: 1px solid #2E2B29;
+  color: #FAF7F2;
+  transition: background-color 150ms ease-out;
+}
+
+.hub-catalog-tray:hover {
+  background-color: #242120;
+}
+
+.hub-catalog-tray:focus-visible {
+  outline: 2px solid #FAF7F2;
+  outline-offset: -3px;
+}
+
+.hub-tray-badge {
+  background-color: #1C1917;
+  background-color: var(--brand-safe, #1C1917);
+  color: #FFFFFF;
+}
+
+.hub-tray-subtitle {
+  color: #B8B0A6;
+}
+
+.hub-tray-pill {
+  background-color: #FAF7F2;
+  color: #1C1917;
+  transition: background-color 150ms ease-out;
+}
+
+.hub-catalog-tray:hover .hub-tray-pill {
+  background-color: #FFFFFF;
 }
 
 @supports (color: color-mix(in oklab, red, blue)) {
-  .hub-search-shell {
-    background-color: color-mix(in oklab, var(--theme) 18%, #13131a);
-    background-image:
-      radial-gradient(
-        120% 95% at 12% 0%,
-        color-mix(in oklab, var(--theme) 28%, rgba(255, 255, 255, 0.14)) 0%,
-        transparent 58%
-      ),
-      linear-gradient(
-        135deg var(--in-oklab),
-        color-mix(in oklab, var(--theme) 22%, #15151d) 0%,
-        color-mix(in oklab, var(--theme) 11%, #0e0e14) 100%
-      );
-    border-color: color-mix(in oklab, var(--theme) 48%, rgba(255, 255, 255, 0.46));
-    box-shadow:
-      0 10px 28px -10px color-mix(in oklab, var(--theme) 38%, transparent),
-      0 4px 12px -2px rgba(0, 0, 0, 0.62),
-      inset 0 1px 0 0 rgba(255, 255, 255, 0.2);
-  }
-
-  .hub-search-shell:hover {
-    border-color: color-mix(in oklab, var(--theme) 60%, rgba(255, 255, 255, 0.56));
-    box-shadow:
-      0 12px 30px -8px color-mix(in oklab, var(--theme) 46%, transparent),
-      0 4px 14px -2px rgba(0, 0, 0, 0.66),
-      inset 0 1px 0 0 rgba(255, 255, 255, 0.24);
-  }
-
-  .hub-search-shell:focus-within {
-    background-color: color-mix(in oklab, var(--theme) 22%, #15151e);
-    border-color: color-mix(in oklab, var(--theme) 68%, rgba(255, 255, 255, 0.68));
-    outline-color: color-mix(in oklab, var(--theme) 42%, #ffffff);
-    box-shadow:
-      0 14px 32px -8px color-mix(in oklab, var(--theme) 50%, transparent),
-      0 4px 14px -2px rgba(0, 0, 0, 0.68),
-      inset 0 1px 0 0 rgba(255, 255, 255, 0.26);
-  }
-
-  .hub-search-badge {
-    background-image: linear-gradient(
-      135deg var(--in-oklab),
-      color-mix(in oklab, var(--theme) 78%, #09090b) 0%,
-      color-mix(in oklab, var(--theme) 52%, #09090b) 100%
-    );
-    border-color: color-mix(in oklab, var(--theme) 55%, rgba(255, 255, 255, 0.52));
-    box-shadow:
-      0 6px 16px -4px color-mix(in oklab, var(--theme) 55%, transparent),
-      inset 0 1px 0 0 rgba(255, 255, 255, 0.34);
-  }
-
-  .hub-search-label {
-    color: color-mix(in oklab, var(--theme) 32%, rgba(255, 255, 255, 0.86));
-  }
-
   .hub-photo-trigger {
-    background-color: color-mix(in oklab, var(--theme) 28%, rgba(255, 255, 255, 0.1));
-    border-color: color-mix(in oklab, var(--theme) 48%, rgba(255, 255, 255, 0.42));
-    box-shadow:
-      0 4px 12px -4px color-mix(in oklab, var(--theme) 40%, transparent),
-      inset 0 1px 0 0 rgba(255, 255, 255, 0.24);
+    background-color: color-mix(in oklab, var(--brand-safe, #1C1917) 94%, #141210);
   }
 
-  .hub-photo-trigger:hover:not(:disabled) {
-    background-color: color-mix(in oklab, var(--theme) 40%, rgba(255, 255, 255, 0.16));
-    border-color: color-mix(in oklab, var(--theme) 62%, rgba(255, 255, 255, 0.58));
-  }
-
-  .hub-results-card {
-    background-color: color-mix(in oklab, var(--theme) 8%, #13131a);
-    border-color: color-mix(in oklab, var(--theme) 32%, rgba(255, 255, 255, 0.16));
-    box-shadow:
-      0 12px 28px -12px color-mix(in oklab, var(--theme) 28%, rgba(0, 0, 0, 0.72)),
-      inset 0 1px 0 0 rgba(255, 255, 255, 0.1);
-  }
-
-  .hub-result-row-active {
-    background-color: color-mix(in oklab, var(--theme) 5%, rgba(10, 10, 14, 0.86));
-    border-color: color-mix(in oklab, var(--theme) 18%, rgba(255, 255, 255, 0.1));
-  }
-
-  .hub-result-row-active:hover {
-    background-color: color-mix(in oklab, var(--theme) 12%, rgba(16, 16, 22, 0.95));
-    border-color: color-mix(in oklab, var(--theme) 44%, rgba(255, 255, 255, 0.28));
-  }
-
-  .hub-visual-chip {
-    background-color: color-mix(in oklab, var(--theme) 14%, rgba(18, 18, 24, 0.9));
-    border-color: color-mix(in oklab, var(--theme) 36%, rgba(255, 255, 255, 0.2));
-  }
-
-  .hub-visual-chip:hover {
-    background-color: color-mix(in oklab, var(--theme) 26%, rgba(24, 24, 32, 0.96));
-    border-color: color-mix(in oklab, var(--theme) 55%, rgba(255, 255, 255, 0.42));
+  .hub-tray-badge {
+    background-color: color-mix(in oklab, var(--brand-safe, #1C1917) 94%, #141210);
   }
 }
 
 @media (forced-colors: active) {
-  .hub-search-shell,
-  .hub-photo-trigger,
-  .hub-results-card,
-  .hub-result-row-active,
-  .hub-visual-chip {
+  .hub-catalog-card,
+  .hub-catalog-cream,
+  .hub-cream-input-box,
+  .hub-cream-results-box,
+  .hub-cream-row-active,
+  .hub-cream-row-muted,
+  .hub-cream-chip,
+  .hub-catalog-tray {
     forced-color-adjust: auto;
-    background-image: none;
+    background-color: Canvas;
+    color: CanvasText;
     box-shadow: none;
     border: 1px solid CanvasText;
   }
 
-  .hub-search-shell:focus-within,
+  .hub-photo-trigger,
+  .hub-tray-pill,
+  .hub-tray-badge {
+    forced-color-adjust: auto;
+    background-color: ButtonFace;
+    color: ButtonText;
+    border: 1px solid ButtonText;
+  }
+
+  .hub-cream-input-box:focus-within,
   .hub-photo-trigger:focus-visible,
-  .hub-clear-btn:focus-visible,
-  .hub-result-row-active:focus-visible,
-  .hub-visual-chip:focus-visible {
+  .hub-cream-clear-btn:focus-visible,
+  .hub-cream-close-btn:focus-visible,
+  .hub-cream-row-active:focus-visible,
+  .hub-cream-chip:focus-visible,
+  .hub-catalog-tray:focus-visible {
     outline: 2px solid Highlight;
     outline-offset: 2px;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .hub-search-shell,
+  .hub-cream-input-box,
   .hub-photo-trigger,
-  .hub-result-row-active,
-  .hub-visual-chip {
+  .hub-cream-row-active,
+  .hub-cream-chip,
+  .hub-catalog-tray,
+  .hub-tray-pill {
     transition: none;
   }
 
