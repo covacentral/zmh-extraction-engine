@@ -5,7 +5,7 @@ import {
   type SemanticItem,
 } from './types';
 
-const EMOJI_RE = /\p{Extended_Pictographic}/gu;
+const EMOJI_RE = new RegExp('\\p{Extended_Pictographic}', 'gu');
 const HTML_TAG_RE = /<[^>]*>/g;
 const CONTROL_RE = /[\u0000-\u001F\u007F]/g;
 

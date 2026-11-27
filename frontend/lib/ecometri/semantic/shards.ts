@@ -1,4 +1,4 @@
-import crypto from 'node:crypto';
+import crypto from 'crypto';
 import {
   MAX_SHARD_BYTES,
   MAX_SHARD_ITEMS,

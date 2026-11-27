@@ -1,4 +1,4 @@
-import crypto from 'node:crypto';
+import crypto from 'crypto';
 import type { ResolvedCommerce } from '../../commerceResolver';
 import { createHttpGeminiClient, type GeminiClient } from '../geminiClient';
 import {

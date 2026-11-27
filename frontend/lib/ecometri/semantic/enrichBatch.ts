@@ -94,7 +94,7 @@ export function buildFailedSemanticItem(
   const cleanTitle =
     input.rawTitle
       .replace(/<[^>]*>/g, ' ')
-      .replace(/\p{Extended_Pictographic}/gu, '')
+      .replace(new RegExp('\\p{Extended_Pictographic}', 'gu'), '')
       .replace(/\s+/g, ' ')
       .trim()
       .slice(0, MAX_DISPLAY_TITLE_LEN) || 'Producto';
