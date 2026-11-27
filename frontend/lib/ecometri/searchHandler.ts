@@ -1,9 +1,25 @@
 import type { ResolvedCommerce } from '../commerceResolver';
 import {
+  createCatalogIndexStore,
+  type CatalogIndexStore,
+} from './catalogIndex';
+import {
   normalizeEcometriProduct,
   PAGE_SIZE,
   sortAndPaginateProducts,
 } from './normalize';
+import { FirestoreSemanticStore } from './semantic/firestoreStore';
+import {
+  loadSemanticIndex,
+  type SemanticLoaderDeps,
+} from './semantic/loadIndex';
+import {
+  mergeLiveAndSemantic,
+  scoreTextQuery,
+  toLiveProduct,
+  toPublicProductDTO,
+} from './semantic/searchJoin';
+import type { SemanticIndex, SemanticStore } from './semantic/types';
 import type { EcometriConfig, EcometriSearchResponse, ProductDTO } from './types';
 
 export const UPSTREAM_WINDOW_LIMIT = 50;
@@ -92,6 +108,13 @@ export interface EcometriHandlerDeps {
   fetchFn?: typeof fetch;
   timeoutMs?: number;
   bypassRateLimit?: boolean;
+  catalogIndexStore?: CatalogIndexStore;
+  semanticStoreFactory?: (commerceId: string) => SemanticStore;
+  loadSemanticIndexFn?: (
+    commerceId: string,
+    deps: SemanticLoaderDeps
+  ) => Promise<SemanticIndex | null>;
+  nowFn?: () => number;
 }
 
 export function createEcometriSearchHandler({
@@ -99,7 +122,14 @@ export function createEcometriSearchHandler({
   fetchFn = fetch,
   timeoutMs = UPSTREAM_TIMEOUT_MS,
   bypassRateLimit = false,
+  catalogIndexStore,
+  semanticStoreFactory = (id) => new FirestoreSemanticStore(id),
+  loadSemanticIndexFn = loadSemanticIndex,
+  nowFn = () => Date.now(),
 }: EcometriHandlerDeps) {
+  const sharedCatalogStore =
+    catalogIndexStore ?? createCatalogIndexStore({ fetchFn, nowFn });
+
   return async function executeSearch(input: SearchRequestInput): Promise<SearchHandlerResult> {
     if (!bypassRateLimit) {
       const ip = (input.clientIp || 'unknown').trim() || 'unknown';
@@ -155,20 +185,94 @@ export function createEcometriSearchHandler({
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
+      let semanticIndex: SemanticIndex | null = null;
+
+      // Opt-in Semantic Super-Search path (D10 + D12): zero reads when semanticIndexEnabled !== true
+      if (cfg.semanticIndexEnabled === true) {
+        const semanticStore = semanticStoreFactory(resolved.commerceId);
+        const [loadedIndex, liveCatalog] = await Promise.all([
+          loadSemanticIndexFn(resolved.commerceId, {
+            store: semanticStore,
+            now: nowFn,
+          }).catch(() => null),
+          sharedCatalogStore
+            .getOrFetch(resolved.commerceId, cfg, controller.signal)
+            .catch(() => null),
+        ]);
+
+        semanticIndex = loadedIndex;
+
+        if (semanticIndex && liveCatalog && liveCatalog.length > 0) {
+          const enriched = mergeLiveAndSemantic(
+            liveCatalog.map(toLiveProduct),
+            semanticIndex
+          );
+
+          const scoredMatches = enriched
+            .map((item) => ({ item, score: scoreTextQuery(termParam, item) }))
+            .filter((entry) => entry.score > 0);
+
+          if (scoredMatches.length > 0) {
+            clearTimeout(timeoutId);
+            scoredMatches.sort((a, b) => {
+              if (a.item.inStock !== b.item.inStock) {
+                return a.item.inStock ? -1 : 1;
+              }
+              if (b.score !== a.score) {
+                return b.score - a.score;
+              }
+              return a.item.id.localeCompare(b.item.id);
+            });
+
+            const orderedDtos = scoredMatches.map((m) => toPublicProductDTO(m.item));
+            const result = sortAndPaginateProducts(orderedDtos, page, PAGE_SIZE);
+            return {
+              status: 200,
+              body: result,
+              headers: {
+                'Cache-Control': CACHE_CONTROL_HEADER,
+              },
+            };
+          }
+        }
+      }
+
+      // Default upstream path (or D10 fallback when semantic index is unavailable / returns 0 matches)
       const rawItems = await fetchUpstreamPage(cfg, termParam, controller.signal, fetchFn);
       clearTimeout(timeoutId);
 
       const seenIds = new Set<string>();
       const normalized: ProductDTO[] = [];
+      const activeById = new Map<string, boolean>();
       for (const rawItem of rawItems) {
         const dto = normalizeEcometriProduct(rawItem, cfg);
         if (dto && !seenIds.has(dto.id)) {
           seenIds.add(dto.id);
           normalized.push(dto);
+          if (rawItem && typeof rawItem === 'object' && !Array.isArray(rawItem)) {
+            const rawObj = rawItem as Record<string, unknown>;
+            activeById.set(
+              dto.id,
+              rawObj.active !== false && rawObj.is_active !== false
+            );
+          }
         }
       }
 
-      const result = sortAndPaginateProducts(normalized, page, PAGE_SIZE);
+      // On partial upstream windows (<= 50 filtered items), skip ghost-twin dedupe
+      // (`deduplicateTwins: false`) so partial slices never distort live representation
+      const finalDtos = semanticIndex
+        ? mergeLiveAndSemantic(
+            normalized.map((dto) => ({
+              ...toLiveProduct(dto),
+              active: activeById.get(dto.id) ?? true,
+            })),
+            semanticIndex,
+            { deduplicateTwins: false }
+          ).map(toPublicProductDTO)
+        : normalized;
+
+      const result = sortAndPaginateProducts(finalDtos, page, PAGE_SIZE);
       return {
         status: 200,
         body: result,

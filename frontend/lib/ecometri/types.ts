@@ -10,6 +10,7 @@ export interface EcometriConfig {
   storeBaseUrl: string;       // https://{host}/{telefono}
   allowedImageHost: string;   // d1b50uin55dq3m.cloudfront.net
   visualSearchEnabled?: boolean;
+  semanticIndexEnabled?: boolean;
   cartEnabled?: boolean;      // opcional, false/ausente en Fases 1-2
   advisorLines?: EcometriAdvisorLine[];
 }
@@ -25,16 +26,26 @@ export interface EcometriClientConfig {
 }
 
 export type VisualMatchType = 'exact' | 'similar';
+export type DescriptionSource = 'ecometri' | 'ai';
+
+export interface ProductAttributesDTO {
+  brand: string | null;
+  modelRef: string | null;
+  colors: string[];
+}
 
 export interface ProductDTO {
   id: string;
   slug: string | null;
   title: string;
+  displayTitle?: string;
   sku: string | null;
   priceCop: number;           // entero COP
   inStock: boolean;
   imageUrl: string | null;
   description: string | null;
+  descriptionSource?: DescriptionSource;
+  attributes?: ProductAttributesDTO;
   productUrl: string;
   matchType?: VisualMatchType;
 }

@@ -235,6 +235,16 @@ export default function ProductQuickView({
       ? detail.inStock
       : product?.inStock ?? true;
   const resolvedDescription = detail?.description ?? product?.description ?? null;
+  const visibleTitle = product?.displayTitle || product?.title || '';
+  const visibleColors = (product?.attributes?.colors || [])
+    .map((c) => (c ? c.charAt(0).toUpperCase() + c.slice(1) : ''))
+    .filter(Boolean);
+  const hasVisibleAttributes = Boolean(
+    product?.attributes &&
+      (product.attributes.brand ||
+        product.attributes.modelRef ||
+        visibleColors.length > 0)
+  );
 
   const handleCopySku = async () => {
     if (!resolvedSku) return;
@@ -275,7 +285,7 @@ export default function ProductQuickView({
             {product.imageUrl && !imgFailed ? (
               <img
                 src={product.imageUrl}
-                alt={product.title}
+                alt={visibleTitle}
                 className="h-full w-full object-contain bg-zinc-950"
                 onError={() => setImgFailed(true)}
               />
@@ -317,7 +327,7 @@ export default function ProductQuickView({
                 id={titleId}
                 className="text-lg font-bold leading-snug text-white break-words"
               >
-                {product.title}
+                {visibleTitle}
               </h1>
 
               <div className="flex items-baseline gap-1.5 pt-0.5">
@@ -365,6 +375,29 @@ export default function ProductQuickView({
             <span className="sr-only" aria-live="polite">
               {copied && resolvedSku ? `Codigo ${resolvedSku} copiado` : ''}
             </span>
+
+            {hasVisibleAttributes && product?.attributes && (
+              <div className="flex flex-wrap items-center gap-1.5">
+                {product.attributes.brand && (
+                  <span className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-zinc-900/80 px-2.5 py-1 text-[11px] font-medium text-white/75">
+                    <span className="text-white/45">Marca:</span>
+                    <span className="font-semibold text-white">{product.attributes.brand}</span>
+                  </span>
+                )}
+                {product.attributes.modelRef && (
+                  <span className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-zinc-900/80 px-2.5 py-1 text-[11px] font-medium text-white/75">
+                    <span className="text-white/45">Modelo:</span>
+                    <span className="font-semibold text-white">{product.attributes.modelRef}</span>
+                  </span>
+                )}
+                {visibleColors.length > 0 && (
+                  <span className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-zinc-900/80 px-2.5 py-1 text-[11px] font-medium text-white/75">
+                    <span className="text-white/45">Color:</span>
+                    <span className="font-semibold text-white">{visibleColors.join(', ')}</span>
+                  </span>
+                )}
+              </div>
+            )}
 
             {resolvedDescription && (
               <div className="rounded-xl border border-white/[0.08] bg-zinc-900/60 p-3.5">

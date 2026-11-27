@@ -12,6 +12,13 @@ import {
 } from './geminiClient';
 import { normalizeEcometriProduct } from './normalize';
 import { fetchUpstreamPage } from './searchHandler';
+import { FirestoreSemanticStore } from './semantic/firestoreStore';
+import {
+  loadSemanticIndex,
+  type SemanticLoaderDeps,
+} from './semantic/loadIndex';
+import { rankVisualWithSemantics } from './semantic/searchJoin';
+import type { SemanticIndex, SemanticStore } from './semantic/types';
 import type {
   EcometriConfig,
   ProductDTO,
@@ -62,6 +69,11 @@ export interface VisualSearchHandlerDeps {
   geminiClient: GeminiClient | null;
   fetchFn?: typeof fetch;
   catalogIndexStore?: CatalogIndexStore;
+  semanticStoreFactory?: (commerceId: string) => SemanticStore;
+  loadSemanticIndexFn?: (
+    commerceId: string,
+    deps: SemanticLoaderDeps
+  ) => Promise<SemanticIndex | null>;
   rateLimiter?: VisualRateLimiter;
   circuitBreaker?: CircuitBreaker;
   nowFn?: () => number;
@@ -117,7 +129,10 @@ async function fetchCandidateThumbnails(
   try {
     return await Promise.all(
       top.map(async (item): Promise<RerankCandidateImage> => {
-        const base: RerankCandidateImage = { id: item.id, title: item.title };
+        const base: RerankCandidateImage = {
+          id: item.id,
+          title: item.displayTitle || item.title,
+        };
         if (!item.imageUrl) return base;
         const url = toSmallThumbnailUrl(item.imageUrl, allowedHost);
         if (!url) return base;
@@ -200,6 +215,8 @@ export function createVisualSearchHandler({
   geminiClient,
   fetchFn = fetch,
   catalogIndexStore,
+  semanticStoreFactory = (id) => new FirestoreSemanticStore(id),
+  loadSemanticIndexFn = loadSemanticIndex,
   rateLimiter = createVisualRateLimiter(),
   circuitBreaker = createCircuitBreaker(),
   nowFn = () => Date.now(),
@@ -428,12 +445,22 @@ export function createVisualSearchHandler({
       // with automatic fallback to public-search if store index is unavailable.
       const indexScope = createScopedSignal(rootController.signal, CATALOG_INDEX_TIMEOUT_MS);
       let catalogItems: ProductDTO[] | null = null;
+      let semanticIndex: SemanticIndex | null = null;
       try {
-        catalogItems = await indexStore.getOrFetch(
-          resolved.commerceId,
-          cfg,
-          indexScope.signal
-        );
+        const semanticPromise =
+          cfg.semanticIndexEnabled === true
+            ? loadSemanticIndexFn(resolved.commerceId, {
+                store: semanticStoreFactory(resolved.commerceId),
+                now: nowFn,
+              }).catch(() => null)
+            : Promise.resolve(null);
+
+        const [fetchedCatalog, fetchedSemantic] = await Promise.all([
+          indexStore.getOrFetch(resolved.commerceId, cfg, indexScope.signal),
+          semanticPromise,
+        ]);
+        catalogItems = fetchedCatalog;
+        semanticIndex = fetchedSemantic;
       } finally {
         indexScope.cleanup();
       }
@@ -442,7 +469,12 @@ export function createVisualSearchHandler({
       let fallbackRanked: ProductDTO[] = [];
 
       if (catalogItems && catalogItems.length > 0) {
-        const ranked = rankSimilar(analysis, catalogItems, 24);
+        const ranked = rankVisualWithSemantics(
+          analysis,
+          catalogItems,
+          semanticIndex,
+          24
+        );
         const positiveMatches = ranked.filter((r) => r.score > 0).map((r) => r.item);
         fallbackRanked = ranked.map((r) => r.item);
         candidates = positiveMatches.length > 0 ? positiveMatches : fallbackRanked.slice(0, MAX_RERANK_CANDIDATES);
@@ -457,7 +489,12 @@ export function createVisualSearchHandler({
           fetchFn
         );
         const merged = mergeCandidates(queryResults);
-        fallbackRanked = rankSimilar(analysis, merged, MAX_RERANK_CANDIDATES).map((r) => r.item);
+        fallbackRanked = rankVisualWithSemantics(
+          analysis,
+          merged,
+          semanticIndex,
+          MAX_RERANK_CANDIDATES
+        ).map((r) => r.item);
         candidates = fallbackRanked.length > 0 ? fallbackRanked : merged;
       }
 

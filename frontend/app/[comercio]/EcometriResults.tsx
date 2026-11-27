@@ -142,6 +142,7 @@ export default function EcometriResults({ commerceId, searchQuery }: EcometriRes
           >
             {items.map((item) => {
               const showImg = Boolean(item.imageUrl && !failedImages[item.id]);
+              const visibleTitle = item.displayTitle || item.title;
               return (
                 <button
                   key={item.id}
@@ -157,7 +158,7 @@ export default function EcometriResults({ commerceId, searchQuery }: EcometriRes
                     {showImg ? (
                       <img
                         src={item.imageUrl as string}
-                        alt={item.title}
+                        alt={visibleTitle}
                         loading="lazy"
                         className="h-full w-full object-cover"
                         onError={() =>
@@ -171,7 +172,7 @@ export default function EcometriResults({ commerceId, searchQuery }: EcometriRes
 
                   <div className="flex min-w-0 flex-1 flex-col gap-1">
                     <span className="line-clamp-2 text-[13px] font-semibold leading-snug text-white">
-                      {item.title}
+                      {visibleTitle}
                     </span>
                     <div className="flex items-center gap-2.5">
                       <span className="text-sm font-bold tracking-tight text-white">
