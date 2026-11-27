@@ -122,7 +122,7 @@ export default function VisualSearchPanel({
             <img
               src={state.previewDataUrl}
               alt="Foto consultada"
-              className="h-7 w-7 rounded-md border border-[#857D73] object-cover shrink-0"
+              className="h-7 w-7 rounded-md border border-[#E6E2DC] object-cover shrink-0"
             />
           )}
           <h2 className="hub-cream-muted truncate text-[11px] font-bold">
@@ -144,18 +144,18 @@ export default function VisualSearchPanel({
         </button>
       </div>
 
-      <div className="hub-cream-results-box w-full rounded-xl p-2 flex flex-col gap-2">
+      <div className="w-full pt-0.5 flex flex-col gap-2">
         {isLoading && (
           <div className="flex flex-col gap-1.5">
             {[0, 1, 2].map((idx) => (
               <div
                 key={idx}
-                className="flex items-center gap-3 rounded-xl border border-[#E5DFD4] bg-white p-2.5 animate-pulse"
+                className="flex items-center gap-3 rounded-xl border border-[#E6E2DC] bg-white p-2.5 animate-pulse"
               >
-                <div className="h-14 w-14 shrink-0 rounded-xl bg-stone-200/80" />
+                <div className="h-14 w-14 shrink-0 rounded-xl bg-stone-200/70" />
                 <div className="flex flex-1 flex-col gap-2">
-                  <div className="h-3.5 w-3/4 rounded bg-stone-200/80" />
-                  <div className="h-3 w-1/3 rounded bg-stone-200/80" />
+                  <div className="h-3.5 w-3/4 rounded bg-stone-200/70" />
+                  <div className="h-3 w-1/3 rounded bg-stone-200/70" />
                 </div>
               </div>
             ))}
@@ -163,7 +163,7 @@ export default function VisualSearchPanel({
         )}
 
         {state.status === 'error' && (
-          <div className="px-3 py-3 text-center">
+          <div className="rounded-xl border border-[#E6E2DC] bg-white px-3 py-3 text-center">
             <p className="hub-cream-muted text-xs">
               {state.error || 'Buscador por foto en pausa breve, intenta en unos segundos o busca por texto.'}
             </p>
@@ -171,7 +171,7 @@ export default function VisualSearchPanel({
         )}
 
         {state.status === 'ok' && state.chips.length > 0 && (
-          <div className="flex flex-wrap items-center gap-1.5 px-0.5 pt-0.5">
+          <div className="flex flex-wrap items-center gap-1.5 px-0.5">
             {state.chips.map((chip) => (
               <button
                 key={chip}
@@ -186,7 +186,7 @@ export default function VisualSearchPanel({
         )}
 
         {state.status === 'ok' && state.items.length === 0 && (
-          <div className="px-3 py-3 text-center">
+          <div className="rounded-xl border border-[#E6E2DC] bg-white px-3 py-3 text-center">
             <p className="hub-cream-muted text-xs">
               El catalogo de este comercio no devolvio productos disponibles en este momento.
             </p>
@@ -210,7 +210,7 @@ export default function VisualSearchPanel({
                       : 'hub-cream-row-muted opacity-75 hover:opacity-95 transition-opacity duration-150'
                   }`}
                 >
-                  <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-[#E5DFD4] bg-[#F7F4EE]">
+                  <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-[#E6E2DC] bg-[#F7F4EE]">
                     {showImg ? (
                       <img
                         src={item.imageUrl as string}
@@ -243,7 +243,7 @@ export default function VisualSearchPanel({
                         <span
                           aria-hidden="true"
                           className={`h-1.5 w-1.5 rounded-full ${
-                            item.inStock ? 'bg-[#047857]' : 'bg-[#857D73]'
+                            item.inStock ? 'bg-[#047857]' : 'bg-[#57534E]'
                           }`}
                         />
                         {item.inStock ? 'Disponible' : 'Agotado'}
@@ -251,7 +251,7 @@ export default function VisualSearchPanel({
                     </div>
                   </div>
 
-                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#F3EFE8] text-[#57534E] transition-colors duration-150 group-hover:bg-[#E5DFD4] group-hover:text-[#1C1917]">
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#F3EFE8] text-[#57534E] transition-colors duration-150 group-hover:bg-[#EAE5DC] group-hover:text-[#1C1917]">
                     <ChevronRightSmall />
                   </div>
                 </button>
@@ -261,7 +261,7 @@ export default function VisualSearchPanel({
         )}
 
         {state.quota && (
-          <div className="hub-cream-muted flex items-center justify-between gap-2 border-t border-[#DED7CB] pt-2 px-1 text-[11px] font-medium">
+          <div className="hub-cream-muted flex items-center justify-between gap-2 border-t border-[#E6E2DC] pt-2 px-1 text-[11px] font-medium">
             <span>
               {secondsLeft > 0 && state.quota.remaining < state.quota.limit
                 ? `Intentos disponibles: ${state.quota.remaining} de ${state.quota.limit}`

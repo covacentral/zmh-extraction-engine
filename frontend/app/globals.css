@@ -31,9 +31,8 @@ dialog.product-quickview::backdrop {
 
 /* ── Option B: Matte Unified Dual-Tray Catalog Card ── */
 .hub-catalog-card {
-  background-color: #FAF7F2;
-  border: 1px solid #D6CFC4;
-  box-shadow: 0 10px 26px -12px rgba(0, 0, 0, 0.62);
+  background-color: #1C1A19;
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .hub-catalog-cream {
@@ -51,12 +50,13 @@ dialog.product-quickview::backdrop {
 
 .hub-cream-input-box {
   background-color: #FFFFFF;
-  border: 1px solid #857D73;
+  border: 1px solid #E6E2DC;
+  box-shadow: 0 1px 3px rgba(28, 25, 23, 0.06);
   transition: border-color 150ms ease-out;
 }
 
 .hub-cream-input-box:hover {
-  border-color: #57534E;
+  border-color: rgba(28, 25, 23, 0.2);
 }
 
 .hub-cream-input-box:focus-within {
@@ -84,7 +84,7 @@ dialog.product-quickview::backdrop {
   background-color: #1C1917;
   background-color: var(--brand-safe, #1C1917);
   color: #FFFFFF;
-  border: 1px solid rgba(0, 0, 0, 0.14);
+  border: 1px solid rgba(0, 0, 0, 0.08);
   transition: opacity 150ms ease-out, transform 150ms ease-out;
 }
 
@@ -105,26 +105,22 @@ dialog.product-quickview::backdrop {
   outline-offset: 2px;
 }
 
-.hub-cream-results-box {
-  background-color: #F3EFE8;
-  border: 1px solid #DED7CB;
-}
-
 .hub-cream-row-active {
   background-color: #FFFFFF;
-  border: 1px solid #D6CFC4;
+  border: 1px solid #E6E2DC;
+  box-shadow: 0 1px 3px rgba(28, 25, 23, 0.05);
   color: #1C1917;
   transition: border-color 150ms ease-out, background-color 150ms ease-out;
 }
 
 .hub-cream-row-active:hover {
-  background-color: #FFFEFC;
-  border-color: #857D73;
+  background-color: #FFFFFF;
+  border-color: rgba(28, 25, 23, 0.22);
 }
 
 .hub-cream-row-muted {
-  background-color: #F7F4EE;
-  border: 1px solid #E5DFD4;
+  background-color: #F4F1EC;
+  border: 1px solid #E6E2DC;
   color: #57534E;
 }
 
@@ -134,19 +130,20 @@ dialog.product-quickview::backdrop {
 
 .hub-cream-chip {
   background-color: #FFFFFF;
-  border: 1px solid #857D73;
+  border: 1px solid #E6E2DC;
+  box-shadow: 0 1px 3px rgba(28, 25, 23, 0.04);
   color: #1C1917;
   transition: background-color 150ms ease-out, border-color 150ms ease-out;
 }
 
 .hub-cream-chip:hover {
-  background-color: #EDE7DD;
-  border-color: #1C1917;
+  background-color: #F3EFE8;
+  border-color: rgba(28, 25, 23, 0.22);
 }
 
 .hub-catalog-tray {
   background-color: #1C1A19;
-  border-top: 1px solid #2E2B29;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
   color: #FAF7F2;
   transition: background-color 150ms ease-out;
 }
@@ -190,11 +187,19 @@ dialog.product-quickview::backdrop {
   }
 }
 
+@media (prefers-contrast: more) {
+  .hub-cream-input-box,
+  .hub-cream-row-active,
+  .hub-cream-row-muted,
+  .hub-cream-chip {
+    border-color: #57534E;
+  }
+}
+
 @media (forced-colors: active) {
   .hub-catalog-card,
   .hub-catalog-cream,
   .hub-cream-input-box,
-  .hub-cream-results-box,
   .hub-cream-row-active,
   .hub-cream-row-muted,
   .hub-cream-chip,

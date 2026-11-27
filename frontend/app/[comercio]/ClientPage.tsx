@@ -272,7 +272,11 @@ export default function ClientPage({ commerceId, data, themeHex, RENDER_API = ''
 
         {/* ── OPTION B: UNIFIED DUAL-TRAY CATALOG & SEARCH CARD ── */}
         <div className="hub-catalog-card w-full rounded-2xl overflow-hidden">
-          <div className="hub-catalog-cream p-3.5 flex flex-col gap-2.5">
+          <div
+            className={`hub-catalog-cream p-3.5 flex flex-col gap-2.5 ${
+              showCatalogButton ? 'rounded-t-[15px]' : 'rounded-[15px]'
+            }`}
+          >
             <search className="w-full flex flex-col gap-2">
               <div className="flex items-center justify-between gap-2 px-0.5">
                 <label
