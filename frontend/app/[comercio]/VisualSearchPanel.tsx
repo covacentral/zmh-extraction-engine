@@ -122,7 +122,7 @@ export default function VisualSearchPanel({
               className="h-6 w-6 rounded-md border border-white/15 object-cover shrink-0"
             />
           )}
-          <h2 className="truncate text-[10px] font-bold uppercase tracking-widest text-white/40">
+          <h2 className="hub-search-label truncate text-[10px] font-bold uppercase tracking-widest">
             {state.status === 'identifying' && 'Identificando producto...'}
             {state.status === 'comparing' && 'Comparando en el catalogo...'}
             {state.status === 'ok' && VISUAL_RESULTS_HEADING}
@@ -134,14 +134,14 @@ export default function VisualSearchPanel({
           type="button"
           onClick={onClear}
           aria-label="Cerrar busqueda por foto"
-          className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[10px] font-semibold text-white/45 transition-colors duration-150 hover:bg-white/10 hover:text-white"
+          className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[10px] font-semibold text-white/65 transition-colors duration-150 hover:bg-white/10 hover:text-white"
         >
           <span>Cerrar</span>
           <CloseSmallIcon />
         </button>
       </div>
 
-      <div className="w-full rounded-2xl border border-white/[0.08] bg-zinc-900/75 p-2 flex flex-col gap-2">
+      <div className="hub-results-card w-full rounded-2xl p-2 flex flex-col gap-2">
         {isLoading && (
           <div className="flex flex-col gap-2">
             {[0, 1, 2].map((idx) => (
@@ -174,7 +174,7 @@ export default function VisualSearchPanel({
                 key={chip}
                 type="button"
                 onClick={() => onSelectChip(chip)}
-                className="rounded-full border border-white/10 bg-zinc-950/75 px-2.5 py-1 text-[11px] font-medium text-white/70 transition-colors duration-150 hover:border-white/25 hover:text-white"
+                className="hub-visual-chip rounded-full px-2.5 py-1 text-[11px] font-semibold text-white/85 hover:text-white"
               >
                 {chip}
               </button>
@@ -201,10 +201,10 @@ export default function VisualSearchPanel({
                   key={item.id}
                   type="button"
                   onClick={() => setSelectedProduct(item)}
-                  className={`group flex w-full items-center gap-3 rounded-xl border p-2.5 text-left transition-colors duration-150 ${
+                  className={`group flex w-full items-center gap-3 rounded-xl border p-2.5 text-left ${
                     item.inStock
-                      ? 'border-white/[0.07] bg-zinc-950/70 hover:border-white/20 hover:bg-zinc-950'
-                      : 'border-white/[0.04] bg-zinc-950/40 opacity-60 hover:opacity-80'
+                      ? 'hub-result-row-active'
+                      : 'border-white/[0.04] bg-zinc-950/40 opacity-60 hover:opacity-80 transition-opacity duration-150'
                   }`}
                 >
                   <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-zinc-900">
@@ -243,7 +243,7 @@ export default function VisualSearchPanel({
                     </div>
                   </div>
 
-                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-white/40 transition-colors duration-150 group-hover:bg-white/10 group-hover:text-white">
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/[0.05] text-white/65 transition-colors duration-150 group-hover:bg-white/15 group-hover:text-white">
                     <ChevronRightSmall />
                   </div>
                 </button>

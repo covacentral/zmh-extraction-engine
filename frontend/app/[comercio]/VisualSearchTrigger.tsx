@@ -234,11 +234,12 @@ export default function VisualSearchTrigger({
         type="button"
         disabled={busy}
         onClick={() => inputRef.current?.click()}
-        aria-label="Buscar producto por foto"
+        aria-label="Buscar por foto"
         title="Buscar por foto"
-        className="flex h-8 w-8 items-center justify-center rounded-xl border border-white/10 bg-white/[0.05] text-white/65 transition-colors duration-150 hover:border-white/25 hover:bg-white/10 hover:text-white disabled:opacity-40"
+        className="hub-photo-trigger inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold tracking-wide text-white disabled:opacity-45"
       >
         <CameraIcon />
+        <span>Foto</span>
       </button>
     </>
   );

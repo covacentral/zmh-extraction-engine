@@ -61,3 +61,62 @@ test('EcometriResults and ProductQuickView contain zero emojis and follow securi
   assert.match(clientPageSrc, /data\?\.ecometri\?\.enabled/);
   assert.match(serverPageSrc, /toClientEcometriConfig\(data\?\.ecometri\)/);
 });
+
+test('co-primary search bar & Foto trigger enforce ADR invariants (single accessible label, 16px search input, oklab/forced-colors fallbacks, opt-in Foto, zero SKU/exactness in rows)', () => {
+  const clientPageSrc = fs.readFileSync(
+    path.join(FRONTEND_ROOT, 'app', '[comercio]', 'ClientPage.tsx'),
+    'utf8'
+  );
+  const triggerSrc = fs.readFileSync(
+    path.join(FRONTEND_ROOT, 'app', '[comercio]', 'VisualSearchTrigger.tsx'),
+    'utf8'
+  );
+  const panelSrc = fs.readFileSync(
+    path.join(FRONTEND_ROOT, 'app', '[comercio]', 'VisualSearchPanel.tsx'),
+    'utf8'
+  );
+  const resultsSrc = fs.readFileSync(
+    path.join(FRONTEND_ROOT, 'app', '[comercio]', 'EcometriResults.tsx'),
+    'utf8'
+  );
+  const globalsCss = fs.readFileSync(
+    path.join(FRONTEND_ROOT, 'app', 'globals.css'),
+    'utf8'
+  );
+
+  // Zero emojis across modified UI & CSS files
+  assert.equal(EMOJI_RE.test(clientPageSrc), false);
+  assert.equal(EMOJI_RE.test(triggerSrc), false);
+  assert.equal(EMOJI_RE.test(panelSrc), false);
+  assert.equal(EMOJI_RE.test(resultsSrc), false);
+  assert.equal(EMOJI_RE.test(globalsCss), false);
+
+  // Semantic <search> landmark + single <label htmlFor="hub-catalog-search"> + decorative badge aria-hidden="true"
+  assert.match(clientPageSrc, /<search\b/);
+  const labelMatches = clientPageSrc.match(/htmlFor="hub-catalog-search"/g) || [];
+  assert.equal(labelMatches.length, 1, 'Expected exactly one <label htmlFor="hub-catalog-search">');
+  assert.match(clientPageSrc, /aria-hidden="true"[\s\S]{0,120}hub-search-badge/);
+
+  // Search input has type="search" and 16px (text-base) font size without conflicting aria-label
+  const inputBlockMatch = clientPageSrc.match(/<input[\s\S]*?id="hub-catalog-search"[\s\S]*?\/>/);
+  assert.ok(inputBlockMatch, 'Expected #hub-catalog-search input');
+  assert.match(inputBlockMatch[0], /type="search"/);
+  assert.match(inputBlockMatch[0], /\btext-base\b/);
+  assert.equal(/aria-label=/.test(inputBlockMatch[0]), false, 'Visible <label> must be the sole accessible name');
+
+  // VisualSearchTrigger stays strictly opt-in behind visualSearchEnabled, displays "Foto" and aria-label="Buscar por foto"
+  assert.match(clientPageSrc, /\{visualSearchEnabled && \(\s*<VisualSearchTrigger/);
+  assert.match(triggerSrc, /aria-label="Buscar por foto"/);
+  assert.match(triggerSrc, /<span>Foto<\/span>/);
+
+  // Progressive oklab + solid base + forced-colors + prefers-reduced-motion in globals.css
+  assert.match(globalsCss, /@supports \(color: color-mix\(in oklab, red, blue\)\)/);
+  assert.match(globalsCss, /@media \(forced-colors: active\)/);
+  assert.match(globalsCss, /outline:\s*2px solid Highlight/);
+  assert.match(globalsCss, /@media \(prefers-reduced-motion: reduce\)/);
+
+  // No SKU rendered in list rows and no exactness claims in visual panel
+  assert.equal(/\.sku\b/.test(resultsSrc), false);
+  assert.equal(/\.sku\b/.test(panelSrc), false);
+  assert.equal(/\b(coincidencia|exact[oa]s?|id[eé]ntic[oa]s?)\b|100\s*%/i.test(panelSrc), false);
+});

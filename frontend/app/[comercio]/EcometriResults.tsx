@@ -87,20 +87,20 @@ export default function EcometriResults({ commerceId, searchQuery }: EcometriRes
       className="w-full flex flex-col gap-2"
     >
       <div className="flex items-center justify-between px-1">
-        <h2 className="text-[10px] font-bold uppercase tracking-widest text-white/40">
+        <h2 className="hub-search-label text-[10px] font-bold uppercase tracking-widest">
           Coincidencias en Catalogo
         </h2>
         {status === 'ok' && (
-          <span className="text-[10px] font-medium text-white/35">
+          <span className="text-[10px] font-semibold text-white/60">
             {total === 1 ? '1 resultado' : `${total} resultados`}
           </span>
         )}
         {status === 'loading' && (
-          <span className="text-[10px] font-medium text-white/35">Buscando...</span>
+          <span className="text-[10px] font-semibold text-white/60">Buscando...</span>
         )}
       </div>
 
-      <div className="w-full rounded-2xl border border-white/[0.08] bg-zinc-900/75 p-2">
+      <div className="hub-results-card w-full rounded-2xl p-2">
         {status === 'loading' && (
           <div className="flex flex-col gap-2">
             {[0, 1, 2].map((idx) => (
@@ -148,10 +148,10 @@ export default function EcometriResults({ commerceId, searchQuery }: EcometriRes
                   key={item.id}
                   type="button"
                   onClick={() => setSelectedProduct(item)}
-                  className={`group flex w-full items-center gap-3 rounded-xl border p-2.5 text-left transition-colors duration-150 ${
+                  className={`group flex w-full items-center gap-3 rounded-xl border p-2.5 text-left ${
                     item.inStock
-                      ? 'border-white/[0.07] bg-zinc-950/70 hover:border-white/20 hover:bg-zinc-950'
-                      : 'border-white/[0.04] bg-zinc-950/40 opacity-60 hover:opacity-80'
+                      ? 'hub-result-row-active'
+                      : 'border-white/[0.04] bg-zinc-950/40 opacity-60 hover:opacity-80 transition-opacity duration-150'
                   }`}
                 >
                   <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-zinc-900">
@@ -189,7 +189,7 @@ export default function EcometriResults({ commerceId, searchQuery }: EcometriRes
                     </div>
                   </div>
 
-                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-white/40 transition-colors duration-150 group-hover:bg-white/10 group-hover:text-white">
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/[0.05] text-white/65 transition-colors duration-150 group-hover:bg-white/15 group-hover:text-white">
                     <ChevronRightSmall />
                   </div>
                 </button>

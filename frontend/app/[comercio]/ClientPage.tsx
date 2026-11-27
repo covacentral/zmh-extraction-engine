@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
@@ -65,7 +65,7 @@ const MessageCircleIcon = () => (
   <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg>
 );
 const SearchIcon = () => (
-  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="stroke-white/40"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" className="stroke-white shrink-0"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
 );
 const VerifiedIcon = () => (
   <svg viewBox="0 0 24 24" width="13" height="13" className="fill-green-400 shrink-0"><path d="M23 12l-2.44-2.79.34-3.69-3.61-.82-1.89-3.2L12 2.96 8.6 1.5 6.71 4.7l-3.61.81.34 3.7L1 12l2.44 2.79-.34 3.7 3.61.82 1.89 3.2 3.4-1.47 3.4 1.46 1.89-3.19 3.61-.82-.34-3.69L23 12zm-12.91 4.72l-3.8-3.81 1.48-1.48 2.32 2.33 5.85-5.87 1.48 1.48-7.33 7.35z"/></svg>
@@ -116,6 +116,7 @@ export default function ClientPage({ commerceId, data, themeHex, RENDER_API = ''
   let { businessName, avatarJid, promoJid, buttons = [], promos = [] } = data;
 
   const [searchQuery, setSearchQuery] = useState('');
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [activeContactTab, setActiveContactTab] = useState<string>('all');
   const [visualState, setVisualState] = useState<VisualSearchUiState>(IDLE_VISUAL_STATE);
@@ -236,57 +237,84 @@ export default function ClientPage({ commerceId, data, themeHex, RENDER_API = ''
           <div className="w-2.5 h-2.5 rounded-full shrink-0 opacity-80" style={{ backgroundColor: 'var(--theme)' }} />
         </div>
 
-        {/* ── SEARCH BAR ── */}
-        <div className="w-full relative group">
-          <div className="absolute inset-y-0 left-3.5 flex items-center pointer-events-none transition-opacity duration-150 group-focus-within:opacity-100 opacity-75">
-            <SearchIcon />
-          </div>
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => {
-              setSearchQuery(e.target.value);
-              if (visualState.status !== 'idle') setVisualState(IDLE_VISUAL_STATE);
+        {/* ── CO-PRIMARY BRAND SEARCH BAR ── */}
+        <search className="w-full">
+          <div
+            onClick={(e) => {
+              const target = e.target as HTMLElement | null;
+              if (target && !target.closest('button') && target !== searchInputRef.current) {
+                searchInputRef.current?.focus();
+              }
             }}
-            placeholder={
-              data?.ecometri?.enabled
-                ? 'Buscar producto, asesor o canal...'
-                : 'Buscar canal, asesor o enlace...'
-            }
-            aria-label={
-              data?.ecometri?.enabled
-                ? 'Buscar producto, asesor o canal'
-                : 'Buscar canal, asesor o enlace'
-            }
-            className={`w-full bg-zinc-900/85 border border-white/10 focus:border-white/25 focus:bg-zinc-900 rounded-2xl py-3 pl-10 text-sm text-white placeholder-white/40 outline-none transition-colors duration-150 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] ${
-              visualSearchEnabled ? (searchQuery ? 'pr-20' : 'pr-12') : 'pr-10'
-            }`}
-          />
-          <div className="absolute inset-y-0 right-2 flex items-center gap-1">
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery('')}
-                aria-label="Limpiar busqueda"
-                className="flex h-7 w-7 items-center justify-center rounded-full text-white/45 hover:bg-white/10 hover:text-white transition-colors duration-150"
+            className="hub-search-shell w-full flex items-center gap-3 px-3.5 py-2.5 rounded-2xl cursor-text"
+          >
+            <div
+              aria-hidden="true"
+              className="hub-search-badge w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+            >
+              <SearchIcon />
+            </div>
+
+            <div className="flex flex-col flex-1 min-w-0">
+              <label
+                htmlFor="hub-catalog-search"
+                className="hub-search-label text-[10.5px] font-bold tracking-wide leading-tight cursor-text select-none"
               >
-                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="18" y1="6" x2="6" y2="18" />
-                  <line x1="6" y1="6" x2="18" y2="18" />
-                </svg>
-              </button>
-            )}
-            {visualSearchEnabled && (
-              <VisualSearchTrigger
-                commerceId={commerceId}
-                onStateChange={(next) => {
-                  setSearchQuery('');
-                  setVisualState(next);
+                {data?.ecometri?.enabled ? 'Buscar en el catalogo' : 'Buscar en este comercio'}
+              </label>
+              <input
+                ref={searchInputRef}
+                id="hub-catalog-search"
+                name="q"
+                type="search"
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  if (visualState.status !== 'idle') setVisualState(IDLE_VISUAL_STATE);
                 }}
+                placeholder={
+                  data?.ecometri?.enabled
+                    ? 'Producto, marca, referencia o asesor...'
+                    : 'Canal, asesor o enlace...'
+                }
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="none"
+                spellCheck={false}
+                enterKeyHint="search"
+                className="hub-search-input w-full bg-transparent pt-0.5 text-base font-semibold text-white placeholder-white/55 outline-none leading-snug"
               />
-            )}
+            </div>
+
+            <div className="flex items-center gap-1.5 shrink-0">
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery('');
+                    searchInputRef.current?.focus();
+                  }}
+                  aria-label="Limpiar busqueda"
+                  className="hub-clear-btn flex h-9 w-9 items-center justify-center rounded-xl text-white/70 hover:bg-white/15 hover:text-white transition-colors duration-150"
+                >
+                  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                </button>
+              )}
+              {visualSearchEnabled && (
+                <VisualSearchTrigger
+                  commerceId={commerceId}
+                  onStateChange={(next) => {
+                    setSearchQuery('');
+                    setVisualState(next);
+                  }}
+                />
+              )}
+            </div>
           </div>
-        </div>
+        </search>
 
         {/* ── VISUAL SEARCH PANEL (opt-in per commerce) ── */}
         {visualSearchEnabled && visualState.status !== 'idle' && (
